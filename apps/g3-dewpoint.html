@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>이슬점·습도 예측기 · 과학탐구 앱 허브</title>
+<link rel="stylesheet" href="../assets/hub.css">
+<style>
+  .stage .split { --cols: minmax(0, 1fr) 190px; }
+  .side { --w: 180px; }
+</style>
+</head>
+<body>
+<section class="lab">
+  <div class="stage">
+    <div class="split">
+      <canvas id="g" role="img" aria-label="온도별 포화 수증기량 곡선과 현재 공기 상태"></canvas>
+      <div class="side"><canvas id="k" role="img" aria-label="얼음물로 식히는 금속 컵"></canvas>얼음물을 넣어 식히는 금속 컵</div>
+    </div>
+    <p class="cap">곡선은 온도별 포화 수증기량, 파란 점은 지금 공기의 상태입니다. 수증기량은 그대로 두고 온도만 낮추면 점이 왼쪽으로 움직이다가 곡선을 만납니다. 그 온도가 이슬점입니다.</p>
+  </div>
+  <aside class="controls">
+    <h3>지금 공기</h3>
+    <div class="field"><label for="T">기온 <b></b></label><input type="range" id="T" min="5" max="35" step="1" value="25"></div>
+    <div class="field"><label for="w">공기 1 m³ 속 수증기량 <b></b></label><input type="range" id="w" min="5" max="30" step="0.5" value="12"></div>
+    <div class="readout"><div><small>포화 수증기량</small><b id="ws">–</b></div><div><small>상대 습도</small><b id="rh">–</b></div></div>
+    <p class="result" id="over" hidden></p>
+    <h3>예측하고 확인하기</h3>
+    <div class="field"><label for="pred">컵을 몇 ℃까지 식히면 이슬이 맺힐까? (예측)</label><input type="number" id="pred" step="0.5" min="0" max="35" placeholder="예: 14" inputmode="decimal"></div>
+    <div class="row"><button class="btn primary" id="cool">컵 식히기</button><button class="btn" id="reset">다시</button></div>
+    <div class="result" id="res" aria-live="polite">컵 온도: 기온과 같음</div>
+    <div class="field"><label><input type="checkbox" id="showDew"> 그래프에 이슬점 표시하기</label></div>
+    <p class="hint">예측을 먼저 적어야 하니 이슬점 표시는 꺼 두었습니다. 이슬이 맺히면 자동으로 켜집니다.</p>
+  </aside>
+</section>
+<script src="../assets/hub.js"></script>
+<script>
+window.APP = {
+  id: "g3-dewpoint", grade: 3, unit: "날씨와 기후변화", sensor: "온도·습도 센서",
+  title: "이슬점·습도 예측기",
+  question: "같은 양의 수증기를 품은 공기도 기온에 따라 습도가 달라지는 이유는 무엇일까?",
+  how: "기온과 수증기량을 정해 그래프 위의 점을 움직여 보세요. 이슬점을 예측한 뒤 컵을 식혀 실제로 이슬이 맺히는 온도를 확인하세요.",
+  notes: ["수증기량은 그대로 두고 기온만 올리면 습도는? 이슬점은?", "예측한 이슬점과 실제 이슬이 맺힌 온도를 비교해 적어 보세요.", "포화 수증기량 곡선으로 상대 습도와 이슬점을 설명해 보세요."],
+  prompt: "중학교 3학년 '날씨와 기후변화' 단원용 웹앱을 만들어 줘. 온도별 포화 수증기량 곡선(g/m³, 0~35 ℃)을 그래프로 그리고, 기온과 수증기량 슬라이더로 정한 현재 공기 상태를 점으로 표시해 줘. 상대 습도와 포화 수증기량을 계산해 보여 주고, 점에서 왼쪽으로 수평선을 그어 곡선과 만나는 이슬점을 표시해 줘. 학생이 이슬점을 예측해 입력한 뒤 '컵 식히기'를 누르면 금속 컵 그림의 온도가 천천히 내려가다가 이슬점에 도달하면 물방울이 맺히게 하고, 예측과 비교해 줘. 실제 온도·습도 센서 값을 넣을 자리를 남겨 둬.",
+  next: "교실의 실제 기온·습도를 센서로 재면 오늘의 이슬점은 몇 ℃일까? 비나 안개가 생기는 조건과 어떻게 연결될까?"
+};
+SIH.shell();
+
+// 포화 수증기압(Magnus 식, hPa) → 포화 수증기량(g/m³). 25 ℃에서 약 23.0, 교과서 표와 일치
+const es = T => 6.112 * Math.exp(17.62 * T / (243.12 + T));
+const sat = T => 216.7 * es(T) / (T + 273.15);
+const dewOf = w => { let lo = -20, hi = 50; for (let i = 0; i < 40; i++) { const mid = (lo + hi) / 2; sat(mid) < w ? lo = mid : hi = mid; } return (lo + hi) / 2; };
+const COOL_RATE = 1.5, ICE = 0; // ℃/초, 얼음물로는 0 ℃ 아래로 내려가지 않음
+const $ = id => document.getElementById(id);
+const cg = $("g"), cG = SIH.dpr(cg, 520, 340), ck = $("k"), cK = SIH.dpr(ck, 180, 300);
+let T = 25, w = 12, cupT = 25, state = "idle", last = 0, drops = [], dewAt = null;
+const WORDS = { idle: "컵 식히기", running: "멈춤", paused: "계속 식히기", done: "끝" };
+
+function resetCup() {
+  state = "idle"; cupT = T; drops = []; dewAt = null;
+  SIH.label($("cool"), "idle", WORDS); $("res").textContent = "컵 온도: 기온과 같음"; $("res").classList.remove("good");
+  draw();
+}
+SIH.bind("T", v => { T = v; resetCup(); }, " ℃");
+SIH.bind("w", v => { w = v; resetCup(); }, " g");
+$("showDew").onchange = draw;
+
+function draw() {
+  const ws = sat(T), wa = Math.min(w, ws), rh = wa / ws * 100, dp = dewOf(wa);
+  $("ws").textContent = ws.toFixed(1) + " g/m³"; $("rh").textContent = rh.toFixed(0) + " %";
+  const over = $("over"); over.hidden = w <= ws;
+  if (w > ws) over.textContent = `${T} ℃ 공기 1 m³에는 수증기가 최대 ${ws.toFixed(1)} g까지만 들어 있을 수 있어요. 남는 수증기는 응결합니다.`;
+  const curve = []; for (let t = 0; t <= 35; t += 0.5) curve.push([t, sat(t)]);
+  const showDew = $("showDew").checked;
+  const series = [{ pts: curve, color: "#23a087", width: 3 }];
+  const marks = [{ x: T, y: wa, color: "#2c7fd1", label: "지금 공기" }];
+  if (showDew) {
+    series.push({ pts: [[dp, wa], [T, wa]], color: "#2c7fd1", width: 1.8, dash: [6, 4] }, { pts: [[dp, 0], [dp, wa]], color: "#e29a2a", width: 1.8, dash: [6, 4] });
+    marks.push({ x: dp, y: wa, color: "#e29a2a", label: `이슬점 ${dp.toFixed(1)} ℃` });
+  }
+  if (state !== "idle") series.push({ pts: [[cupT, 0], [cupT, 40]], color: "#8a5cd6", width: 1.5, dash: [2, 4] });
+  SIH.drawChart(cG, { x: 0, y: 0, w: 520, h: 340, xMin: 0, xMax: 35, yMin: 0, yMax: 40, xTicks: 7, yTicks: 8, xLabel: "온도(℃)", yLabel: "수증기량(g/m³)", series, marks,
+    legend: [{ label: "포화 수증기량", color: "#23a087" }, ...(state !== "idle" ? [{ label: "컵 표면 온도", color: "#8a5cd6", dash: [2, 4] }] : [])] });
+  // 컵
+  const c = cK, f = (s, wt) => SIH.px(cK, s, wt); c.clearRect(0, 0, 180, 300);
+  c.fillStyle = "#e6eeeb"; c.fillRect(50, 90, 80, 150); c.strokeStyle = "#86a09c"; c.lineWidth = 2; c.strokeRect(50, 90, 80, 150);
+  c.fillStyle = "#cfe0f2"; c.fillRect(54, 120, 72, 116);
+  c.fillStyle = "#fff"; [[70, 140], [95, 160], [80, 190]].forEach(([x, y]) => c.fillRect(x, y, 16, 14)); // 얼음 조각
+  drops.forEach(d => { c.fillStyle = "rgba(29,95,159,.75)"; c.beginPath(); c.arc(d.x, d.y, d.r, 0, Math.PI * 2); c.fill(); });
+  c.fillStyle = "#17302e"; c.font = f(17, "bold"); c.textAlign = "center"; c.fillText(cupT.toFixed(1) + " ℃", 90, 74);
+  c.fillStyle = "#3f5956"; c.font = f(12); c.fillText("컵 표면 온도", 90, 48);
+}
+function loop(now) {
+  const dt = Math.min(0.1, (now - last) / 1000); last = now;
+  if (state === "running") {
+    const dp = dewOf(Math.min(w, sat(T)));
+    cupT = Math.max(ICE, cupT - dt * COOL_RATE);
+    if (cupT <= dp) {
+      if (dewAt == null) {
+        dewAt = dp;
+        const raw = $("pred").value.trim(), res = $("res");
+        res.classList.add("good");
+        res.innerHTML = `컵 표면이 <b>${dp.toFixed(1)} ℃</b>가 되자 이슬이 맺혔어요.` + (raw === "" || isNaN(+raw) ? " (예측을 적지 않았어요)" : ` 예측 ${(+raw).toFixed(1)} ℃와 <b>${Math.abs(+raw - dp).toFixed(1)} ℃</b> 차이.`);
+        $("showDew").checked = true;
+      }
+      if (drops.length < 45 && Math.random() < 0.5) drops.push({ x: 52 + Math.random() * 76, y: 95 + Math.random() * 140, r: 2 + Math.random() * 3.5 });
+      if (cupT <= Math.max(ICE, dp - 3)) { state = "done"; SIH.label($("cool"), "done", WORDS); }
+    } else {
+      $("res").textContent = `컵 온도 ${cupT.toFixed(1)} ℃ … 아직 이슬이 없어요`;
+      if (cupT <= ICE) { state = "done"; SIH.label($("cool"), "done", WORDS); $("res").textContent = "얼음물로는 0 ℃ 아래로 식힐 수 없어 이슬이 맺히지 않았어요."; }
+    }
+    draw();
+  }
+  requestAnimationFrame(loop);
+}
+$("cool").onclick = () => { if (state === "running") state = "paused"; else if (state !== "done") state = "running"; SIH.label($("cool"), state, WORDS); };
+$("reset").onclick = resetCup;
+window.addEventListener("sih:resize", draw);
+last = performance.now(); resetCup(); requestAnimationFrame(loop);
+</script>
+</body>
+</html>

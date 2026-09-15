@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>소리 파형 관찰기 · 과학탐구 앱 허브</title>
+<link rel="stylesheet" href="../assets/hub.css">
+<style>
+  .keys { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+  .keys .btn { padding: 8px 4px; font-size: .9em; }
+  fieldset { border: 0; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+  fieldset[disabled] { opacity: .5; }
+</style>
+</head>
+<body>
+<section class="lab">
+  <div class="stage">
+    <canvas id="w" role="img" aria-label="시간에 따른 소리 파형 그래프"></canvas>
+    <p class="cap">가로축은 시간(0~10 ms), 세로축은 공기 압력의 변화(상댓값)입니다. 파형 하나가 반복되는 데 걸리는 시간이 주기, 1초에 반복되는 횟수가 진동수입니다.</p>
+  </div>
+  <aside class="controls">
+    <h3>소리 1</h3>
+    <div class="field"><label for="f1">진동수 <b></b></label><input type="range" id="f1" min="100" max="1000" step="1" value="262"></div>
+    <div class="field"><label for="a1">진폭 <b></b></label><input type="range" id="a1" min="0" max="100" step="1" value="60"></div>
+    <div class="keys" role="group" aria-label="음 고르기"><button class="btn" data-f="262">도</button><button class="btn" data-f="330">미</button><button class="btn" data-f="392">솔</button><button class="btn" data-f="523">높은 도</button></div>
+    <div class="row"><button class="btn primary" id="play1">소리 1 듣기</button></div>
+    <h3>소리 2</h3>
+    <div class="field"><label><input type="checkbox" id="use2"> 비교할 소리 켜기</label></div>
+    <fieldset id="set2" disabled>
+      <div class="field"><label for="f2">진동수 <b></b></label><input type="range" id="f2" min="100" max="1000" step="1" value="523"></div>
+      <div class="field"><label for="a2">진폭 <b></b></label><input type="range" id="a2" min="0" max="100" step="1" value="60"></div>
+      <div class="row"><button class="btn" id="play2">소리 2 듣기</button></div>
+    </fieldset>
+    <table>
+      <thead><tr><th></th><th>주기</th><th>파장(공기 중)</th></tr></thead>
+      <tbody><tr><td>소리 1</td><td id="T1">–</td><td id="L1">–</td></tr><tr id="row2"><td>소리 2</td><td id="T2">–</td><td id="L2">–</td></tr></tbody>
+    </table>
+    <p class="hint">파장은 공기 중 소리의 속력 340 m/s로 계산합니다. 소리를 들을 때는 음량을 작게 시작하세요.</p>
+  </aside>
+</section>
+<script src="../assets/hub.js"></script>
+<script>
+window.APP = {
+  id: "g1-sound", grade: 1, unit: "빛과 파동", sensor: "소리 센서 / 스마트폰 마이크",
+  title: "소리 파형 관찰기",
+  question: "높은 소리와 큰 소리는 파형에서 어떻게 다르게 보일까?",
+  how: "진동수와 진폭을 바꾸며 파형을 보고, 실제로 들어 보세요. 비교할 소리를 켜면 두 파형이 겹쳐 그려집니다.",
+  notes: ["진동수를 올리면 파형이 어떻게 변할까요? 진폭을 올리면요?", "'도'와 '높은 도'의 파형에서 10 ms 안에 마루가 몇 개씩 보이나요?", "소리의 높낮이와 세기를 진동수·진폭과 연결해 설명해 보세요."],
+  prompt: "중학교 1학년 '빛과 파동' 단원용 웹앱을 만들어 줘. 소리의 진동수(100~1000 Hz)와 진폭을 슬라이더로 바꾸면 파형(사인파)이 시간축 0~10 ms 위에 그려지고, 웹 오디오로 실제 소리를 들을 수 있게 해 줘. 도·미·솔·높은도 음 버튼을 두고, 비교용 두 번째 소리를 켜면 두 파형이 다른 색으로 겹쳐 보이게 해 줘. 주기와 파장(음속 340 m/s 기준)을 계산해서 표시해 줘. 나중에 소리 센서나 스마트폰 마이크의 실제 파형을 넣을 자리를 남겨 둬.",
+  next: "목소리나 악기 소리는 사인파처럼 매끈할까? 마이크로 실제 파형을 받아 오려면 어떤 기능을 요청해야 할까?"
+};
+SIH.shell();
+
+const V_SOUND = 340; // m/s
+const $ = id => document.getElementById(id);
+const cv = $("w"), ctx = SIH.dpr(cv, 760, 340);
+let f1 = 262, a1 = 60, f2 = 523, a2 = 60;
+const use2 = () => $("use2").checked;
+SIH.bind("f1", v => { f1 = v; update(); }, " Hz"); SIH.bind("a1", v => { a1 = v; update(); });
+SIH.bind("f2", v => { f2 = v; update(); }, " Hz"); SIH.bind("a2", v => { a2 = v; update(); });
+$("use2").onchange = () => { $("set2").disabled = !use2(); update(); };
+document.querySelectorAll(".keys .btn").forEach(b => b.onclick = () => { SIH.setRange("f1", b.dataset.f); play(f1, a1); });
+
+function wave(f, a) { const pts = []; for (let i = 0; i <= 800; i++) { const ms = i / 80; pts.push([ms, a * Math.sin(2 * Math.PI * f * ms / 1000)]); } return pts; }
+function draw() {
+  const series = [{ pts: [[0, 0], [10, 0]], color: "#c4d4d0", width: 1 }, { pts: wave(f1, a1), color: "#23a087", width: 2.8 }];
+  const legend = [{ label: "소리 1", color: "#23a087" }];
+  if (use2()) { series.push({ pts: wave(f2, a2), color: "#ee6b57", width: 2.2 }); legend.push({ label: "소리 2", color: "#ee6b57" }); }
+  SIH.drawChart(ctx, { x: 0, y: 0, w: 760, h: 340, xMin: 0, xMax: 10, yMin: -100, yMax: 100, xTicks: 10, yTicks: 4, xLabel: "시간(ms)", yLabel: "압력 변화(상댓값)", series, legend });
+}
+function update() {
+  draw();
+  $("T1").textContent = (1000 / f1).toFixed(2) + " ms"; $("L1").textContent = (V_SOUND / f1 * 100).toFixed(0) + " cm";
+  $("row2").style.opacity = use2() ? 1 : .45;
+  $("T2").textContent = use2() ? (1000 / f2).toFixed(2) + " ms" : "–"; $("L2").textContent = use2() ? (V_SOUND / f2 * 100).toFixed(0) + " cm" : "–";
+  document.querySelectorAll(".keys .btn").forEach(b => b.setAttribute("aria-pressed", +b.dataset.f === f1 ? "true" : "false"));
+}
+let AC;
+function play(f, a) {
+  AC = AC || new (window.AudioContext || window.webkitAudioContext)();
+  if (AC.state === "suspended") AC.resume();
+  const o = AC.createOscillator(), g = AC.createGain(), now = AC.currentTime;
+  o.type = "sine"; o.frequency.setValueAtTime(f, now);
+  const peak = 0.35 * (a / 100) + 0.0001;
+  g.gain.setValueAtTime(0.0001, now);
+  g.gain.exponentialRampToValueAtTime(peak, now + 0.03);
+  g.gain.setValueAtTime(peak, now + 0.7);
+  g.gain.exponentialRampToValueAtTime(0.0001, now + 0.95);
+  o.connect(g); g.connect(AC.destination);
+  o.start(now); o.stop(now + 1);
+}
+$("play1").onclick = () => play(f1, a1);
+$("play2").onclick = () => play(f2, a2);
+window.addEventListener("sih:resize", draw);
+update();
+</script>
+</body>
+</html>

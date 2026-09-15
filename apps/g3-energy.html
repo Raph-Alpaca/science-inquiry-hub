@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>에너지 전환 시뮬레이터 · 과학탐구 앱 허브</title>
+<link rel="stylesheet" href="../assets/hub.css">
+<style>
+  .stage .split { --cols: minmax(0, 1fr) 210px; }
+  .side { --w: 210px; }
+  #tCtl, #pCtl { display: flex; flex-direction: column; gap: 14px; }
+  #tCtl[hidden], #pCtl[hidden] { display: none; }
+</style>
+</head>
+<body>
+<section class="lab">
+  <div class="stage">
+    <div class="split">
+      <canvas id="c" role="img" aria-label="트랙 또는 진자 위의 공"></canvas>
+      <div class="side"><canvas id="bars" role="img" aria-label="에너지 막대 그래프"></canvas></div>
+    </div>
+    <p class="cap" id="cap">공을 놓으면 위치 에너지가 운동 에너지로 바뀝니다. 오른쪽 막대는 매 순간의 에너지입니다.</p>
+  </div>
+  <aside class="controls">
+    <div class="tabs" role="group" aria-label="화면 고르기"><button class="btn" id="tabT">트랙</button><button class="btn" id="tabP">진자</button></div>
+    <div id="tCtl">
+      <div class="field"><label for="h0">출발 높이 <b></b></label><input type="range" id="h0" min="2" max="10" step="0.5" value="8"></div>
+      <div class="field"><label for="hh">중간 언덕 높이 <b></b></label><input type="range" id="hh" min="0" max="10" step="0.5" value="5"></div>
+      <div class="field"><label><input type="checkbox" id="fric"> 마찰 켜기</label></div>
+    </div>
+    <div id="pCtl" hidden>
+      <div class="field"><label for="ang">놓는 각도 <b></b></label><input type="range" id="ang" min="10" max="80" step="5" value="45"></div>
+      <div class="field"><label for="len">줄 길이 <b></b></label><input type="range" id="len" min="1" max="3" step="0.5" value="2"></div>
+      <div class="field"><label><input type="checkbox" id="fricP"> 공기 저항 켜기</label></div>
+    </div>
+    <div class="field"><label for="mass">공의 질량 <b></b></label><input type="range" id="mass" min="0.5" max="3" step="0.5" value="1"></div>
+    <div class="field"><label for="spd">재생 속도</label>
+      <select id="spd"><option value="0.25">아주 느리게 (¼배)</option><option value="0.5" selected>느리게 (½배)</option><option value="1">실제 빠르기</option></select></div>
+    <div class="row"><button class="btn primary" id="go">놓기</button><button class="btn" id="reset">처음으로</button></div>
+    <div class="readout"><div><small>높이</small><b id="rh">– m</b></div><div><small>속력</small><b id="rv">– m/s</b></div><div><small>위치 에너지</small><b id="rpe">– J</b></div><div><small>운동 에너지</small><b id="rke">– J</b></div></div>
+    <p class="result" id="msg" aria-live="polite" hidden></p>
+    <p class="hint">g = 9.8 m/s². 공은 구르지 않고 미끄러진다고 가정합니다. 언덕을 출발 높이보다 높게 하면 어떻게 될까요?</p>
+  </aside>
+</section>
+<script src="../assets/hub.js"></script>
+<script>
+window.APP = {
+  id: "g3-energy", grade: 3, unit: "운동과 에너지", sensor: "거리(운동) 센서, 힘 센서",
+  title: "에너지 전환 시뮬레이터",
+  question: "출발 높이가 낮은 공이 더 높은 언덕을 넘을 수 있을까? 에너지는 어디로 갈까?",
+  how: "높이와 질량을 바꾸고 공을 놓아 보세요. 위치 에너지와 운동 에너지 막대의 합이 어떻게 되는지, 마찰을 켜면 무엇이 달라지는지 관찰하세요.",
+  notes: ["출발 8 m, 언덕 5 m일 때 언덕 꼭대기에서 속력은? 언덕을 9 m로 올리면?", "막대 그래프에서 역학적 에너지는 변했나요? 마찰을 켰을 때 줄어든 만큼은 어디에 나타나나요?", "역학적 에너지 보존과 에너지 전환으로 설명해 보세요. 진자에서도 같은가요?"],
+  prompt: "중학교 3학년 '운동과 에너지' 단원용 웹앱을 만들어 줘. 첫 화면은 트랙: 출발 높이(2~10 m)와 중간 언덕 높이, 공의 질량을 슬라이더로 정하고 공을 놓으면 역학적 에너지 보존(g=9.8)에 따라 공이 굴러가고, 언덕이 출발점보다 높으면 넘지 못하고 되돌아오게 해 줘. 옆에는 위치·운동·역학적 에너지를 실시간 막대 그래프로 보여 주고, 마찰을 켜면 에너지가 줄어드는 것이 보이게 해 줘. 두 번째 화면은 진자: 놓는 각도와 줄 길이를 바꾸어 같은 막대 그래프로 관찰하게 해 줘. 높이·속력·에너지 값을 숫자로도 표시해 줘. 실제 거리 센서로 잰 위치–시간 데이터를 넣을 자리를 남겨 둬.",
+  next: "실제 공은 왜 시뮬레이션처럼 무한히 구르지 않을까? 거리 센서로 실제 속력을 재서 비교하려면 앱에 어떤 기능이 필요할까?"
+};
+SIH.shell();
+
+const g = 9.8, X_END = 20, FRIC = 0.06; // 마찰: 1 m 이동할 때마다 높이 0.06 m에 해당하는 에너지가 열로
+const $ = id => document.getElementById(id);
+const cv = $("c"), ctx = SIH.dpr(cv, 600, 360), cb = $("bars"), ctb = SIH.dpr(cb, 210, 360);
+let mode = "track", h0 = 8, hh = 5, m = 1, state = "idle", x = 0, dir = 1, loss = 0, last = 0, ang = 45, L = 2, th = 0, om = 0, speed = 0.5, t = 0;
+const WORDS = { idle: "놓기", running: "멈춤", paused: "계속", done: "끝" };
+// 트랙 모양: 출발 언덕(코사인) + 중간 언덕(종 모양)
+const H = xx => (xx < 6 ? h0 * 0.5 * (1 + Math.cos(Math.PI * xx / 6)) : 0) + hh * Math.exp(-(((xx - 12) / 1.6) ** 2));
+const PX = xx => 30 + xx * 27.5, PY = h => 330 - h * 27;
+const say = (txt) => { const el = $("msg"); el.hidden = !txt; el.textContent = txt || ""; };
+
+SIH.bind("h0", v => { h0 = v; reset(); }, " m"); SIH.bind("hh", v => { hh = v; reset(); }, " m"); SIH.bind("mass", v => { m = v; draw(); }, " kg");
+SIH.bind("ang", v => { ang = v; reset(); }, "°"); SIH.bind("len", v => { L = v; reset(); }, " m");
+$("spd").onchange = e => speed = +e.target.value;
+$("fric").onchange = $("fricP").onchange = reset;
+SIH.tabs([{ btn: "tabT", panel: "tCtl", key: "track" }, { btn: "tabP", panel: "pCtl", key: "pend" }], k => {
+  mode = k;
+  $("cap").textContent = k === "track" ? "공을 놓으면 위치 에너지가 운동 에너지로 바뀝니다. 오른쪽 막대는 매 순간의 에너지입니다." : "진자가 흔들리는 동안 가장 낮은 점과 가장 높은 점에서 두 에너지 막대를 비교해 보세요.";
+  reset();
+});
+function reset() { state = "idle"; x = 0; dir = 1; loss = 0; t = 0; th = ang * Math.PI / 180; om = 0; SIH.label($("go"), "idle", WORDS); say(""); draw(); }
+$("reset").onclick = reset;
+$("go").onclick = () => { if (state === "running") state = "paused"; else if (state !== "done") state = "running"; SIH.label($("go"), state, WORDS); };
+
+function Etotal() { return m * g * (mode === "track" ? h0 : L * (1 - Math.cos(ang * Math.PI / 180))); }
+function stateTrack() { const h = H(x); const avail = Math.max(0, h0 - loss - h); return { h, v: Math.sqrt(2 * g * avail), heat: m * g * loss }; }
+function statePend() { const h = L * (1 - Math.cos(th)), v = Math.abs(om) * L; return { h, v, heat: Math.max(0, Etotal() - m * g * h - 0.5 * m * v * v) }; }
+
+function step(dt) {
+  t += dt;
+  if (mode === "track") {
+    const fric = $("fric").checked, { v } = stateTrack();
+    const slope = (H(x + 0.01) - H(x - 0.01)) / 0.02;
+    const ds = Math.max(v, 0.3) * dt, dx = ds / Math.sqrt(1 + slope * slope) * dir;   // 트랙을 따라 움직인 거리 ds
+    const nx = Math.max(0, x + dx), top = h0 - loss;
+    if (H(nx) > top) {                      // 에너지가 모자라 더 오를 수 없음 → 되돌아옴
+      dir *= -1;
+      if (hh >= h0 - loss && x > 6 && x < 12) say("중간 언덕을 넘을 에너지가 부족해서 되돌아와요.");
+    } else {
+      x = nx;
+      if (fric) loss = Math.min(h0 - H(x), loss + FRIC * ds);
+      if (x === 0 && dir < 0) dir = 1;
+    }
+    if (fric && h0 - loss - H(x) < 0.01 && H(x) < 0.01) { state = "done"; say("마찰 때문에 역학적 에너지가 모두 열 에너지로 바뀌어 공이 멈췄어요."); }
+    if (x >= X_END) { x = X_END; state = "done"; say(`공이 트랙 끝에 도착했어요. 속력 ${stateTrack().v.toFixed(1)} m/s`); }
+    if (state === "done") SIH.label($("go"), "done", WORDS);
+  } else {
+    const fric = $("fricP").checked;
+    const a = -(g / L) * Math.sin(th) - (fric ? 0.3 * om : 0);
+    om += a * dt; th += om * dt;               // 반암시적 오일러: 에너지가 잘 보존됨
+    if (fric && Math.abs(om) < 0.01 && Math.abs(th) < 0.005) { state = "done"; SIH.label($("go"), "done", WORDS); say("공기 저항 때문에 역학적 에너지가 모두 열 에너지로 바뀌어 진자가 멈췄어요."); }
+  }
+}
+function draw() {
+  const c = ctx, f = (s, w) => SIH.px(ctx, s, w);
+  c.fillStyle = "#fff"; c.fillRect(0, 0, 600, 360);
+  let st;
+  if (mode === "track") {
+    c.lineWidth = 1; c.font = f(12); c.textAlign = "left";
+    for (let y = 0; y <= 10; y += 2) { c.strokeStyle = "#e6eeeb"; c.beginPath(); c.moveTo(28, PY(y)); c.lineTo(590, PY(y)); c.stroke(); c.fillStyle = "#567370"; c.fillText(y + " m", 0, PY(y) + 4); }
+    c.fillStyle = "#eef3f1"; c.beginPath(); c.moveTo(PX(0), PY(0));
+    for (let xx = 0; xx <= X_END; xx += 0.1) c.lineTo(PX(xx), PY(H(xx)));
+    c.lineTo(PX(X_END), PY(0)); c.closePath(); c.fill();
+    c.strokeStyle = "#4c6663"; c.lineWidth = 3.5; c.beginPath();
+    for (let xx = 0; xx <= X_END; xx += 0.1) xx ? c.lineTo(PX(xx), PY(H(xx))) : c.moveTo(PX(xx), PY(H(xx)));
+    c.stroke();
+    // 처음 역학적 에너지 높이
+    c.strokeStyle = "#23a087"; c.setLineDash([6, 5]); c.lineWidth = 1.5; c.beginPath(); c.moveTo(PX(0), PY(h0)); c.lineTo(590, PY(h0)); c.stroke(); c.setLineDash([]);
+    c.fillStyle = "#12705e"; c.font = f(12, 600); c.textAlign = "right"; c.fillText("출발 높이", 590, PY(h0) - 6);
+    st = stateTrack(); c.fillStyle = "#ee6b57"; c.beginPath(); c.arc(PX(x), PY(st.h) - 11, 10, 0, Math.PI * 2); c.fill();
+    c.strokeStyle = "#b8402b"; c.lineWidth = 1.5; c.stroke();
+  } else {
+    const ox = 300, oy = 34, s = 95, bx = ox + Math.sin(th) * L * s, by = oy + Math.cos(th) * L * s;
+    c.fillStyle = "#4c6663"; c.fillRect(ox - 60, oy - 6, 120, 6);
+    c.strokeStyle = "#d3e2dd"; c.setLineDash([4, 4]); c.lineWidth = 1; c.beginPath(); c.moveTo(ox, oy); c.lineTo(ox, oy + L * s + 22); c.stroke(); c.setLineDash([]);
+    const lowY = oy + L * s;
+    c.strokeStyle = "#e6eeeb"; c.beginPath(); c.moveTo(60, lowY); c.lineTo(540, lowY); c.stroke();
+    c.strokeStyle = "#4c6663"; c.lineWidth = 2; c.beginPath(); c.moveTo(ox, oy); c.lineTo(bx, by); c.stroke();
+    st = statePend(); c.fillStyle = "#ee6b57"; c.beginPath(); c.arc(bx, by, 13, 0, Math.PI * 2); c.fill();
+    c.strokeStyle = "#b8402b"; c.lineWidth = 1.5; c.stroke();
+    c.fillStyle = "#567370"; c.font = f(12); c.textAlign = "left"; c.fillText("가장 낮은 점 (높이 0)", 62, lowY - 6);
+  }
+  const PE = m * g * st.h, KE = 0.5 * m * st.v * st.v, E0 = Etotal();
+  const fe = (s, w) => SIH.px(ctb, s, w), b = ctb; b.fillStyle = "#fff"; b.fillRect(0, 0, 210, 360);
+  const bars = [["위치", PE, "#2c7fd1"], ["운동", KE, "#ee6b57"], ["역학적", PE + KE, "#23a087"], ["열", st.heat, "#e29a2a"]];
+  const top = 34, base = 300, span = base - top;
+  bars.forEach(([n, E, col], i) => {
+    const hgt = E0 ? Math.min(1.05, E / E0) * span : 0, X = 8 + i * 50;
+    b.fillStyle = "#eef3f1"; b.fillRect(X, top, 40, span); b.fillStyle = col; b.fillRect(X, base - hgt, 40, hgt);
+    b.fillStyle = "#3f5956"; b.font = fe(12, 600); b.textAlign = "center"; b.fillText(n, X + 20, base + 20);
+    b.font = fe(11); b.fillText(E.toFixed(E0 < 20 ? 1 : 0), X + 20, base + 38);
+  });
+  b.strokeStyle = "#17302e"; b.setLineDash([4, 3]); b.lineWidth = 1; b.beginPath(); b.moveTo(4, top); b.lineTo(206, top); b.stroke(); b.setLineDash([]);
+  b.fillStyle = "#3f5956"; b.font = fe(11); b.textAlign = "left"; b.fillText(`처음 에너지 ${E0.toFixed(E0 < 20 ? 1 : 0)} J`, 6, top - 10);
+  $("rh").textContent = st.h.toFixed(2) + " m"; $("rv").textContent = st.v.toFixed(2) + " m/s";
+  $("rpe").textContent = PE.toFixed(1) + " J"; $("rke").textContent = KE.toFixed(1) + " J";
+}
+function loop(now) {
+  const dt = Math.min(0.05, (now - last) / 1000); last = now;
+  if (state === "running") { const n = 8, h = dt * speed / n; for (let i = 0; i < n && state === "running"; i++) step(h); }
+  draw(); requestAnimationFrame(loop);
+}
+last = performance.now(); requestAnimationFrame(loop);
+</script>
+</body>
+</html>

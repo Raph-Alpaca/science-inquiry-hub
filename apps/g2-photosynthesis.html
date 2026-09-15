@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>광합성 CO₂ 측정소 · 과학탐구 앱 허브</title>
+<link rel="stylesheet" href="../assets/hub.css">
+<style>
+  .stage .split { --cols: 220px minmax(0, 1fr); }
+  .side { --w: 210px; }
+  #g { cursor: crosshair; }
+  .slope { background: var(--g-soft); border-radius: var(--radius-s); padding: 9px 12px; font-size: .93em; }
+  .slope b { font-size: 1.2em; font-variant-numeric: tabular-nums; }
+</style>
+</head>
+<body>
+<section class="lab">
+  <div class="stage">
+    <div class="split">
+      <div class="side"><canvas id="ch" role="img" aria-label="전등과 밀폐 용기 속 식물"></canvas>밀폐 용기 속 식물과 CO₂ 센서</div>
+      <div>
+        <canvas id="g" role="img" aria-label="시간에 따른 CO₂ 농도 그래프"></canvas>
+        <p class="cap">기울기 재기: 그래프 위에서 두 지점을 차례로 누르세요. 두 점 사이의 CO₂ 변화율(ppm/분)이 계산됩니다.</p>
+      </div>
+    </div>
+  </div>
+  <aside class="controls">
+    <h3>빛 조건</h3>
+    <div class="field"><label for="dist">전등과 식물 사이 거리 <b></b></label><input type="range" id="dist" min="10" max="100" step="5" value="30"></div>
+    <div class="field"><label><input type="checkbox" id="dark"> 전등 끄기 (어둠)</label></div>
+    <div class="readout"><div><small>상대 빛 세기 (30 cm = 1)</small><b id="light">1.00</b></div><div><small>CO₂ 농도</small><b id="co2">800 ppm</b></div></div>
+    <div class="row"><button class="btn primary" id="run">측정 시작 (10분)</button><button class="btn" id="reset">새 실험</button></div>
+    <p class="hint" id="lockHint" hidden>측정 중에는 조건을 바꿀 수 없어요. '새 실험'을 누르면 바꿀 수 있습니다.</p>
+    <div class="readout"><div><small>경과</small><b id="time">0.0 분</b></div><div><small>이번 조건</small><b id="cond">30 cm</b></div></div>
+    <div class="slope" id="slopeBox" aria-live="polite">기울기: 그래프에서 두 점을 누르세요</div>
+    <div class="row"><button class="btn small" id="slopeAll">처음~지금 기울기</button><button class="btn small" id="save" disabled>이 곡선 보관</button></div>
+    <h3>보관한 곡선</h3>
+    <ul class="list" id="runs"><li><span class="hint">아직 없어요</span></li></ul>
+    <p class="hint">거리를 바꿔 여러 번 측정하고 기울기를 비교해 보세요. 곡선이 내려가면 CO₂가 줄어드는 것(광합성 &gt; 호흡)입니다.</p>
+  </aside>
+</section>
+<script src="../assets/hub.js"></script>
+<script>
+window.APP = {
+  id: "g2-photosynthesis", grade: 2, unit: "식물과 에너지", sensor: "이산화 탄소(CO₂) 센서",
+  title: "광합성 CO₂ 측정소",
+  question: "빛이 강해지면 식물은 이산화 탄소를 더 빨리 흡수할까? 어둠에서는 어떻게 될까?",
+  how: "전등 거리를 정하고 10분간 측정하세요. 곡선의 기울기가 CO₂가 줄어드는 빠르기입니다. 곡선을 보관해 두면 다른 거리의 곡선과 겹쳐 비교할 수 있습니다.",
+  notes: ["전등을 가까이 두면 CO₂ 곡선의 기울기는 어떻게 될까요? 전등을 끄면요?", "거리별 기울기(ppm/분)를 적어 보세요. 아주 가까워지면 기울기가 계속 커지나요?", "광합성과 호흡, 빛의 세기의 관계로 설명해 보세요."],
+  prompt: "중학교 2학년 '식물과 에너지' 단원용 웹앱을 만들어 줘. 밀폐 용기 안의 식물과 CO₂ 센서를 그림으로 보여 주고, 전등과 식물의 거리(10~100 cm)를 슬라이더로 바꾸면 빛의 세기가 거리의 제곱에 반비례해 변하게 해 줘. 측정을 시작하면 10분 동안 CO₂ 농도(ppm)가 시간에 따라 그래프에 실시간으로 그려지는데, 광합성 속도는 빛이 강할수록 커지되 어느 이상에서는 포화되고, 호흡으로는 항상 일정량이 배출되도록 계산해 줘. 전등을 끄면 CO₂가 오히려 늘어나게 해 줘. 학생이 그래프에서 두 점을 클릭하면 기울기(ppm/분)를 계산해 주고, 곡선을 보관해 다른 거리의 곡선과 겹쳐 볼 수 있게 해 줘. 실제 CO₂ 센서 값을 넣을 자리를 남겨 둬.",
+  next: "온도나 CO₂ 농도 자체도 광합성 속도에 영향을 줄까? 그 변인을 넣으려면 어떤 조건을 프롬프트에 써야 할까?"
+};
+SIH.shell();
+
+// CO₂ 변화율(ppm/분) = 호흡(+9) − 광합성. 광합성은 빛 세기에 따라 커지다가 포화.
+// 빛 세기 I ∝ 1/거리² (30 cm를 1로). 보상점은 약 80 cm 부근.
+const RESP = 9, PMAX = 55, KHALF = 0.7, T_END = 10, START = 800, SPEED = 0.5; // 실제 1초 = 0.5분
+const $ = id => document.getElementById(id);
+const cC = $("ch"), c1 = SIH.dpr(cC, 220, 300);
+const cg = $("g"), cG = SIH.dpr(cg, 520, 340);
+let d = 30, dark = false, t = 0, co2 = START, state = "idle", last = 0, pts = [[0, START]], saved = [], picks = [], cond = "30 cm", savedThis = false;
+const COLORS = ["#2c7fd1", "#23a087", "#ee6b57", "#e29a2a", "#8a5cd6", "#4c6663"];
+const WORDS = { idle: "측정 시작 (10분)", running: "일시정지", paused: "계속 측정", done: "측정 완료" };
+const light = () => dark ? 0 : (30 / d) ** 2;
+const rate = () => { const I = light(); return RESP - PMAX * I / (I + KHALF); };
+const condLabel = () => dark ? "어둠" : `${d} cm`;
+function showCond() { cond = condLabel(); $("cond").textContent = cond; $("light").textContent = light().toFixed(2); drawChamber(); }
+SIH.bind("dist", v => { d = v; showCond(); }, " cm");
+$("dark").onchange = e => { dark = e.target.checked; $("dist").disabled = dark; showCond(); };
+
+function drawChamber() {
+  const c = c1, f = s => SIH.px(c1, s); c.clearRect(0, 0, 220, 300);
+  const glow = dark ? 0 : Math.min(1, light() / 3);
+  const ly = 22 + (d - 10) * 1.1;
+  if (!dark) {
+    const grd = c.createRadialGradient(110, ly, 10, 110, ly, 250);
+    grd.addColorStop(0, `rgba(226,154,42,${0.18 + glow * 0.4})`); grd.addColorStop(1, "rgba(226,154,42,0)");
+    c.fillStyle = grd; c.fillRect(0, 0, 220, 300);
+  } else { c.fillStyle = "#e9eeed"; c.fillRect(0, 0, 220, 300); }
+  c.fillStyle = dark ? "#9db3ae" : "#e29a2a"; c.beginPath(); c.arc(110, ly, 15, 0, Math.PI * 2); c.fill();
+  c.fillStyle = "#3f5956"; c.font = f(12); c.textAlign = "center"; c.fillText(dark ? "전등 꺼짐" : `전등 · ${d} cm`, 110, ly < 40 ? ly + 32 : ly - 22);
+  c.strokeStyle = "#86a09c"; c.lineWidth = 2; c.strokeRect(40, 160, 140, 130);
+  c.fillStyle = "#8a5cd6"; c.fillRect(148, 170, 22, 12); c.fillStyle = "#3f5956"; c.font = f(11); c.fillText("CO₂", 159, 197);
+  c.fillStyle = "#a36a3d"; c.fillRect(85, 252, 50, 36);
+  c.strokeStyle = "#1f8f78"; c.lineWidth = 4; c.beginPath(); c.moveTo(110, 252); c.lineTo(110, 195); c.stroke();
+  c.fillStyle = "#23a087"; [[94, 228, -1], [126, 216, 1], [98, 204, -1], [122, 196, 1]].forEach(([x, y, s]) => { c.beginPath(); c.ellipse(x, y, 15, 7, s * 0.5, 0, Math.PI * 2); c.fill(); });
+}
+function drawGraph() {
+  const series = saved.map(s => ({ pts: s.pts, color: s.color, width: 2, dash: [7, 4] }));
+  series.push({ pts, color: COLORS[0], width: 3 });
+  if (picks.length === 2) series.push({ pts: picks, color: "#e29a2a", width: 2.4, dots: 6 });
+  else if (picks.length === 1) series.push({ pts: picks, color: "#e29a2a", noLine: true, dots: 6 });
+  const legend = [{ label: `지금 (${cond})`, color: COLORS[0] }, ...saved.slice(-3).map(s => ({ label: s.label, color: s.color, dash: [7, 4] }))];
+  cg._map = SIH.drawChart(cG, { x: 0, y: 0, w: 520, h: 340, xMin: 0, xMax: T_END, yMin: 0, yMax: 1200, xTicks: 10, yTicks: 6, xLabel: "시간(분)", yLabel: "CO₂(ppm)", series, legend });
+  $("time").textContent = t.toFixed(1) + " 분"; $("co2").textContent = Math.round(co2) + " ppm";
+}
+function setLock(on) { $("dist").disabled = on || dark; $("dark").disabled = on; $("lockHint").hidden = !on; }
+function loop(now) {
+  if (state !== "running") return;
+  const dt = Math.min(0.1, (now - last) / 1000) * SPEED; last = now;
+  t = Math.min(T_END, t + dt); co2 = Math.max(0, co2 + rate() * dt); pts.push([t, co2]);
+  if (t >= T_END) { state = "done"; SIH.label($("run"), "done", WORDS); $("lockHint").hidden = true; }
+  $("save").disabled = savedThis || pts.length < 5;
+  drawGraph();
+  if (state === "running") requestAnimationFrame(loop);
+}
+$("run").onclick = () => {
+  if (state === "running") state = "paused";
+  else if (state !== "done") { state = "running"; setLock(true); last = performance.now(); requestAnimationFrame(loop); }
+  SIH.label($("run"), state, WORDS);
+};
+$("reset").onclick = () => {
+  state = "idle"; t = 0; co2 = START; pts = [[0, START]]; picks = []; savedThis = false;
+  SIH.label($("run"), "idle", WORDS); setLock(false); $("save").disabled = true;
+  $("slopeBox").textContent = "기울기: 그래프에서 두 점을 누르세요"; drawGraph();
+};
+$("save").onclick = () => {
+  if (savedThis || pts.length < 5) return;
+  const color = COLORS[1 + saved.length % (COLORS.length - 1)];
+  const s = (pts[pts.length - 1][1] - START) / pts[pts.length - 1][0];
+  saved.push({ pts: pts.slice(), label: cond, color, slope: s, until: t });
+  savedThis = true; $("save").disabled = true;
+  $("runs").innerHTML = saved.map(s => `<li><span style="color:${s.color};font-weight:700">■ ${s.label}</span><span>${s.slope.toFixed(1)} ppm/분${s.until < T_END ? ` (${s.until.toFixed(1)}분까지)` : ""}</span></li>`).join("");
+  drawGraph();
+};
+function showSlope() {
+  const s = (picks[1][1] - picks[0][1]) / (picks[1][0] - picks[0][0]);
+  $("slopeBox").innerHTML = `${picks[0][0].toFixed(1)}~${picks[1][0].toFixed(1)}분 기울기 <b>${isFinite(s) ? s.toFixed(1) : "–"}</b> ppm/분 · ${s < 0 ? "CO₂ 감소(광합성 &gt; 호흡)" : s > 0 ? "CO₂ 증가(호흡 &gt; 광합성)" : "변화 없음"}`;
+}
+$("slopeAll").onclick = () => {
+  if (t <= 0) { $("slopeBox").textContent = "먼저 측정을 시작하세요"; return; }
+  picks = [pts[0], pts[pts.length - 1]]; showSlope(); drawGraph();
+};
+cg.addEventListener("click", ev => {
+  if (t <= 0) return;
+  const [X] = SIH.canvasXY(cg, ev, 520, 340);
+  const [x] = cg._map.inv(X, 0); if (x < 0 || x > T_END) return;
+  const cx = Math.min(x, t);
+  const p = pts.reduce((a, b) => Math.abs(b[0] - cx) < Math.abs(a[0] - cx) ? b : a);
+  if (picks.length === 2) picks = [];
+  if (picks.length === 1 && Math.abs(picks[0][0] - p[0]) < 0.05) return;
+  picks.push(p); picks.sort((a, b) => a[0] - b[0]);
+  if (picks.length === 2) showSlope(); else $("slopeBox").textContent = `첫 점 ${p[0].toFixed(1)}분 · 두 번째 점을 누르세요`;
+  drawGraph();
+});
+window.addEventListener("sih:resize", () => { drawChamber(); drawGraph(); });
+showCond(); drawGraph();
+</script>
+</body>
+</html>

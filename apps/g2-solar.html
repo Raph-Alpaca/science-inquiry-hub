@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>달의 위상·행성 공전 관찰기 · 과학탐구 앱 허브</title>
+<link rel="stylesheet" href="../assets/hub.css">
+<style>
+  .phases { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+  .phases .btn { padding: 7px 6px; font-size: .9em; }
+  .phases .btn.pick { border-color: var(--sky); background: var(--sky-soft); }
+  #moonCtl, #planetCtl { display: flex; flex-direction: column; gap: 14px; }
+  #moonCtl[hidden], #planetCtl[hidden] { display: none; }
+</style>
+</head>
+<body>
+<section class="lab">
+  <div class="stage dark">
+    <canvas id="c" role="img" aria-label="태양, 지구, 달의 배치와 지구에서 본 달의 모양"></canvas>
+    <p class="cap" id="cap"></p>
+  </div>
+  <aside class="controls">
+    <div class="tabs" role="group" aria-label="화면 고르기"><button class="btn" id="tabMoon">달의 위상</button><button class="btn" id="tabPlanet">행성 공전</button></div>
+    <div id="moonCtl">
+      <div class="field"><label for="day">날짜 (삭 이후 경과일) <b></b></label><input type="range" id="day" min="0" max="29.5" step="0.1" value="0"></div>
+      <div class="row"><button class="btn primary" id="playM">시간 흐르게</button><button class="btn" id="quiz">문제 내기</button></div>
+      <div class="readout"><div><small>지금 모양</small><b id="phaseNow">삭</b></div><div><small>밝게 보이는 쪽</small><b id="litSide">–</b></div></div>
+      <div id="quizBox" hidden>
+        <p class="hint" id="quizQ"></p>
+        <div class="phases" id="phaseBtns"></div>
+        <p class="hint" id="quizR" aria-live="polite"></p>
+      </div>
+      <p class="hint">달의 모양은 약 29.5일마다 되풀이됩니다(삭→삭). 달이 지구를 한 바퀴 도는 데는 약 27.3일이 걸리지만, 그동안 지구도 태양 둘레를 돌기 때문에 같은 모양으로 돌아오기까지 조금 더 걸립니다.</p>
+    </div>
+    <div id="planetCtl" hidden>
+      <div class="field"><label for="days">경과일 <b></b></label><input type="range" id="days" min="0" max="730" step="1" value="0"></div>
+      <div class="row"><button class="btn primary" id="playP">시간 흐르게</button></div>
+      <div class="readout"><div><small>수성 (88일)</small><b id="lapMe">0.00 바퀴</b></div><div><small>금성 (225일)</small><b id="lapV">0.00 바퀴</b></div><div><small>지구 (365일)</small><b id="lapE">0.00 바퀴</b></div><div><small>화성 (687일)</small><b id="lapM">0.00 바퀴</b></div></div>
+      <p class="hint">태양에 가까운 행성일수록 한 바퀴 도는 데 걸리는 시간이 짧습니다. 네 행성이 같은 방향에서 출발한다고 가정했고, 거리와 크기는 보기 좋게 조정한 값입니다.</p>
+    </div>
+  </aside>
+</section>
+<script src="../assets/hub.js"></script>
+<script>
+window.APP = {
+  id: "g2-solar", grade: 2, unit: "태양계", sensor: "센서 없음 (시뮬레이션 전용)",
+  title: "달의 위상·행성 공전 관찰기",
+  question: "달의 모양은 왜 날마다 달라질까? 행성마다 공전 주기는 왜 다를까?",
+  how: "시간 슬라이더를 앞뒤로 움직이며 태양·지구·달의 위치와 지구에서 보이는 달 모양을 함께 보세요. 문제 내기로 예측을 확인할 수 있습니다.",
+  notes: ["삭에서 7일 뒤 달은 어떤 모양일까요? 보름달은 며칠째일까요?", "위에서 본 달의 위치와 지구에서 본 모양을 짝지어 적어 보세요.", "달의 위상 변화를 햇빛·달의 공전·관측 위치로 설명해 보세요."],
+  prompt: "중학교 2학년 '태양계' 단원용 웹앱을 만들어 줘. 첫 화면은 달의 위상: 위에서 내려다본 태양–지구–달 배치와 지구에서 본 달의 모양을 나란히 그리고, 삭 이후 경과일(0~29.5일) 슬라이더를 앞뒤로 움직이면 둘이 동시에 바뀌게 해 줘. 재생 버튼과 '이 날짜의 위상은?' 문제 내기 기능을 넣어 줘. 두 번째 화면은 행성 공전: 수성·금성·지구·화성이 각자의 공전 주기(88, 225, 365, 687일)로 태양 둘레를 도는 모습을 경과일 슬라이더로 보여 주고, 각 행성이 몇 바퀴 돌았는지 표시해 줘. 센서는 필요 없어.",
+  next: "지구에서 본 금성의 모양도 변할까? 그것을 보여 주려면 시뮬레이션에 어떤 시점(관측 위치)을 추가해야 할까?"
+};
+SIH.shell();
+
+const SYNODIC = 29.5;
+const $ = id => document.getElementById(id);
+const cv = $("c"), ctx = SIH.dpr(cv, 760, 380);
+let mode = "moon", day = 0, days = 0, playM = false, playP = false, last = 0;
+// 이 캔버스는 좌우 두 그림이 붙어 있어 글자를 너무 키우면 겹친다
+const F = (s, w) => `${w ? w + " " : ""}${Math.round(s * Math.min(1.6, SIH.fs(ctx)))}px ${SIH.font}`;
+SIH.bind("day", v => { day = v; draw(); }, "일"); SIH.bind("days", v => { days = v; draw(); }, "일");
+
+function stopAll() { playM = playP = false; $("playM").textContent = "시간 흐르게"; $("playP").textContent = "시간 흐르게"; }
+SIH.tabs([{ btn: "tabMoon", panel: "moonCtl", key: "moon" }, { btn: "tabPlanet", panel: "planetCtl", key: "planet" }], m => {
+  mode = m; stopAll();
+  $("cap").textContent = m === "moon"
+    ? "왼쪽: 북극 위에서 내려다본 모습(달은 시계 반대 방향으로 공전). 오른쪽: 북반구에서 올려다본 달. 노란 화살표가 햇빛 방향입니다."
+    : "북극 위에서 내려다본 수성·금성·지구·화성의 궤도(시계 반대 방향으로 공전). 꼬리는 최근 30일 동안 지나온 길입니다.";
+  draw();
+});
+
+function arrow(c, x1, y1, x2, y2) {
+  c.beginPath(); c.moveTo(x1, y1); c.lineTo(x2, y2); c.stroke();
+  const a = Math.atan2(y2 - y1, x2 - x1);
+  c.beginPath(); c.moveTo(x2, y2); c.lineTo(x2 - 9 * Math.cos(a - .45), y2 - 9 * Math.sin(a - .45)); c.moveTo(x2, y2); c.lineTo(x2 - 9 * Math.cos(a + .45), y2 - 9 * Math.sin(a + .45)); c.stroke();
+}
+function drawMoon() {
+  const c = ctx; c.fillStyle = "#0f1c2b"; c.fillRect(0, 0, 760, 380);
+  // 위에서 본 배치: 태양은 왼쪽 멀리. 화면 기준 시계 반대 방향 = 왼쪽→아래→오른쪽→위
+  const ex = 250, ey = 190, R = 120, ang = (day / SYNODIC) * Math.PI * 2;
+  c.strokeStyle = "#e29a2a"; c.lineWidth = 2;
+  for (let y = 70; y <= 310; y += 60) arrow(c, 18, y, 76, y);
+  c.fillStyle = "#f0b454"; c.font = F(13, 600); c.textAlign = "left"; c.fillText("햇빛", 18, 46);
+  c.strokeStyle = "#34485f"; c.lineWidth = 1.2; c.beginPath(); c.arc(ex, ey, R, 0, Math.PI * 2); c.stroke();
+  // 공전 방향 표시
+  c.strokeStyle = "#7f93a8"; c.lineWidth = 1.5; c.beginPath(); c.arc(ex, ey, R + 16, Math.PI * 0.62, Math.PI * 0.38, true); c.stroke();
+  const ax = ex + Math.cos(Math.PI * 0.38) * (R + 16), ay = ey + Math.sin(Math.PI * 0.38) * (R + 16);
+  c.beginPath(); c.moveTo(ax, ay); c.lineTo(ax + 3, ay - 10); c.moveTo(ax, ay); c.lineTo(ax - 10, ay - 2); c.stroke();
+  // 지구: 태양 쪽(왼쪽) 반이 낮
+  c.fillStyle = "#1f3f66"; c.beginPath(); c.arc(ex, ey, 26, 0, Math.PI * 2); c.fill();
+  c.fillStyle = "#4f9de8"; c.beginPath(); c.arc(ex, ey, 26, Math.PI / 2, Math.PI * 3 / 2); c.fill();
+  c.fillStyle = "#dbe7f3"; c.textAlign = "center"; c.font = F(13); c.fillText("지구", ex, ey + 46);
+  // 달: 경과일 0(삭)에 태양 쪽
+  const mx = ex - Math.cos(ang) * R, my = ey + Math.sin(ang) * R;
+  c.strokeStyle = "rgba(242,239,226,.35)"; c.setLineDash([3, 4]); c.beginPath(); c.moveTo(ex, ey); c.lineTo(mx, my); c.stroke(); c.setLineDash([]);
+  c.fillStyle = "#4a5361"; c.beginPath(); c.arc(mx, my, 14, 0, Math.PI * 2); c.fill();
+  c.fillStyle = "#f2efe2"; c.beginPath(); c.arc(mx, my, 14, Math.PI / 2, Math.PI * 3 / 2); c.fill();
+  c.fillStyle = "#dbe7f3"; c.fillText("달", mx, my < ey ? my - 22 : my + 32);
+
+  // 지구(북반구)에서 본 달. 차오르는 동안(0~14.75일) 오른쪽이 밝다.
+  const px = 600, py = 195, r = 92;
+  c.strokeStyle = "#2a3b50"; c.beginPath(); c.moveTo(470, 30); c.lineTo(470, 350); c.stroke();
+  c.fillStyle = "#dbe7f3"; c.font = F(14, 600); c.fillText("북반구에서 본 달", px, 50);
+  c.fillStyle = "#333b48"; c.beginPath(); c.arc(px, py, r, 0, Math.PI * 2); c.fill();
+  const k = -Math.cos(ang);                 // 밝은 부분 폭: 삭 −1 … 상·하현 0 … 보름 +1
+  const litRight = Math.sin(ang) >= 0;
+  c.fillStyle = "#f2efe2"; c.beginPath();
+  if (litRight) { c.arc(px, py, r, -Math.PI / 2, Math.PI / 2); c.ellipse(px, py, r * Math.abs(k), r, 0, Math.PI / 2, -Math.PI / 2, k < 0); }
+  else { c.arc(px, py, r, Math.PI / 2, -Math.PI / 2); c.ellipse(px, py, r * Math.abs(k), r, 0, -Math.PI / 2, Math.PI / 2, k < 0); }
+  c.fill();
+  c.fillStyle = "#dbe7f3"; c.font = F(16, 700); c.fillText(phaseName(day), px, py + r + 36);
+  $("phaseNow").textContent = phaseName(day).replace(/ \(.+\)/, "");
+  const f = frac(day);
+  $("litSide").textContent = f < 0.03 || f > 0.97 ? "안 보임" : Math.abs(f - 0.5) < 0.03 ? "전체" : litRight ? "오른쪽" : "왼쪽";
+}
+function frac(d) { return ((d / SYNODIC) % 1 + 1) % 1; }
+function phaseName(d) {
+  const f = frac(d);
+  if (f < 0.03 || f > 0.97) return "삭 (보이지 않음)"; if (f < 0.22) return "초승달"; if (f < 0.28) return "상현달";
+  if (f < 0.47) return "상현~보름 사이"; if (f < 0.53) return "보름달"; if (f < 0.72) return "보름~하현 사이";
+  if (f < 0.78) return "하현달"; return "그믐달";
+}
+var PL = [["수성", 88, 55, "#b9b3a6", 4], ["금성", 225, 85, "#e8c87a", 6], ["지구", 365, 120, "#4f9de8", 6], ["화성", 687, 165, "#e06b4d", 5]];
+function drawPlanets() {
+  const c = ctx; c.fillStyle = "#0f1c2b"; c.fillRect(0, 0, 760, 380);
+  const sx = 380, sy = 190;
+  c.fillStyle = "#f0b454"; c.beginPath(); c.arc(sx, sy, 15, 0, Math.PI * 2); c.fill();
+  c.fillStyle = "#dbe7f3"; c.font = F(12); c.textAlign = "center"; c.fillText("태양", sx, sy + 32);
+  PL.forEach(([n, T, r, col, s]) => {
+    c.strokeStyle = "#2a3b50"; c.lineWidth = 1; c.beginPath(); c.arc(sx, sy, r, 0, Math.PI * 2); c.stroke();
+    const from = Math.max(0, days - 30);
+    c.strokeStyle = col; c.lineWidth = 2.5; c.globalAlpha = .55; c.beginPath();
+    for (let dd = from; dd <= days; dd += 0.5) { const a = dd / T * Math.PI * 2; const x = sx + Math.cos(a) * r, y = sy - Math.sin(a) * r; dd === from ? c.moveTo(x, y) : c.lineTo(x, y); }
+    c.stroke(); c.globalAlpha = 1;
+    const a = days / T * Math.PI * 2; const x = sx + Math.cos(a) * r, y = sy - Math.sin(a) * r;
+    c.fillStyle = col; c.beginPath(); c.arc(x, y, s + 1, 0, Math.PI * 2); c.fill();
+    c.fillStyle = "#dbe7f3"; c.font = F(13, 600); c.fillText(n, x, y - s - 7);
+  });
+  const lap = T => (days / T).toFixed(2) + " 바퀴";
+  $("lapMe").textContent = lap(88); $("lapV").textContent = lap(225); $("lapE").textContent = lap(365); $("lapM").textContent = lap(687);
+}
+function draw() { mode === "moon" ? drawMoon() : drawPlanets(); }
+function loop(now) {
+  const dt = Math.min(0.1, (now - last) / 1000); last = now;
+  // 슬라이더는 눈금(0.1일, 1일)으로 반올림되므로 재생 중에는 내부 누적값을 따로 둔다
+  if (playM && mode === "moon") { mAcc = (mAcc + dt * (SIH.reduced ? 1 : 2)) % SYNODIC; SIH.setRange("day", mAcc); }
+  if (playP && mode === "planet") {
+    pAcc = Math.min(730, pAcc + dt * 40); SIH.setRange("days", pAcc);
+    if (pAcc >= 730) { playP = false; $("playP").textContent = "처음부터 재생"; }
+  }
+  if (playM || playP) requestAnimationFrame(loop);
+}
+let mAcc = 0, pAcc = 0;
+function startLoop() { last = performance.now(); requestAnimationFrame(loop); }
+$("playM").onclick = e => { playM = !playM; mAcc = day; e.target.textContent = playM ? "멈춤" : "시간 흐르게"; if (playM) startLoop(); };
+$("playP").onclick = e => {
+  if (!playP && days >= 730) SIH.setRange("days", 0);
+  playP = !playP; pAcc = days; e.target.textContent = playP ? "멈춤" : "시간 흐르게"; if (playP) startLoop();
+};
+// 문제 내기
+const NAMES = ["삭 (보이지 않음)", "초승달", "상현달", "보름달", "하현달", "그믐달"];
+const QDAYS = [0, 3.5, 7.4, 14.8, 22.1, 26];
+$("phaseBtns").innerHTML = NAMES.map(n => `<button class="btn" data-n="${n}">${n.replace(" (보이지 않음)", "")}</button>`).join("");
+let qDay = 0;
+$("quiz").onclick = () => {
+  stopAll();
+  let nd; do { nd = QDAYS[Math.floor(Math.random() * QDAYS.length)]; } while (nd === qDay && QDAYS.length > 1);
+  qDay = nd;
+  $("quizBox").hidden = false; $("quizQ").textContent = `삭 이후 ${qDay}일째, 달은 어떤 모양일까요? 먼저 고른 뒤 확인하세요.`; $("quizR").textContent = "";
+  document.querySelectorAll("#phaseBtns .btn").forEach(b => b.classList.remove("pick"));
+  document.querySelector("#phaseBtns .btn").focus();
+};
+document.querySelectorAll("#phaseBtns .btn").forEach(b => b.onclick = () => {
+  document.querySelectorAll("#phaseBtns .btn").forEach(x => x.classList.remove("pick")); b.classList.add("pick");
+  const ok = b.dataset.n === phaseName(qDay);
+  $("quizR").innerHTML = (ok ? `<span class="ok">맞아요.</span> ` : `<span class="bad">다시 생각해 볼까요?</span> `) + `<button class="btn small" id="goQ">${qDay}일로 이동해 확인</button>`;
+  $("goQ").onclick = () => { stopAll(); SIH.setRange("day", qDay); };
+});
+window.addEventListener("sih:resize", draw);
+draw();
+</script>
+</body>
+</html>
