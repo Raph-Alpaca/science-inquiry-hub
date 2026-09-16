@@ -1,2 +1,8 @@
 # 센서 참고 코드: 자체 git 저장소(Raph-Alpaca/sensor-lab)를 품고 있어 이 저장소에는 올리지 않음
 reference/
+
+# Firebase 에뮬레이터가 남기는 로그
+firestore-debug.log
+storage-debug.log
+firebase-debug.log
+.firebase/

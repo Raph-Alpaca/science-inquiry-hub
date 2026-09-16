@@ -1,0 +1,86 @@
+rules_version = '2';
+
+// 산출물 책장 보안 규칙
+//  - 공개 화면(비로그인): 승인된 책만 읽는다. 모둠원 이름(private)은 절대 읽지 못한다.
+//  - 학생 제출(비로그인): status가 pending이고, 요청에 담긴 code가 그 책장의 code와 같을 때만 만들 수 있다.
+//  - 승인·수정·삭제: 그 책장을 만든 선생님(teacherUid) 본인만.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function shelf(shelfId) {
+      return get(/databases/$(database)/documents/shelves/$(shelfId)).data;
+    }
+    function isTeacher(shelfId) {
+      return request.auth != null && request.auth.uid == shelf(shelfId).teacherUid;
+    }
+    function codeMatches(shelfId) {
+      return request.resource.data.code is string && request.resource.data.code == shelf(shelfId).code;
+    }
+    function str(v, maxLen) {
+      return v is string && v.size() <= maxLen;
+    }
+
+    match /shelves/{shelfId} {
+      // 학생이 코드로 책장을 찾아야 하므로 읽기는 공개. 교사 이메일 같은 개인정보는 넣지 않는다.
+      allow read: if true;
+
+      allow create: if request.auth != null
+                    && request.resource.data.teacherUid == request.auth.uid
+                    && request.resource.data.keys().hasOnly(['code', 'school', 'teacherName', 'title', 'teacherUid', 'createdAt'])
+                    && str(request.resource.data.code, 24)
+                    && str(request.resource.data.school, 40)
+                    && str(request.resource.data.teacherName, 20)
+                    && str(request.resource.data.title, 40)
+                    && request.resource.data.createdAt == request.time;
+
+      allow update: if request.auth != null
+                    && resource.data.teacherUid == request.auth.uid
+                    && request.resource.data.teacherUid == resource.data.teacherUid
+                    && request.resource.data.createdAt == resource.data.createdAt;
+
+      allow delete: if request.auth != null && resource.data.teacherUid == request.auth.uid;
+
+      match /books/{bookId} {
+        // 공개 목록은 status == 'approved' 로 걸러 질의해야 통과한다.
+        allow read: if resource.data.status == 'approved' || isTeacher(shelfId);
+
+        allow create: if request.resource.data.status == 'pending'
+                      && request.resource.data.example == false
+                      && codeMatches(shelfId)
+                      && request.resource.data.keys().hasOnly(['grade', 'classNo', 'team', 'title', 'url',
+                           'intent', 'howto', 'concepts', 'coverKind', 'coverColor', 'coverPath',
+                           'status', 'example', 'code', 'createdAt'])
+                      && request.resource.data.grade is int
+                      && request.resource.data.grade >= 1 && request.resource.data.grade <= 3
+                      && request.resource.data.classNo is int
+                      && request.resource.data.classNo >= 1 && request.resource.data.classNo <= 20
+                      && str(request.resource.data.team, 30)
+                      && str(request.resource.data.title, 60)
+                      && str(request.resource.data.url, 500)
+                      && request.resource.data.url.matches('https://.*')
+                      && str(request.resource.data.intent, 600)
+                      && str(request.resource.data.howto, 600)
+                      && request.resource.data.concepts is list
+                      && request.resource.data.concepts.size() <= 8
+                      && str(request.resource.data.coverKind, 20)
+                      && str(request.resource.data.coverColor, 10)
+                      && str(request.resource.data.coverPath, 300)
+                      && request.resource.data.createdAt == request.time;
+
+        allow update, delete: if isTeacher(shelfId);
+      }
+
+      // 모둠원 이름: 공개 화면은 읽지 않는다. 책장 주인 선생님만 읽는다.
+      match /private/{bookId} {
+        allow read: if isTeacher(shelfId);
+
+        allow create: if codeMatches(shelfId)
+                      && request.resource.data.keys().hasOnly(['memberNames', 'code', 'createdAt'])
+                      && str(request.resource.data.memberNames, 200)
+                      && request.resource.data.createdAt == request.time;
+
+        allow update, delete: if isTeacher(shelfId);
+      }
+    }
+  }
+}

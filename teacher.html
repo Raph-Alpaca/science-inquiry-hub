@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>선생님 책장 관리 — 과학탐구 앱 허브</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%97%84%EF%B8%8F%3C/text%3E%3C/svg%3E">
+<link rel="stylesheet" href="assets/shelf.css">
+<style>
+  @media print {
+    body > *:not(#qrDlg) { display: none !important; }
+    #qrDlg { position: static; display: block; box-shadow: none; }
+    #qrDlg .ft { display: none; }
+  }
+</style>
+</head>
+<body>
+<div id="demoBar" class="demo-bar" hidden>미리보기(데모) 모드입니다. Firebase 설정을 넣기 전까지 이 브라우저에만 저장됩니다.</div>
+
+<div class="wrap narrow">
+  <header class="head">
+    <div>
+      <h1>선생님 책장 관리</h1>
+      <p class="sub" id="who">로그인을 확인하는 중…</p>
+    </div>
+    <span class="grow"></span>
+    <button class="btn small" id="logout" hidden>로그아웃</button>
+  </header>
+
+  <main id="main"></main>
+</div>
+
+<dialog class="sheet" id="qrDlg">
+  <div class="bd">
+    <h2 id="qrTitle">책장 코드</h2>
+    <div class="qr-box"><div id="qrHere"></div>
+      <div><p style="margin:0 0 6px"><b id="qrCode" style="font-size:22px"></b></p>
+        <p class="link" id="qrUrl" style="font-size:13px;color:var(--ink-2);word-break:break-all"></p>
+        <p style="font-size:13.5px;color:var(--ink-2);margin:8px 0 0">학생은 이 QR을 찍거나 주소로 들어와 산출물을 제출합니다.</p></div>
+    </div>
+  </div>
+  <div class="ft"><button class="btn" id="qrPrint">인쇄하기</button><button class="btn dark" id="qrClose">닫기</button></div>
+</dialog>
+
+<dialog class="sheet" id="editDlg">
+  <form method="dialog" class="bd" id="editForm">
+    <h2>책 수정</h2>
+    <div class="field"><label for="ed-title">책 제목</label><input type="text" id="ed-title" maxlength="60"></div>
+    <div class="field"><label for="ed-url">시뮬레이션 링크</label><input type="url" id="ed-url" maxlength="500"></div>
+    <div class="two field">
+      <div><label for="ed-grade">학년</label><select id="ed-grade"><option value="1">1학년</option><option value="2">2학년</option><option value="3">3학년</option></select></div>
+      <div><label for="ed-class">반</label><input type="number" id="ed-class" min="1" max="20"></div>
+    </div>
+    <div class="field"><label for="ed-team">모둠명</label><input type="text" id="ed-team" maxlength="30"></div>
+    <div class="field"><label for="ed-intent">개발자의 의도</label><textarea id="ed-intent" maxlength="600"></textarea></div>
+    <div class="field"><label for="ed-howto">사용 방법</label><textarea id="ed-howto" maxlength="600"></textarea></div>
+    <div class="field"><label for="ed-concepts">관련 과학 개념 (쉼표로 구분)</label><input type="text" id="ed-concepts" maxlength="120"></div>
+    <div class="field"><span class="lab">모둠원 이름 (선생님만 보입니다)</span><p id="ed-members" style="margin:0;color:var(--coral-ink)"></p></div>
+    <label class="consent"><input type="checkbox" id="ed-example"><span>“우리 학교 예시”로 올리기 (책장 위쪽 칸에 꽂힙니다)</span></label>
+  </form>
+  <div class="ft">
+    <button class="btn" id="ed-delete" style="margin-right:auto;color:var(--coral-ink)">이 책 삭제</button>
+    <button class="btn" id="ed-cancel">취소</button>
+    <button class="btn primary" id="ed-save">저장</button>
+  </div>
+</dialog>
+
+<script type="module">
+import {
+  DEMO, CONFIGURED, onUser, login, logout, myShelves, createShelf, regenerateCode,
+  listBooks, loadMembers, setStatus, updateBook, deleteBook, clearShelfCache, COVERS,
+} from "./assets/shelf-data.js";
+
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const suffix = DEMO ? "&demo=1" : "";
+const shelfUrl = (code) => `${location.origin}${location.pathname.replace(/teacher\.html$/, "")}shelf.html?code=${code}${suffix}`;
+let user = null, shelves = [], data = {}, tab = {};
+
+if (DEMO) $("demoBar").hidden = false;
+
+function toast(msg) {
+  const el = document.createElement("div");
+  el.className = "toast"; el.textContent = msg; el.setAttribute("role", "status");
+  document.body.appendChild(el);
+  setTimeout(() => el.remove(), 2200);
+}
+async function copy(text, what) {
+  try { await navigator.clipboard.writeText(text); toast(what + " 복사했어요"); }
+  catch (e) { window.prompt(what + "를 복사하세요", text); }
+}
+
+/* ---------- 로그인 ---------- */
+onUser(async (u) => {
+  user = u;
+  $("logout").hidden = !u;
+  if (!u) { renderSignedOut(); return; }
+  $("who").textContent = `${u.displayName || "선생님"}${u.email ? ` (${u.email})` : ""}`;
+  await reload();
+});
+$("logout").onclick = async () => { await logout(); location.reload(); };
+
+function renderSignedOut() {
+  $("who").textContent = "로그인하면 우리 학교 책장을 만들 수 있어요";
+  $("main").innerHTML = `
+    <div class="notice">
+      <h2>구글 계정으로 로그인하세요</h2>
+      <p>선생님이 하실 일은 네 가지뿐입니다. 로그인 → 학교 책장 만들기 → 학생에게 코드 알려 주기 → 제출된 책 승인하기.</p>
+      <p><button class="btn primary" id="loginBtn">구글로 로그인</button></p>
+      ${CONFIGURED ? "" : `<p class="link" style="color:var(--amber-ink)">아직 Firebase 설정이 들어오지 않아 미리보기(데모)로 열립니다. 설정을 넣으면 실제 저장이 됩니다.</p>`}
+    </div>
+    <div class="steps3" style="margin-top:20px">
+      <div class="step"><span class="n">1</span><div><b>로그인해요</b><small>구글 계정</small></div></div>
+      <div class="step"><span class="n">2</span><div><b>학생에게 책장 코드를 알려 주세요</b><small>칠판에 적거나 QR을 띄우면 됩니다</small></div></div>
+      <div class="step"><span class="n">3</span><div><b>제출된 책을 승인하면 책장에 꽂혀요</b><small>승인 전에는 공개되지 않습니다</small></div></div>
+    </div>`;
+  $("loginBtn").onclick = async () => {
+    try { await login(); } catch (e) { toast("로그인하지 못했어요: " + (e.code || e.message)); }
+  };
+}
+
+/* ---------- 책장 목록 ---------- */
+async function reload() {
+  shelves = await myShelves(user.uid);
+  await Promise.all(shelves.map(async (s) => {
+    const books = await listBooks(s.id);
+    const members = await loadMembers(s.id, books.map((b) => b.id));
+    data[s.id] = { books, members };
+    tab[s.id] = tab[s.id] || "pending";
+  }));
+  render();
+}
+function render() {
+  if (!shelves.length) { renderFirstRun(); return; }
+  const pending = shelves.reduce((n, s) => n + data[s.id].books.filter((b) => b.status === "pending").length, 0);
+  const first = shelves[0];
+  $("main").innerHTML = `
+    <div class="steps3">
+      <div class="step done"><span class="n">1</span><div><b>로그인했어요</b><small>완료</small></div></div>
+      <div class="step"><span class="n">2</span><div><b>학생에게 책장 코드를 알려 주세요</b><small>${esc(first.code)}</small></div></div>
+      <div class="step"><span class="n">3</span><div><b>제출된 책을 승인하면 책장에 꽂혀요</b><small>${pending ? `대기 ${pending}권` : "대기 없음"}</small></div></div>
+    </div>
+    ${shelves.map(shelfCard).join("")}
+    <button class="add-shelf" id="addShelf">+ 책장 하나 더 만들기 (예: 3학년 책장)</button>`;
+  wire();
+}
+function shelfCard(s) {
+  const d = data[s.id], t = tab[s.id];
+  const counts = {
+    pending: d.books.filter((b) => b.status === "pending").length,
+    approved: d.books.filter((b) => b.status === "approved").length,
+    hidden: d.books.filter((b) => b.status === "hidden").length,
+  };
+  const rows = d.books.filter((b) => b.status === t);
+  return `
+  <section class="card shelf-card" data-s="${s.id}">
+    <div class="hd">
+      <div>
+        <h2>${esc(s.title)}</h2>
+        <div class="meta">코드 ${esc(s.code)} · 공개 주소 ${esc(shelfUrl(s.code))}</div>
+      </div>
+      <div class="acts">
+        <button class="btn small" data-a="copyCode">코드 복사</button>
+        <button class="btn small" data-a="qr">QR 보기</button>
+        <button class="btn small" data-a="copyUrl">주소 복사</button>
+        <button class="btn small" data-a="csv">CSV 내보내기</button>
+        <button class="btn small" data-a="recode">코드 재발급</button>
+      </div>
+    </div>
+    <div class="tabs-pill" role="tablist">
+      <button role="tab" data-t="pending" aria-selected="${t === "pending"}">승인 대기 ${counts.pending}</button>
+      <button role="tab" data-t="approved" aria-selected="${t === "approved"}">승인됨 ${counts.approved}</button>
+      <button role="tab" data-t="hidden" aria-selected="${t === "hidden"}">숨김 ${counts.hidden}</button>
+    </div>
+    ${rows.length ? `
+    <table class="books">
+      <thead><tr><th>학년-반</th><th>책 제목</th><th>모둠원 (선생님만)</th><th>링크</th><th>제출일</th><th>개발자의 의도</th><th></th></tr></thead>
+      <tbody>${rows.map((b) => bookRow(s, b, d.members[b.id])).join("")}</tbody>
+    </table>` : `<p class="upload-note" style="margin:18px 0 0">${t === "pending" ? "승인을 기다리는 책이 없습니다." : t === "approved" ? "아직 승인한 책이 없습니다." : "숨긴 책이 없습니다."}</p>`}
+    ${t === "pending" && counts.pending ? `
+    <div class="bulk">
+      <button class="btn dark" data-a="approveAll">대기 중인 ${counts.pending}권 모두 승인</button>
+      <span class="note">승인하면 바로 공개 책장에 꽂힙니다. 모둠원 이름은 공개되지 않습니다.</span>
+    </div>` : ""}
+  </section>`;
+}
+function bookRow(s, b, members) {
+  const date = b.createdAt ? new Date(b.createdAt) : null;
+  return `<tr data-b="${b.id}">
+    <td data-l="학년-반">${b.grade}-${b.classNo}</td>
+    <td data-l="제목"><b>${esc(b.title)}</b>${b.example ? ' <span class="chip amber">예시</span>' : ""}</td>
+    <td data-l="모둠원" class="names">${esc(members || "(없음)")}</td>
+    <td data-l="링크"><a class="lk" href="${esc(b.url)}" target="_blank" rel="noopener noreferrer">${esc(b.url)}</a></td>
+    <td data-l="제출일">${date ? `${date.getMonth() + 1}. ${date.getDate()}` : "-"}</td>
+    <td data-l="의도">${esc((b.intent || "").slice(0, 18))}${(b.intent || "").length > 18 ? "…" : ""}</td>
+    <td><span class="row-acts">
+      ${b.status !== "approved" ? `<button class="btn small go" data-a="approve">승인</button>` : ""}
+      <button class="btn small" data-a="edit">수정</button>
+      ${b.status !== "hidden" ? `<button class="btn small" data-a="hide">숨김</button>` : `<button class="btn small" data-a="approve">다시 승인</button>`}
+    </span></td>
+  </tr>`;
+}
+
+/* ---------- 첫 방문: 책장 만들기 ---------- */
+function renderFirstRun(edit) {
+  $("main").innerHTML = `
+    <div class="steps3">
+      <div class="step done"><span class="n">1</span><div><b>로그인했어요</b><small>완료</small></div></div>
+      <div class="step"><span class="n">2</span><div><b>학생에게 책장 코드를 알려 주세요</b><small>책장을 만들면 코드가 나옵니다</small></div></div>
+      <div class="step"><span class="n">3</span><div><b>제출된 책을 승인하면 책장에 꽂혀요</b><small>승인 전에는 공개되지 않습니다</small></div></div>
+    </div>
+    <section class="card shelf-card">
+      <h2 style="margin-top:0">학교 책장 만들기</h2>
+      <p class="upload-note" style="margin-bottom:16px">학교 이름과 성함만 적으면 됩니다. 책장 코드는 자동으로 만들어져요.</p>
+      <div class="field"><label for="nw-school">학교 이름</label><input type="text" id="nw-school" maxlength="40" placeholder="예: 서울○○중학교"></div>
+      <div class="field"><label for="nw-name">선생님 성함</label><input type="text" id="nw-name" maxlength="20" placeholder="예: 김선생"></div>
+      <div class="field"><label for="nw-title">책장 이름</label><input type="text" id="nw-title" maxlength="40" placeholder="예: 2학년 책장"></div>
+      <button class="btn primary" id="nw-make">책장 만들기</button>
+    </section>`;
+  const mk = $("nw-make");
+  if (edit) { $("nw-school").value = edit.school || ""; $("nw-name").value = edit.teacherName || ""; }
+  mk.onclick = async () => {
+    const school = $("nw-school").value.trim(), teacherName = $("nw-name").value.trim();
+    const title = $("nw-title").value.trim() || "우리 학교 책장";
+    if (!school || !teacherName) { toast("학교 이름과 성함을 적어 주세요"); return; }
+    mk.disabled = true; mk.textContent = "만드는 중…";
+    try {
+      await createShelf({ school, teacherName, title, uid: user.uid });
+      await reload();
+      toast("책장을 만들었어요");
+    } catch (e) {
+      mk.disabled = false; mk.textContent = "책장 만들기";
+      toast("만들지 못했어요: " + (e.code || e.message));
+    }
+  };
+}
+
+/* ---------- 동작 연결 ---------- */
+function wire() {
+  $("addShelf").onclick = () => {
+    const s = shelves[0];
+    renderFirstRun({ school: s.school, teacherName: s.teacherName });
+    window.scrollTo({ top: document.body.scrollHeight, behavior: "smooth" });
+  };
+  document.querySelectorAll(".shelf-card").forEach((card) => {
+    const s = shelves.find((x) => x.id === card.dataset.s);
+    card.querySelectorAll("[role=tab]").forEach((b) => (b.onclick = () => { tab[s.id] = b.dataset.t; render(); }));
+    card.onclick = async (ev) => {
+      const btn = ev.target.closest("[data-a]");
+      if (!btn) return;
+      const row = ev.target.closest("tr[data-b]");
+      const book = row ? data[s.id].books.find((b) => b.id === row.dataset.b) : null;
+      const a = btn.dataset.a;
+      if (a === "copyCode") return copy(s.code, "코드를");
+      if (a === "copyUrl") return copy(shelfUrl(s.code), "주소를");
+      if (a === "qr") return showQr(s);
+      if (a === "csv") return exportCsv(s);
+      if (a === "recode") {
+        if (!confirm("코드를 새로 만들면 예전 코드로는 제출할 수 없습니다. 계속할까요?")) return;
+        const before = s.code;
+        s.code = await regenerateCode(s);
+        clearShelfCache(before); clearShelfCache(s.code);
+        render(); toast("새 코드: " + s.code);
+        return;
+      }
+      if (a === "approveAll") {
+        const ids = data[s.id].books.filter((b) => b.status === "pending").map((b) => b.id);
+        await setStatus(s, ids, "approved");
+        clearShelfCache(s.code); await reload(); toast(`${ids.length}권을 승인했어요`);
+        return;
+      }
+      if (!book) return;
+      if (a === "approve" || a === "hide") {
+        await setStatus(s, [book.id], a === "approve" ? "approved" : "hidden");
+        clearShelfCache(s.code); await reload();
+        toast(a === "approve" ? "승인했어요" : "숨겼어요");
+        return;
+      }
+      if (a === "edit") openEdit(s, book);
+    };
+  });
+}
+
+/* ---------- QR ---------- */
+async function showQr(s) {
+  const url = shelfUrl(s.code);
+  $("qrTitle").textContent = `${s.title} 책장 코드`;
+  $("qrCode").textContent = s.code;
+  $("qrUrl").textContent = url;
+  $("qrHere").innerHTML = `<p class="upload-note">QR을 만드는 중…</p>`;
+  $("qrDlg").showModal();
+  try {
+    const { qrSvg } = await import("./assets/qr.js");
+    $("qrHere").innerHTML = qrSvg(url, { size: 220, title: `${s.title} 책장 주소` });
+  } catch (e) {
+    $("qrHere").innerHTML = `<p class="upload-note">QR을 만들지 못했어요. 아래 주소를 알려 주세요.</p>`;
+  }
+}
+$("qrClose").onclick = () => $("qrDlg").close();
+$("qrPrint").onclick = () => window.print();
+
+/* ---------- CSV ---------- */
+function exportCsv(s) {
+  const d = data[s.id];
+  const head = ["학년", "반", "모둠", "책 제목", "링크", "개발자의 의도", "사용 방법", "관련 과학 개념", "모둠원", "상태", "제출일"];
+  const q = (v) => `"${String(v ?? "").replace(/"/g, '""')}"`;
+  const lines = [head.map(q).join(",")].concat(d.books.map((b) => [
+    b.grade, b.classNo, b.team, b.title, b.url, b.intent, b.howto, (b.concepts || []).join(" / "),
+    d.members[b.id] || "", { pending: "대기", approved: "승인", hidden: "숨김" }[b.status] || b.status,
+    b.createdAt ? new Date(b.createdAt).toLocaleDateString("ko-KR") : "",
+  ].map(q).join(",")));
+  const blob = new Blob(["﻿" + lines.join("\r\n")], { type: "text/csv;charset=utf-8" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = `${s.title}-산출물.csv`;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  toast("CSV를 내려받았어요");
+}
+
+/* ---------- 수정 ---------- */
+let editing = null;
+function openEdit(s, b) {
+  editing = { s, b };
+  $("ed-title").value = b.title || "";
+  $("ed-url").value = b.url || "";
+  $("ed-grade").value = String(b.grade || 1);
+  $("ed-class").value = b.classNo || 1;
+  $("ed-team").value = b.team || "";
+  $("ed-intent").value = b.intent || "";
+  $("ed-howto").value = b.howto || "";
+  $("ed-concepts").value = (b.concepts || []).join(", ");
+  $("ed-members").textContent = data[s.id].members[b.id] || "(없음)";
+  $("ed-example").checked = !!b.example;
+  $("editDlg").showModal();
+}
+$("ed-cancel").onclick = () => $("editDlg").close();
+$("ed-save").onclick = async () => {
+  if (!editing) return;
+  const { s, b } = editing;
+  const patch = {
+    title: $("ed-title").value.trim(), url: $("ed-url").value.trim(),
+    grade: +$("ed-grade").value, classNo: +$("ed-class").value, team: $("ed-team").value.trim(),
+    intent: $("ed-intent").value.trim(), howto: $("ed-howto").value.trim(),
+    concepts: $("ed-concepts").value.split(",").map((x) => x.trim()).filter(Boolean).slice(0, 8),
+    example: $("ed-example").checked,
+  };
+  $("editDlg").close();
+  await updateBook(s.id, b.id, patch);
+  clearShelfCache(s.code); await reload(); toast("저장했어요");
+};
+$("ed-delete").onclick = async () => {
+  if (!editing) return;
+  if (!confirm("이 책을 삭제할까요? 되돌릴 수 없습니다.")) return;
+  const { s, b } = editing;
+  $("editDlg").close();
+  await deleteBook(s.id, b.id);
+  clearShelfCache(s.code); await reload(); toast("삭제했어요");
+};
+</script>
+</body>
+</html>
