@@ -98,7 +98,10 @@ const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 const params = new URLSearchParams(location.search);
-const code = (params.get("code") || "").trim().toUpperCase();
+// 코드를 쉼표로 이어 넣으면(code=A,B) 여러 책장의 서가를 한 화면에 이어서 본다. 선생님 화면의 "함께 보기"가 쓴다.
+const codes = [...new Set((params.get("code") || "").split(",").map((s) => s.trim().toUpperCase()).filter(Boolean))];
+const code = codes[0] || "";
+const merged = codes.length > 1;
 const PER_ROW = 10;
 let flat = [];            // 펼쳐 보기용 순서
 let openIndex = -1, animating = false, lastFocus = null;
@@ -120,14 +123,21 @@ if (DEMO) $("demoBar").hidden = false;
     bindCodeEntry(DEMO);
     return;
   }
-  $("fab").href = `submit.html?code=${encodeURIComponent(code)}${DEMO ? "&demo=1" : ""}`;
-  $("fab").hidden = false;
+  if (!merged) {
+    $("fab").href = `submit.html?code=${encodeURIComponent(code)}${DEMO ? "&demo=1" : ""}`;
+    $("fab").hidden = false;
+  }
   examples = await loadTeacherExamples().catch(() => null);
   // 선생님이 승인·숨김하면 새로고침 없이 책장이 바뀐다. 책을 펼쳐 보는 중이면 덮은 뒤에 반영한다.
-  watchShelf(code, (data) => {
-    if (!$("reader").hidden) { waiting = data; return; }
-    render(data);
-  }, showError);
+  // 책장이 여러 개면 모두 한 번씩 도착한 뒤에 그린다.
+  const live = new Map();
+  codes.forEach((c) => watchShelf(c, (data) => {
+    live.set(c, data);
+    if (live.size < codes.length) return;
+    const all = codes.map((k) => live.get(k));
+    if (!$("reader").hidden) { waiting = all; return; }
+    render(all);
+  }, showError));
 })();
 
 function showError(err) {
@@ -145,17 +155,19 @@ function showError(err) {
 }
 
 /* ---------- 그리기 ---------- */
-function render({ shelf, books }) {
+function render(list) {
   const bc = $("bookcase");
   bc.removeAttribute("aria-busy");
-  if (!shelf) {
+  const found = list.filter((x) => x.shelf);
+  const missing = codes.filter((c, i) => !list[i].shelf);
+  if (!found.length) {
     $("sub").textContent = "책장을 찾지 못했습니다";
     $("codeChip").hidden = true;
     bc.parentElement.hidden = true;
     $("fab").hidden = true;
     $("foot").hidden = true;
     $("notice").innerHTML = `<div class="notice bad"><h2>이런 코드의 책장이 없어요</h2>
-      <p><b>${esc(code)}</b> 로 된 책장을 찾지 못했습니다. 코드를 다시 확인하거나 선생님께 물어보세요.</p>
+      <p><b>${esc(codes.join(", "))}</b> 로 된 책장을 찾지 못했습니다. 코드를 다시 확인하거나 선생님께 물어보세요.</p>
       ${codeEntryHtml({ value: code, wrong: true, page: "shelf" })}</div>`;
     bindCodeEntry(DEMO);
     rendered = false;
@@ -163,13 +175,25 @@ function render({ shelf, books }) {
   }
   $("notice").innerHTML = "";
   bc.parentElement.hidden = false;
-  $("fab").hidden = false;
-  $("codeText").textContent = shelf.code;
-  rememberCode(shelf.code);
-  $("codeChip").hidden = false;
-  $("sub").textContent = `${shelf.school} · 맨 윗줄은 선생님 예시, 아래는 학년·반별 서가입니다`;
-  document.title = `${shelf.school} 산출물 책장`;
-  $("foot").hidden = false;
+  if (merged) {
+    // 함께 보기: 제출 단추와 코드 표시는 숨기고, 어떤 책장들을 이어 보는지 머리말에 적는다
+    $("fab").hidden = true;
+    $("codeChip").hidden = true;
+    $("foot").hidden = true;
+    const schools = [...new Set(found.map((x) => x.shelf.school))].join(" · ");
+    const titles = found.map((x) => x.shelf.title).join(" + ");
+    $("sub").textContent = `${schools} · ${titles}${missing.length ? ` (못 찾은 코드: ${missing.join(", ")})` : ""}`;
+    document.title = `${schools} 산출물 책장 (함께 보기)`;
+  } else {
+    const { shelf } = found[0];
+    $("fab").hidden = false;
+    $("codeText").textContent = shelf.code;
+    rememberCode(shelf.code);
+    $("codeChip").hidden = false;
+    $("sub").textContent = `${shelf.school} · 맨 윗줄은 선생님 예시, 아래는 학년·반별 서가입니다`;
+    document.title = `${shelf.school} 산출물 책장`;
+    $("foot").hidden = false;
+  }
 
   const sections = [];
   if (examples) {
@@ -179,26 +203,35 @@ function render({ shelf, books }) {
       books: examples.books.map((b) => ({ ...b, teacher: true })),
     });
   }
-  const mine = books.filter((b) => b.example);
-  if (mine.length) {
-    sections.push({ key: "school", label: "우리 학교 예시", note: `${mine.length}권`, books: mine.map(toBook) });
-  }
-  const groups = new Map();
-  books.filter((b) => !b.example).forEach((b) => {
-    const k = `${b.grade}-${b.classNo}`;
-    if (!groups.has(k)) groups.set(k, []);
-    groups.get(k).push(toBook(b));
-  });
-  (shelf.classes || []).forEach((k) => { if (!groups.has(k)) groups.set(k, []); });
-  [...groups.keys()].sort(byClass).forEach((k) => {
-    const list = groups.get(k);
-    const [g, c] = k.split("-");
-    const last = list.length ? new Date(Math.max(...list.map((b) => b.createdAt || 0))) : null;
-    sections.push({
-      key: k, label: `${g}학년 ${c}반`,
-      note: list.length ? `${list.length}권${last ? ` · 최근 제출 ${last.getMonth() + 1}월 ${last.getDate()}일` : ""}` : "0권",
-      books: list,
+  // 책장마다 학년·반 서가를 만든다. 함께 보기에서는 서가 이름 앞에 책장 이름을 붙여 구분한다.
+  found.forEach(({ shelf, books }) => {
+    const pre = merged ? `${shelf.title} · ` : "";
+    const kp = merged ? `${shelf.code}:` : "";
+    const mine = books.filter((b) => b.example);
+    if (mine.length) {
+      sections.push({ key: `${kp}school`, label: `${pre}우리 학교 예시`, note: `${mine.length}권`, books: mine.map(toBook) });
+    }
+    const groups = new Map();
+    books.filter((b) => !b.example).forEach((b) => {
+      const k = `${b.grade}-${b.classNo}`;
+      if (!groups.has(k)) groups.set(k, []);
+      groups.get(k).push(toBook(b));
     });
+    (shelf.classes || []).forEach((k) => { if (!groups.has(k)) groups.set(k, []); });
+    [...groups.keys()].sort(byClass).forEach((k) => {
+      const rows = groups.get(k);
+      const [g, c] = k.split("-");
+      const last = rows.length ? new Date(Math.max(...rows.map((b) => b.createdAt || 0))) : null;
+      sections.push({
+        key: `${kp}${k}`, label: `${pre}${g}학년 ${c}반`,
+        note: rows.length ? `${rows.length}권${last ? ` · 최근 제출 ${last.getMonth() + 1}월 ${last.getDate()}일` : ""}` : "0권",
+        books: rows,
+      });
+    });
+    // 함께 보기에서 서가가 하나도 없는 책장은 빈 줄 하나로 보여 준다 (빠진 것처럼 보이지 않게)
+    if (merged && !sections.some((sec) => sec.key.startsWith(kp))) {
+      sections.push({ key: `${kp}none`, label: shelf.title, note: "0권", books: [] });
+    }
   });
 
   // 다시 그려도 옆으로 넘겨 둔 위치는 그대로
@@ -258,7 +291,7 @@ function bookHtml(b, isNew) {
   const cls = isNew && !reduced ? " arrive" : "";
   return `
     <button class="book bk${cls}" data-i="${i}" style="--tone:${esc(tone)};--dh:${heightOf(b.id)}px" aria-label="${esc(b.title)} 펼쳐 보기">
-      <span class="t">${esc(b.title)}</span>
+      <span class="t"><span>${esc(b.title)}</span></span>
       <img class="art" src="${esc(art)}" alt="" aria-hidden="true">
       <span class="who">${esc(b.who)}</span>
     </button>

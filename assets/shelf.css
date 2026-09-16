@@ -122,16 +122,15 @@ img { max-width: 100%; }
   box-shadow: 0 8px 14px -4px rgba(0, 0, 0, .5), 0 1px 0 rgba(0, 0, 0, .35);
 }
 .row-board::before { content: ""; position: absolute; left: 0; right: 0; top: 0; height: 1px; background: rgba(255, 255, 255, .28); }
-/* 서가 이름표: 윗 선반 밑면에 붙인 종이 라벨 (책과 겹치지 않는 위쪽 빈 공간) */
+/* 서가 이름: 윗 선반 밑 나무에 크림색으로 새긴 글자 (책과 겹치지 않는 위쪽 빈 공간) */
 .row-label {
-  position: absolute; left: 14px; top: 0; z-index: 3;
+  position: absolute; left: 24px; top: 9px; z-index: 3;
   display: flex; align-items: baseline; gap: 10px;
-  background: var(--paper); color: var(--ink); padding: 4px 12px 5px; border-radius: 0 0 2px 2px;
-  box-shadow: 0 2px 3px rgba(0, 0, 0, .4), inset 0 0 0 1px rgba(36, 32, 27, .08);
-  pointer-events: none; max-width: calc(100% - 28px);
+  color: rgba(251, 247, 238, .9); pointer-events: none; max-width: calc(100% - 48px);
+  text-shadow: 0 1px 0 rgba(0, 0, 0, .55), 0 0 1px rgba(0, 0, 0, .35);
 }
-.row-label h2 { margin: 0; font-family: var(--serif); font-size: 15px; font-weight: 700; line-height: 1.3; white-space: nowrap; }
-.row-label .count { font-size: 12px; color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.row-label h2 { margin: 0; font-family: var(--serif); font-size: 15px; font-weight: 700; line-height: 1.3; letter-spacing: .02em; white-space: nowrap; }
+.row-label .count { font-size: 12px; color: rgba(251, 247, 238, .62); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .row-label .skeleton { display: inline-block; }
 .row-empty { color: rgba(251, 247, 238, .72); font-size: 14.5px; margin: 0 auto 26px; padding: 0 12px; text-align: center; }
 /* 한 줄에 다 안 들어가면 옆으로 넘기는 단추와 가림 */
@@ -176,13 +175,16 @@ img { max-width: 100%; }
 }
 .book:hover, .book:focus-visible { transform: translateY(-8px); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .18), 2px 2px 3px rgba(0, 0, 0, .25), 8px 18px 24px -6px rgba(0, 0, 0, .6); }
 .book:focus-visible { outline-offset: 4px; }
+/* 책 제목: 옛 책처럼 표지 위에 얇은 두 겹 선을 두르고 크림색으로 바로 인쇄한다 */
 .book .t {
-  margin: 12px 9px 0 15px; padding: 5px 7px 4px;
-  background: var(--paper); color: var(--ink); border-radius: 1px;
+  margin: 12px 9px 0 15px; padding: 6px 7px 5px;
+  color: var(--paper); border: 1px solid rgba(251, 247, 238, .58); border-radius: 1px;
+  outline: 1px solid rgba(251, 247, 238, .28); outline-offset: 2px;
   font-family: var(--serif); font-size: 11.5px; font-weight: 700; line-height: 1.3;
-  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
-  box-shadow: 0 1px 0 rgba(0, 0, 0, .18);
+  text-shadow: 0 1px 1px rgba(0, 0, 0, .3);
 }
+/* 두 줄까지만. 안쪽 칸에서 자르므로 세 번째 줄이 테두리 안 여백으로 비치지 않는다 */
+.book .t > span { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .book .art { display: block; width: 66px; height: 44px; margin: auto 0 auto 24px; opacity: .95; }
 .book .who {
   margin: 0 8px 9px 15px; font-size: 10.5px; font-weight: 500; letter-spacing: .01em; color: rgba(251, 247, 238, .88);
@@ -332,8 +334,9 @@ body.reading { overflow: hidden; }
 }
 .cover-face .t {
   font-family: var(--serif); font-size: 24px; font-weight: 700; text-align: center; line-height: 1.35;
-  background: var(--paper); color: var(--ink); padding: 14px 22px 12px; border-radius: 2px; max-width: 88%;
-  box-shadow: 0 1px 0 rgba(0, 0, 0, .2);
+  color: var(--paper); padding: 14px 22px 12px; border-radius: 2px; max-width: 88%;
+  border: 1.5px solid rgba(251, 247, 238, .62); outline: 1px solid rgba(251, 247, 238, .3); outline-offset: 4px;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, .3);
 }
 .cover-face .art { width: 46%; max-width: 190px; }
 .cover-face .who { font-size: 14px; font-weight: 500; color: rgba(251, 247, 238, .9); }
@@ -445,6 +448,17 @@ table.books .lk { color: var(--ink-2); font-size: 13px; word-break: break-all; m
 table.books .row-acts { display: flex; gap: 6px; justify-content: flex-end; }
 .bulk { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin-top: 16px; }
 .bulk .note { color: var(--ink-2); font-size: 13px; }
+/* 책장 함께 보기: 고른 책장의 서가를 미리보기 창에 이어서 보여 준다 */
+.merge-bar { padding: 16px 20px; margin-bottom: 20px; display: flex; align-items: center; gap: 12px 18px; flex-wrap: wrap; }
+.merge-bar .merge-hd { display: flex; flex-direction: column; min-width: 0; }
+.merge-bar .merge-hd b { font-size: 15px; }
+.merge-bar .merge-hd small { color: var(--ink-2); font-size: 12.5px; }
+.merge-picks { display: flex; gap: 8px; flex-wrap: wrap; }
+.merge-pick { display: inline-flex; align-items: center; gap: 6px; background: var(--white); border: 1px solid var(--line); border-radius: var(--r-pill); padding: 6px 12px 6px 8px; font-size: 14px; cursor: pointer; }
+.merge-pick:hover { border-color: var(--ink); }
+.merge-pick input { accent-color: var(--ink); width: 16px; height: 16px; margin: 0; }
+.merge-pick small { color: var(--ink-2); font-size: 12px; }
+.merge-bar .btn { margin-left: auto; }
 .add-shelf { border: 1px dashed var(--line-2); background: none; border-radius: var(--r-s); padding: 12px 20px; font-size: 15px; color: var(--ink); width: 100%; }
 .add-shelf:hover { border-color: var(--ink); }
 .qr-box { display: flex; gap: 18px; align-items: center; flex-wrap: wrap; margin-top: 14px; padding: 16px; background: var(--white); border: 1px solid var(--line); border-radius: var(--r-s); }
@@ -524,7 +538,7 @@ dialog.sheet .ft { display: flex; gap: 8px; justify-content: flex-end; padding: 
   .reader .hint { display: none; }
   .bookcase { padding: 16px 16px 20px; gap: 18px; }
   .row-inner { padding: 30px 16px 0; gap: 10px; }
-  .row-label { left: 10px; }
+  .row-label { left: 18px; }
 }
 @media (max-width: 640px) {
   .wrap, .wrap.narrow { padding: 0 16px 90px; }
@@ -535,9 +549,8 @@ dialog.sheet .ft { display: flex; gap: 8px; justify-content: flex-end; padding: 
   .bay { box-shadow: inset 0 8px 14px -6px rgba(0, 0, 0, .5); }
   .row-inner { display: flex; flex-direction: column; align-items: stretch; gap: 8px; padding: 8px 8px 12px; min-height: 0; overflow: visible; scroll-snap-type: none; }
   .row-board { height: 10px; }
-  .row-label { position: static; display: flex; margin: 0 0 8px; box-shadow: none; background: none; color: var(--paper); padding: 6px 2px 0; }
+  .row-label { position: static; margin: 0 0 8px; padding: 6px 2px 0; max-width: none; }
   .row-label h2 { font-size: 16px; }
-  .row-label .count { color: rgba(251, 247, 238, .7); }
   .row-nav, .bay::before, .bay::after { display: none; }
   .shelf-row.empty .row-inner { min-height: 0; }
   .book { display: none; }

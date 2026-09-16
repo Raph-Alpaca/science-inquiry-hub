@@ -31,7 +31,7 @@
 
 <aside class="peek" id="peek" hidden aria-label="학생이 보는 화면">
   <div class="peek-hd">
-    <div class="peek-title"><b>학생이 보는 화면</b><small id="peekName"></small></div>
+    <div class="peek-title"><b id="peekKind">학생이 보는 화면</b><small id="peekName"></small></div>
     <div class="peek-acts">
       <button class="btn small" id="peekWide" aria-pressed="false" title="컴퓨터 화면 폭으로 보기">넓게</button>
       <button class="btn small" id="peekReload">새로 고침</button>
@@ -115,8 +115,10 @@ const shelfUrl = (code) => (!DEMO && SITE.studentLink && SITE.studentLink.includ
   ? SITE.studentLink.replace("{code}", encodeURIComponent(code))
   : `${here}shelf.html?code=${encodeURIComponent(code)}${suffix}`;
 // 옆 패널 미리보기는 항상 이 사이트의 shelf.html 을 쓴다 (파일이 같으므로 학생용 사이트와 똑같이 보인다).
-const peekUrl = (code) => `${here}shelf.html?code=${encodeURIComponent(code)}${suffix}`;
+// 코드를 여러 개 주면(쉼표로 이어서) 그 책장들의 서가를 한 화면에 이어 보여 준다 ("책장 함께 보기").
+const peekUrl = (codes) => `${here}shelf.html?code=${encodeURIComponent([].concat(codes).join(","))}${suffix}`;
 let user = null, shelves = [], data = {}, tab = {};
+const mergeSel = new Set(), mergeKnown = new Set();   // 함께 볼 책장 (새 책장은 처음엔 골라 둔다)
 let access = { admin: false, approved: false }, allowed = [], allShelves = [];
 
 if (DEMO) $("demoBar").hidden = false;
@@ -323,11 +325,25 @@ function render() {
       <div class="step"><span class="n">2</span><div><b>학생에게 책장 코드를 알려 주세요</b><small>${esc(first.code)}</small></div></div>
       <div class="step"><span class="n">3</span><div><b>제출된 책을 승인하면 책장에 꽂혀요</b><small>${pending ? `대기 ${pending}권` : "대기 없음"}</small></div></div>
     </div>
+    ${mergeBar()}
     ${shelves.map(shelfCard).join("")}
     <button class="add-shelf" id="addShelf">+ 책장 하나 더 만들기 (예: 3학년 책장)</button>
     ${access.admin ? adminCard() : ""}`;
   wire();
   wireAdmin();
+}
+// 책장이 둘 이상일 때만: 고른 책장들을 미리보기 창에 이어서 본다
+function mergeBar() {
+  if (shelves.length < 2) return "";
+  shelves.forEach((s) => { if (!mergeKnown.has(s.id)) { mergeKnown.add(s.id); mergeSel.add(s.id); } });
+  return `
+  <section class="card merge-bar" id="mergeBar">
+    <div class="merge-hd"><b>책장 함께 보기</b><small>고른 책장의 서가를 한 화면에 이어서 봅니다. 선생님 화면에서만 쓰는 기능입니다.</small></div>
+    <div class="merge-picks">
+      ${shelves.map((s) => `<label class="merge-pick"><input type="checkbox" data-m="${s.id}"${mergeSel.has(s.id) ? " checked" : ""}> ${esc(s.title)} <small>${esc(s.code)}</small></label>`).join("")}
+    </div>
+    <button class="btn small go" id="mergeGo">고른 책장 함께 보기</button>
+  </section>`;
 }
 function shelfCard(s) {
   const d = data[s.id], t = tab[s.id];
@@ -425,6 +441,17 @@ function renderFirstRun(edit) {
 
 /* ---------- 동작 연결 ---------- */
 function wire() {
+  const mb = $("mergeBar");
+  if (mb) {
+    mb.querySelectorAll("input[data-m]").forEach((cb) => (cb.onchange = () => {
+      if (cb.checked) mergeSel.add(cb.dataset.m); else mergeSel.delete(cb.dataset.m);
+    }));
+    $("mergeGo").onclick = () => {
+      const picked = shelves.filter((s) => mergeSel.has(s.id));
+      if (picked.length < 2) { toast("책장을 두 개 이상 골라 주세요"); return; }
+      openPeek(picked, $("mergeGo"));
+    };
+  }
   $("addShelf").onclick = () => {
     const s = shelves[0];
     renderFirstRun({ school: s.school, teacherName: s.teacherName });
@@ -463,15 +490,24 @@ function wire() {
   });
 }
 
-/* ---------- 학생 화면 보기 (옆 패널) ---------- */
-let peekShelf = null, peekFrom = null;
+/* ---------- 학생 화면 보기 (옆 패널) ----------
+ * 책장 하나를 주면 학생이 보는 그대로, 여러 개를 주면 서가를 이어 붙인 "함께 보기"로 연다. */
+let peekShelves = [], peekFrom = null;
 const peekWideKey = "sih-peek-wide";
+function fillPeek(list) {
+  peekShelves = list;
+  const codes = list.map((s) => s.code);
+  $("peekKind").textContent = list.length > 1 ? "책장 함께 보기 (선생님용)" : "학생이 보는 화면";
+  $("peekName").textContent = list.length > 1
+    ? `${list.map((s) => s.title).join(" + ")} · ${codes.join(", ")}`
+    : `${list[0].title} · ${codes[0]}`;
+  $("peekOpen").href = peekUrl(codes);
+  $("peekFrame").src = peekUrl(codes);
+}
 function openPeek(s, from) {
-  peekShelf = s; peekFrom = from || null;
+  peekFrom = from || null;
   const el = $("peek");
-  $("peekName").textContent = `${s.title} · ${s.code}`;
-  $("peekOpen").href = peekUrl(s.code);
-  $("peekFrame").src = peekUrl(s.code);
+  fillPeek([].concat(s));
   let wide = false;
   try { wide = localStorage.getItem(peekWideKey) === "1"; } catch (e) { /* 무시 */ }
   setPeekWide(wide);
@@ -488,18 +524,15 @@ function closePeek() {
   const done = () => { el.hidden = true; $("peekFrame").src = "about:blank"; };
   if (matchMedia("(prefers-reduced-motion: reduce)").matches) done(); else setTimeout(done, 240);
   if (peekFrom && document.contains(peekFrom)) peekFrom.focus();
-  peekShelf = null;
+  peekShelves = [];
 }
 function refreshPeek() {
-  if ($("peek").hidden || !peekShelf) return;
-  const live = shelves.find((x) => x.id === peekShelf.id);
-  if (!live) { closePeek(); return; }          // 책장을 지웠으면 닫는다
-  peekShelf = live;
+  if ($("peek").hidden || !peekShelves.length) return;
+  const live = peekShelves.map((p) => shelves.find((x) => x.id === p.id)).filter(Boolean);
+  if (!live.length) { closePeek(); return; }          // 책장을 지웠으면 닫는다
   // 화면을 다시 그리면 단추도 새로 만들어지므로, 닫을 때 돌아갈 단추를 다시 찾아 둔다
-  peekFrom = document.querySelector(`.shelf-card[data-s="${live.id}"] [data-a="peek"]`) || peekFrom;
-  $("peekName").textContent = `${live.title} · ${live.code}`;
-  $("peekOpen").href = peekUrl(live.code);
-  $("peekFrame").src = peekUrl(live.code);     // 승인·숨김 직후 새로 그린다
+  peekFrom = (live.length > 1 ? $("mergeGo") : document.querySelector(`.shelf-card[data-s="${live[0].id}"] [data-a="peek"]`)) || peekFrom;
+  fillPeek(live);                                      // 승인·숨김 직후 새로 그린다
 }
 function setPeekWide(wide) {
   $("peek").classList.toggle("wide", wide);
@@ -513,7 +546,7 @@ $("peekWide").onclick = () => {
   setPeekWide(wide);
   try { localStorage.setItem(peekWideKey, wide ? "1" : "0"); } catch (e) { /* 무시 */ }
 };
-$("peekReload").onclick = () => { if (peekShelf) { clearShelfCache(peekShelf.code); refreshPeek(); } };
+$("peekReload").onclick = () => { if (peekShelves.length) { peekShelves.forEach((s) => clearShelfCache(s.code)); refreshPeek(); } };
 $("peekClose").onclick = closePeek;
 document.addEventListener("keydown", (ev) => {
   if (ev.key === "Escape" && !$("peek").hidden && !document.querySelector("dialog[open]")) closePeek();
