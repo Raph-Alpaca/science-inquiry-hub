@@ -1,0 +1,23 @@
+{
+  "name": "science-inquiry-hub-tests",
+  "private": true,
+  "version": "1.0.0",
+  "description": "화면 검사(Playwright)와 보안 규칙 검사(Firebase 에뮬레이터). 사이트 동작에는 필요 없습니다.",
+  "type": "module",
+  "scripts": {
+    "install-browser": "playwright install chromium",
+    "app": "node app-test.mjs .. shots/app",
+    "shelf": "node shelf-test.mjs .. shots/shelf",
+    "peek": "node peek-test.mjs .. shots/peek",
+    "code": "node code-entry-test.mjs .. shots/code",
+    "ui": "npm run app && npm run shelf && npm run peek && npm run code",
+    "rules": "firebase emulators:exec --config ../firebase.json --project demo-sih --only firestore,storage \"node rules-test.mjs ..\"",
+    "test": "npm run ui && npm run rules"
+  },
+  "devDependencies": {
+    "@firebase/rules-unit-testing": "^4.0.1",
+    "firebase": "^11.0.0",
+    "firebase-tools": "^14.27.0",
+    "playwright": "^1.63.0"
+  }
+}

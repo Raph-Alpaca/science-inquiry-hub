@@ -8,7 +8,15 @@
 
 빌드 과정 없이 GitHub Pages나 Netlify에서 바로 동작합니다. 백엔드는 Firebase 하나만 씁니다.
 
-**배포 주소: https://raph-alpaca.github.io/science-inquiry-hub/**
+**배포 주소**
+
+| 누가 | 주소 | 첫 화면 |
+|---|---|---|
+| 학생 | https://sci-shelf.netlify.app | 공개 책장 (코드 입력) |
+| 선생님 | https://sci-teacher.netlify.app | 선생님 화면 |
+| 모두 | https://raph-alpaca.github.io/science-inquiry-hub/ | 탐구 앱 허브 (GitHub Pages, 그대로 유지) |
+
+세 주소는 같은 저장소·같은 Firebase 를 봅니다. 학생에게 공유되는 링크는 `sci-shelf.netlify.app/c/책장코드` 로 통일했습니다.
 
 ## 구성
 
@@ -84,7 +92,7 @@ Storage: `covers/{shelfId}/…` (2 MB 이하 이미지, 공개 읽기)
 2. **빌드 → Firestore Database → 데이터베이스 만들기** (프로덕션 모드, 위치 `asia-northeast3`).
 3. (선택) 표지 캡처 업로드를 쓸 때만 **빌드 → Storage → 시작하기**. 지금은 쓰지 않습니다.
 4. **빌드 → Authentication → Sign-in method → Google** 사용 설정.
-5. **Authentication → Settings → 승인된 도메인**에 `raph-alpaca.github.io` 추가.
+5. **Authentication → Settings → 승인된 도메인**에 `raph-alpaca.github.io` 와 `sci-teacher.netlify.app` 추가.
 6. **프로젝트 설정 → 내 앱 → 웹 앱 추가** 후 나오는 `firebaseConfig` 값을
    `assets/firebase-config.js` 에 옮겨 적습니다. (공개되는 값입니다. 보호는 규칙이 합니다.)
 7. **Firestore → 컬렉션 시작 → `admins`** 에 관리자 이메일(소문자)을 **문서 ID**로 하는 문서를
@@ -102,15 +110,19 @@ Storage 를 켠 경우에만 `--only firestore:rules,storage` 로 함께 올립�
 설정이 비어 있으면 모든 화면이 **미리보기(데모)** 로 열립니다. 주소에 `?demo=1` 을 붙여도 같습니다.
 데모 모드는 그 브라우저에만 저장되고 다른 사람에게는 보이지 않습니다.
 
-## 규칙 시험 (에뮬레이터)
+## 검사 (tests/)
 
-Java 17 이상이 필요합니다.
+화면 검사(Playwright)와 규칙 검사(Firebase 에뮬레이터)가 `tests/` 에 있습니다. 규칙 검사에는 Java 17 이상이 필요합니다.
 
 ```bash
-npx firebase emulators:exec --project demo-sih --only firestore,storage "node rules-test.mjs"
+cd tests && npm install && npm test
 ```
 
-승인 전 책 비공개, 모둠원 이름 차단, 틀린 코드 제출 차단, 남의 책장 수정 차단 등 40가지를 확인합니다.
+- `app-test.mjs` 탐구 앱 10쪽 (1920·1280·380) 53항목
+- `shelf-test.mjs` 책장·제출·선생님 화면 (1920·1200·380) 107항목
+- `peek-test.mjs` 선생님 화면 옆 패널 39항목
+- `code-entry-test.mjs` 책장 코드 입력 칸 22항목
+- `rules-test.mjs` 보안 규칙 61항목 (승인 전 책 비공개, 모둠원 이름 차단, 틀린 코드 제출 차단, 관리자 판별 등)
 
 ## 탐구 앱의 뼈대
 
@@ -150,8 +162,8 @@ GitHub 에 push 하면 두 사이트가 함께 다시 배포됩니다. 빌드 �
 
 | 사이트 | 환경 변수 `SITE_ROLE` | 첫 화면 `/` |
 |---|---|---|
-| 학생용 (예: `sci-shelf.netlify.app`) | `student` | 공개 책장 |
-| 교사용 (예: `sci-teacher.netlify.app`) | `teacher` | 선생님 화면 |
+| 학생용 `sci-shelf.netlify.app` | `student` | 공개 책장 |
+| 교사용 `sci-teacher.netlify.app` | `teacher` | 선생님 화면 |
 
 1. Netlify → **Add new site → Import an existing project → GitHub** → 이 저장소.
    Build command 와 Publish directory 는 `netlify.toml` 이 정하므로 그대로 둡니다.
@@ -159,8 +171,9 @@ GitHub 에 push 하면 두 사이트가 함께 다시 배포됩니다. 빌드 �
 3. 같은 방법으로 사이트를 하나 더 만들고 `SITE_ROLE` = `teacher`.
 4. Firebase 콘솔 → **Authentication → Settings → 승인된 도메인**에 교사용 사이트 주소를 추가합니다.
    학생용 사이트는 로그인이 없어 넣지 않아도 됩니다.
-5. `assets/site-config.js` 의 `studentLink` 에 `"https://학생용주소/c/{code}"` 를 적고 push 합니다.
-   선생님 화면의 **주소 복사**와 **QR** 이 이 짧은 주소로 바뀝니다.
+5. `assets/site-config.js` 의 `studentLink` 에 `"https://sci-shelf.netlify.app/c/{code}"` 를 적고 push 합니다.
+   선생님 화면의 **주소 복사**와 **QR** 이 이 짧은 주소로 바뀝니다. (지금 그렇게 되어 있습니다)
+   "학생 화면 보기" 옆 패널은 일부러 자기 사이트의 shelf.html 을 띄웁니다. 파일이 같아 보이는 것도 같습니다.
 
 Netlify 에서만 생기는 짧은 주소: `/shelf` `/teacher` `/submit` `/hub`,
 `/c/책장코드` → 공개 책장, `/s/책장코드` → 제출 폼. (`deploy/netlify-redirects.mjs` 가 만듭니다)

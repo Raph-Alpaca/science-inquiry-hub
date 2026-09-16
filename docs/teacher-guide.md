@@ -3,7 +3,8 @@
 학생 모둠이 만든 과학 시뮬레이션을 학교 책장에 모아 두는 곳입니다.
 선생님이 하실 일은 **네 가지**뿐입니다. 설정 파일이나 콘솔은 만지지 않으셔도 됩니다.
 
-주소: **https://raph-alpaca.github.io/science-inquiry-hub/teacher.html**
+선생님 주소: **https://sci-teacher.netlify.app**
+학생 주소: **https://sci-shelf.netlify.app** (여기에 책장 코드를 넣습니다)
 
 ---
 
@@ -94,7 +95,8 @@
 ```
 우리 반 과학 산출물 책장
 1. 아래 주소로 들어가 책장 코드를 넣습니다 (교실 QR을 찍으면 바로 열립니다)
-   https://raph-alpaca.github.io/science-inquiry-hub/shelf.html   코드: 우리반코드
+   https://sci-shelf.netlify.app   코드: 우리반코드
+   (QR·주소 복사로 받은 https://sci-shelf.netlify.app/c/우리반코드 는 코드 없이 바로 열립니다)
 2. 오른쪽 아래 "산출물 제출하기"를 누릅니다
 3. 학년·반·모둠명, 책 제목, 만든 이유, 작품 링크, 사용 방법,
    관련 과학 개념, 모둠원 이름을 적습니다

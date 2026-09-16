@@ -189,8 +189,9 @@
 <div class="page">
   <div class="bar">
     <b>주소</b>
+    <span>학생 <a href="https://sci-shelf.netlify.app">sci-shelf.netlify.app</a></span>
+    <span>선생님 <a href="https://sci-teacher.netlify.app">sci-teacher.netlify.app</a></span>
     <span>허브 <a href="https://raph-alpaca.github.io/science-inquiry-hub/">raph-alpaca.github.io/science-inquiry-hub</a></span>
-    <span>선생님 <a href="https://raph-alpaca.github.io/science-inquiry-hub/teacher.html">/teacher.html</a></span>
     <span>저장소 <a href="https://github.com/Raph-Alpaca/science-inquiry-hub">github.com/Raph-Alpaca</a></span>
   </div>
 
@@ -242,7 +243,7 @@
 
     <h3>시연할 때</h3>
     <p>주소 끝에 <code>?demo=1</code> 을 붙이면 미리보기 책장이 열립니다. 예시 책 네 권이 이미 꽂혀 있어서 빈 책장을 보여 주지 않아도 됩니다. 이 모드는 그 컴퓨터에만 저장되고 실제 데이터에 영향을 주지 않습니다.</p>
-    <div class="cmd"><span class="hash">미리보기 책장</span><br>raph-alpaca.github.io/science-inquiry-hub/shelf.html?code=DEMO-2026-BOOK&amp;demo=1</div>
+    <div class="cmd"><span class="hash">미리보기 책장</span><br>sci-shelf.netlify.app/shelf.html?code=DEMO-2026-BOOK&amp;demo=1</div>
     <p>책을 누르면 앞표지가 왼쪽으로 열리면서 펼쳐집니다. 왼쪽 면은 만든 이유와 사용 방법, 오른쪽 면은 시뮬레이션입니다. 화살표 키로 다음 책, <code>Esc</code> 로 닫기가 됩니다. 휴대폰에서는 아래에서 시트가 올라옵니다.</p>
 
     <h3>학생에게 시킬 때</h3>
@@ -294,7 +295,7 @@
         <div class="who">학생 · 학부모</div>
         <h4>공개 책장</h4>
         <p>선생님 예시 9권과 반별 서가. 코드 없이 들어오면 코드 입력 칸이 뜹니다.</p>
-        <span class="path">shelf.html?code=코드</span>
+        <span class="path">sci-shelf.netlify.app/c/코드</span>
       </div>
       <div class="screen">
         <div class="who">학생</div>
@@ -453,7 +454,7 @@
       <li>
         <div>
           <b>같은 저장소로 사이트를 하나 더 만들고 <code>SITE_ROLE</code> = <code>teacher</code></b>
-          <p>이 주소는 첫 화면이 선생님 화면입니다. 예: <code>sci-teacher.netlify.app</code></p>
+          <p>이 주소는 첫 화면이 선생님 화면입니다. 지금 쓰는 주소: <code>sci-teacher.netlify.app</code></p>
         </div>
       </li>
       <li>
@@ -465,7 +466,7 @@
       <li>
         <div>
           <b><code>assets/site-config.js</code> 에 학생용 주소를 적고 올립니다</b>
-          <p><code>studentLink: "https://sci-shelf.netlify.app/c/{code}"</code> 처럼 적으면 선생님 화면의 주소 복사와 QR이 이 짧은 주소로 바뀝니다.</p>
+          <p><code>studentLink: "https://sci-shelf.netlify.app/c/{code}"</code> 로 적혀 있어 선생님 화면의 주소 복사와 QR이 이 짧은 주소로 나갑니다. "학생 화면 보기" 옆 패널은 자기 사이트의 책장을 띄우므로 학생용 사이트가 잠시 멈춰도 미리보기는 됩니다.</p>
         </div>
       </li>
     </ol>

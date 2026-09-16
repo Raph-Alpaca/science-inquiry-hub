@@ -9,5 +9,5 @@
  *   /c/{code} 모양은 Netlify 에서만 동작합니다. (deploy/netlify-redirects.mjs 가 만드는 짧은 주소)
  */
 export const SITE = {
-  studentLink: "",
+  studentLink: "https://sci-shelf.netlify.app/c/{code}",
 };
