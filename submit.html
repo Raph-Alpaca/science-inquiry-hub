@@ -99,6 +99,7 @@
 </div>
 
 <script type="module">
+import { codeEntryHtml, bindCodeEntry, lastCode } from "./assets/code-entry.js";
 import { DEMO, CAN_UPLOAD, loadShelf, submitBook, COVERS, COVER_COLORS, coverSrc, clearShelfCache } from "./assets/shelf-data.js";
 
 const $ = (id) => document.getElementById(id);
@@ -158,9 +159,11 @@ FIELDS.forEach((f) => $(f).addEventListener("input", save));
 
 (async function start() {
   if (!code) {
-    $("sub").textContent = "책장 코드가 필요합니다";
+    $("sub").textContent = "책장 코드를 넣으면 제출할 수 있습니다";
     $("notice").innerHTML = `<div class="notice"><h2>선생님께 책장 코드를 받으세요</h2>
-      <p>선생님이 알려 준 주소로 들어와야 어느 책장에 넣을지 알 수 있어요.</p></div>`;
+      <p>어느 학교 책장에 꽂을지 알아야 해요. 선생님이 알려 준 코드를 넣어 주세요.</p>
+      ${codeEntryHtml({ value: lastCode(), page: "submit" })}</div>`;
+    bindCodeEntry(DEMO);
     return;
   }
   try {
@@ -169,7 +172,9 @@ FIELDS.forEach((f) => $(f).addEventListener("input", save));
     if (!shelf) {
       $("sub").textContent = "책장을 찾지 못했습니다";
       $("notice").innerHTML = `<div class="notice bad"><h2>이런 코드의 책장이 없어요</h2>
-        <p><b>${esc(code)}</b> 를 다시 확인해 주세요.</p></div>`;
+        <p><b>${esc(code)}</b> 를 다시 확인해 주세요.</p>
+        ${codeEntryHtml({ value: code, wrong: true, page: "submit" })}</div>`;
+      bindCodeEntry(DEMO);
       return;
     }
     $("sub").innerHTML = `<span class="code-chip"><small>책장 코드</small><b>${esc(shelf.code)}</b></span> · ${esc(shelf.school)}`;

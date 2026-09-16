@@ -80,6 +80,7 @@
 </div>
 
 <script type="module">
+import { codeEntryHtml, bindCodeEntry, rememberCode, lastCode } from "./assets/code-entry.js";
 import { DEMO, CONFIGURED, loadShelf, loadTeacherExamples, coverSrc } from "./assets/shelf-data.js";
 
 const $ = (id) => document.getElementById(id);
@@ -97,14 +98,14 @@ if (DEMO) $("demoBar").hidden = false;
 (async function start() {
   if (!code) {
     $("bookcase").parentElement.hidden = true;
-    $("sub").textContent = "책장 코드가 필요합니다";
+    $("sub").textContent = "책장 코드를 넣으면 우리 학교 책장이 열립니다";
     $("notice").innerHTML = `<div class="notice">
       <h2>선생님께 책장 코드를 받으세요</h2>
-      <p>선생님이 알려 준 주소나 QR 코드로 들어오면 우리 학교 책장이 열립니다.
-      주소 끝에 <b>?code=학교코드</b> 가 붙어 있어야 합니다.</p>
-      <p><a class="btn" href="teacher.html">선생님이신가요? 책장 만들기</a>
-      <a class="btn" href="shelf.html?code=DEMO-2026-BOOK&demo=1">미리보기 책장 열어 보기</a></p>
+      <p>선생님이 알려 준 코드를 넣어 주세요. QR 코드나 주소로 들어오면 바로 열립니다.</p>
+      ${codeEntryHtml({ value: lastCode(), page: "shelf" })}
+      <p class="links"><a href="teacher.html">선생님이신가요? 책장 만들기</a> · <a href="shelf.html?code=DEMO-2026-BOOK&demo=1">미리보기 책장 열어 보기</a></p>
     </div>`;
+    bindCodeEntry(DEMO);
     return;
   }
   $("fab").href = `submit.html?code=${encodeURIComponent(code)}${DEMO ? "&demo=1" : ""}`;
@@ -136,10 +137,13 @@ function render(examples, { shelf, books }) {
     bc.parentElement.hidden = true;
     $("fab").hidden = true;
     $("notice").innerHTML = `<div class="notice bad"><h2>이런 코드의 책장이 없어요</h2>
-      <p><b>${esc(code)}</b> 로 된 책장을 찾지 못했습니다. 코드를 다시 확인하거나 선생님께 물어보세요.</p></div>`;
+      <p><b>${esc(code)}</b> 로 된 책장을 찾지 못했습니다. 코드를 다시 확인하거나 선생님께 물어보세요.</p>
+      ${codeEntryHtml({ value: code, wrong: true, page: "shelf" })}</div>`;
+    bindCodeEntry(DEMO);
     return;
   }
   $("codeText").textContent = shelf.code;
+  rememberCode(shelf.code);
   $("codeChip").hidden = false;
   $("sub").textContent = `${shelf.school} · 맨 윗줄은 선생님 예시, 아래는 학년·반별 서가입니다`;
   document.title = `${shelf.school} 산출물 책장`;

@@ -23,6 +23,7 @@ assets/shelf.css            책장·제출·교사 화면 공통 스타일 (크�
 assets/shelf-data.js        Firebase 데이터 계층 + 미리보기(데모) 모드
 assets/firebase-config.js   Firebase 웹 설정 (여기에 값을 채웁니다)
 assets/site-config.js       학생용 사이트 주소 (Netlify 로 두 사이트를 쓸 때만 채움)
+assets/code-entry.js        학생 화면의 책장 코드 입력 칸
 assets/qr.js                QR 코드 생성기 (외부 라이브러리 없음)
 assets/covers/*.svg         표지 일러스트 12종
 apps/*.html                 탐구 시뮬레이션 9개 (중1·중2·중3)
@@ -46,7 +47,7 @@ reference/                  무선 센서 연결 참고 코드 (이번 작업에
 
 0. 관리자가 선생님 화면에서 그 선생님의 구글 계정을 **사용 승인** (승인된 계정만 책장을 만들 수 있음)
 1. 선생님이 `teacher.html` 에서 구글 로그인 → 학교 책장 생성 → `SEO-2026-4K7Q` 같은 코드 발급
-2. 학생은 로그인 없이 `shelf.html?code=…` 로 들어와 `submit.html` 에서 제출 (상태: 대기)
+2. 학생은 로그인 없이 `shelf.html?code=…` 로 들어오거나 첫 화면에서 코드를 넣고, `submit.html` 에서 제출 (상태: 대기)
 3. 선생님이 승인하면 공개 책장에 꽂힘
 4. 학생 앱은 이 저장소에 올리지 않습니다. 제미나이·캔바·러버블 등의 **공유 링크만** 받습니다
 
