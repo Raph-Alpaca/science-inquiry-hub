@@ -69,6 +69,7 @@
           <img id="cfArt" alt="">
           <span class="who" id="cfWho"></span>
         </div>
+        <div class="cover-back" aria-hidden="true"></div>
       </div>
     </div>
   </div>
@@ -305,7 +306,7 @@ function openBook(i, fromHash) {
     }
   });
   // 표지가 다 열린 뒤에 앱을 올린다 (모션이 끊기지 않게)
-  setTimeout(() => { mountApp(b); animating = false; $("bkClose").focus(); }, 720);
+  setTimeout(() => { mountApp(b); animating = false; $("bkClose").focus(); }, 1180);
 }
 function closeBook() {
   if (reader.hidden) return;
@@ -321,22 +322,22 @@ function closeBook() {
     history.replaceState(null, "", location.pathname + location.search);
     if (lastFocus && lastFocus.isConnected) lastFocus.focus();
   };
-  reduced ? done() : setTimeout(done, 350);
+  reduced ? done() : setTimeout(done, 430);
 }
 function step(d) {
   const next = openIndex + d;
   if (animating || next < 0 || next >= flat.length) return;
   if (reduced) { openIndex = next; fill(flat[next]); mountApp(flat[next]); return; }
+  // 이전·다음은 책을 다시 덮었다 여는 대신 펼친 채로 내용만 넘긴다 (책장을 넘기는 느낌)
   animating = true;
-  reader.classList.add("quick");          // 닫힘 200ms → 열림 400ms (모션 사양)
-  reader.classList.remove("open");
+  reader.classList.add("quick", "swap");
   $("bkPreview").innerHTML = "";
   setTimeout(() => {
     openIndex = next;
     fill(flat[next]);
-    reader.classList.add("open");
-    setTimeout(() => { mountApp(flat[next]); animating = false; }, 420);
-  }, 200);
+    reader.classList.remove("swap");
+    setTimeout(() => { mountApp(flat[next]); animating = false; }, 320);
+  }, 240);
 }
 $("bkClose").onclick = closeBook;
 $("dim").onclick = closeBook;
@@ -357,13 +358,17 @@ document.addEventListener("keydown", (e) => {
 });
 </script>
 <style>
-  /* 이전·다음으로 넘길 때만 쓰는 빠른 타이밍 (모션 사양: 닫힘 200 → 열림 400) */
-  .reader.quick .cover-flip { transition: transform 200ms ease-in; }
-  .reader.quick.open .cover-flip { transition: transform 400ms var(--ease-cover) 0ms; }
-  .reader.quick.open .page.left .ink-in { transition: opacity 160ms ease-out 200ms, transform 160ms ease-out 200ms; }
-  .reader.quick.open .page.right .app-in { transition: opacity 160ms ease-out 320ms, transform 160ms ease-out 320ms; }
+  /* 닫을 때는 열림의 역순으로 한 번에 */
   .cover-flip { transition: transform var(--t-close) ease-in; }
   .page.left .ink-in, .page.right .app-in { transition: opacity var(--t-close) ease-in; }
+
+  /* 이전·다음으로 넘길 때: 표지는 그대로 두고 양쪽 면 내용만 바꾼다 */
+  .reader.swap .page.left .ink-in, .reader.swap .page.right .app-in {
+    opacity: 0; transform: translateY(6px);
+    transition: opacity 200ms ease-in, transform 200ms ease-in;
+  }
+  .reader.quick.open .page.left .ink-in { transition: opacity 240ms ease-out 40ms, transform 240ms ease-out 40ms; }
+  .reader.quick.open .page.right .app-in { transition: opacity 240ms ease-out 140ms, transform 240ms ease-out 140ms; }
 </style>
 </body>
 </html>
