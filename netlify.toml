@@ -1,0 +1,22 @@
+# Netlify 배포 설정
+#
+# 이 저장소 하나를 Netlify 사이트 두 개(학생용·교사용)에 연결해 씁니다.
+# 두 사이트는 파일이 완전히 같고, "첫 화면(/)이 어디로 열리는가"만 다릅니다.
+# 그 차이는 Netlify 사이트마다 환경 변수 SITE_ROLE 을 다르게 두어 만듭니다.
+#
+#   SITE_ROLE = student  → /  가 공개 책장(shelf.html) 으로 열림   ← 학생용 사이트
+#   SITE_ROLE = teacher  → /  가 선생님 화면(teacher.html) 으로 열림 ← 교사용 사이트
+#   (비워 두면)          → /  가 허브(index.html) 로 열림
+#
+# 빌드 도구는 쓰지 않습니다. 아래 명령은 _redirects 파일 하나를 써 넣을 뿐입니다.
+# GitHub 저장소에 push 하면 Netlify 가 두 사이트를 모두 다시 배포합니다.
+
+[build]
+  publish = "."
+  command = "node deploy/netlify-redirects.mjs"
+
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "strict-origin-when-cross-origin"

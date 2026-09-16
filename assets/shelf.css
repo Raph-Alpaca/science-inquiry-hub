@@ -332,6 +332,40 @@ dialog.sheet .bd { padding: 24px; }
 dialog.sheet h2 { margin: 0 0 12px; font-size: 22px; }
 dialog.sheet .ft { display: flex; gap: 8px; justify-content: flex-end; padding: 0 24px 22px; flex-wrap: wrap; }
 
+/* ---------- 선생님 화면: 학생 화면 보기 (옆 패널) ---------- */
+.peek {
+  position: fixed; top: 0; right: 0; bottom: 0; z-index: 70;
+  width: min(440px, 100%); background: var(--cream);
+  border-left: 1px solid var(--line); box-shadow: -18px 0 40px rgba(58, 42, 29, .18);
+  display: flex; flex-direction: column;
+  transform: translateX(100%);
+  transition: transform 240ms var(--ease), width 240ms var(--ease);
+}
+.peek.on { transform: none; }
+.peek.wide { width: min(1120px, calc(100% - 40px)); }
+.peek-hd { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 12px 16px; background: var(--paper); border-bottom: 1px solid var(--line); }
+.peek-title { display: flex; flex-direction: column; min-width: 0; }
+.peek-title b { font-size: 15px; }
+.peek-title small { color: var(--ink-2); font-size: 12.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 240px; }
+.peek-acts { margin-left: auto; display: flex; gap: 6px; flex-wrap: wrap; }
+.peek iframe { flex: 1; width: 100%; border: 0; background: var(--cream); }
+/* 넓은 화면에서는 패널이 가리지 않도록 본문을 왼쪽으로 밀어 둔다 */
+.wrap.narrow { transition: margin 240ms var(--ease); }
+@media (min-width: 1300px) {
+  body.peeking:not(.peek-wide) .wrap.narrow { margin-right: 464px; }
+}
+@media (min-width: 1100px) and (max-width: 1299px) {
+  .peek { width: min(380px, 100%); }
+  body.peeking:not(.peek-wide) .wrap.narrow { margin-right: 404px; }
+}
+@media (min-width: 861px) and (max-width: 1099px) {
+  .peek { width: min(380px, 100%); }
+}
+@media (max-width: 860px) {
+  .peek, .peek.wide { width: 100%; }
+  #peekWide { display: none; }
+}
+
 /* ---------- 화면 크기 ---------- */
 @media (max-width: 1200px) {
   .wrap { padding: 0 40px 72px; }
@@ -393,6 +427,7 @@ dialog.sheet .ft { display: flex; gap: 8px; justify-content: flex-end; padding: 
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; }
+  .peek, body.peeking .wrap.narrow { transition: none !important; }
   .book:hover { transform: none; }
   .fab:hover { transform: none; }
   .cover-mover { display: none; }

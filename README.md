@@ -6,7 +6,7 @@
 「2026 첨단과학기술 기반 과학탐구」 수업 1차시(교사 제작 웹앱 체험)에서 시연하고,
 2차시 이후 학생들이 자기 앱을 설계할 때 참고 사례로 씁니다.
 
-빌드 과정 없이 GitHub Pages에서 바로 동작합니다. 백엔드는 Firebase 하나만 씁니다.
+빌드 과정 없이 GitHub Pages나 Netlify에서 바로 동작합니다. 백엔드는 Firebase 하나만 씁니다.
 
 **배포 주소: https://raph-alpaca.github.io/science-inquiry-hub/**
 
@@ -16,18 +16,20 @@
 index.html                  허브(메인) — 학년별 카드 9개 + 산출물 책장 입구
 shelf.html                  공개 책장 (?code=책장코드)
 submit.html                 학생 제출 폼 (?code=책장코드)
-teacher.html                선생님 화면 (구글 로그인, 승인, QR, CSV)
+teacher.html                선생님 화면 (구글 로그인, 승인, QR, CSV, 학생 화면 보기)
 shelf/teacher.json          모든 학교에 공통으로 보이는 "선생님 예시" 9권
 assets/hub.css, hub.js      탐구 앱 9개의 공통 틀
 assets/shelf.css            책장·제출·교사 화면 공통 스타일 (크림·나무 테마)
 assets/shelf-data.js        Firebase 데이터 계층 + 미리보기(데모) 모드
 assets/firebase-config.js   Firebase 웹 설정 (여기에 값을 채웁니다)
+assets/site-config.js       학생용 사이트 주소 (Netlify 로 두 사이트를 쓸 때만 채움)
 assets/qr.js                QR 코드 생성기 (외부 라이브러리 없음)
 assets/covers/*.svg         표지 일러스트 12종
 apps/*.html                 탐구 시뮬레이션 9개 (중1·중2·중3)
 firestore.rules             Firestore 보안 규칙
 storage.rules               Storage 보안 규칙
 firebase.json               규칙 배포·에뮬레이터 설정
+netlify.toml, deploy/       Netlify 배포 설정 (사이트별 첫 화면과 짧은 주소)
 docs/teacher-guide.md       선생님께 나눠 줄 한 쪽짜리 안내
 docs/manual.html            운영 설명서 (수업 절차·문제 해결·고칠 파일 위치)
 reference/                  무선 센서 연결 참고 코드 (이번 작업에서 건드리지 않음)
@@ -136,7 +138,31 @@ SIH.shell();          // 상단 바·탐구 기록·프롬프트 보기 생성
 
 ## 배포
 
+### GitHub Pages
+
 GitHub 저장소 → Settings → Pages → Source: `Deploy from a branch`, Branch: `main` / `(root)`.
+
+### Netlify (학생용·교사용 주소를 따로 둘 때)
+
+저장소 하나를 Netlify 사이트 **두 개**에 연결합니다. 두 사이트는 파일이 같고 첫 화면만 다릅니다.
+GitHub 에 push 하면 두 사이트가 함께 다시 배포됩니다. 빌드 도구는 없습니다.
+
+| 사이트 | 환경 변수 `SITE_ROLE` | 첫 화면 `/` |
+|---|---|---|
+| 학생용 (예: `sci-shelf.netlify.app`) | `student` | 공개 책장 |
+| 교사용 (예: `sci-teacher.netlify.app`) | `teacher` | 선생님 화면 |
+
+1. Netlify → **Add new site → Import an existing project → GitHub** → 이 저장소.
+   Build command 와 Publish directory 는 `netlify.toml` 이 정하므로 그대로 둡니다.
+2. **Site configuration → Environment variables** 에 `SITE_ROLE` = `student` 를 넣고 **Deploys → Trigger deploy**.
+3. 같은 방법으로 사이트를 하나 더 만들고 `SITE_ROLE` = `teacher`.
+4. Firebase 콘솔 → **Authentication → Settings → 승인된 도메인**에 교사용 사이트 주소를 추가합니다.
+   학생용 사이트는 로그인이 없어 넣지 않아도 됩니다.
+5. `assets/site-config.js` 의 `studentLink` 에 `"https://학생용주소/c/{code}"` 를 적고 push 합니다.
+   선생님 화면의 **주소 복사**와 **QR** 이 이 짧은 주소로 바뀝니다.
+
+Netlify 에서만 생기는 짧은 주소: `/shelf` `/teacher` `/submit` `/hub`,
+`/c/책장코드` → 공개 책장, `/s/책장코드` → 제출 폼. (`deploy/netlify-redirects.mjs` 가 만듭니다)
 
 ## 주의
 

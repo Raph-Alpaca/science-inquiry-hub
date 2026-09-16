@@ -29,6 +29,19 @@
   <main id="main"></main>
 </div>
 
+<aside class="peek" id="peek" hidden aria-label="학생이 보는 화면">
+  <div class="peek-hd">
+    <div class="peek-title"><b>학생이 보는 화면</b><small id="peekName"></small></div>
+    <div class="peek-acts">
+      <button class="btn small" id="peekWide" aria-pressed="false" title="컴퓨터 화면 폭으로 보기">넓게</button>
+      <button class="btn small" id="peekReload">새로 고침</button>
+      <a class="btn small" id="peekOpen" href="#" target="_blank" rel="noopener">새 탭</a>
+      <button class="btn small dark" id="peekClose" aria-label="미리보기 닫기">닫기</button>
+    </div>
+  </div>
+  <iframe id="peekFrame" title="학생이 보는 공개 책장" loading="lazy"></iframe>
+</aside>
+
 <dialog class="sheet" id="qrDlg">
   <div class="bd">
     <h2 id="qrTitle">책장 코드</h2>
@@ -90,11 +103,18 @@ import {
   listBooks, loadMembers, setStatus, updateBook, deleteBook, clearShelfCache,
   checkAccess, listAllowed, addAllowed, removeAllowed, listAllShelves, renameShelf, deleteShelf,
 } from "./assets/shelf-data.js";
+import { SITE } from "./assets/site-config.js";
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 const suffix = DEMO ? "&demo=1" : "";
-const shelfUrl = (code) => `${location.origin}${location.pathname.replace(/teacher\.html$/, "")}shelf.html?code=${code}${suffix}`;
+const here = `${location.origin}${location.pathname.replace(/teacher\.html$/, "")}`;
+// 학생에게 알려 줄 주소. 학생용 사이트를 따로 두었으면(assets/site-config.js) 그 주소로 만든다.
+const shelfUrl = (code) => (!DEMO && SITE.studentLink && SITE.studentLink.includes("{code}"))
+  ? SITE.studentLink.replace("{code}", encodeURIComponent(code))
+  : `${here}shelf.html?code=${encodeURIComponent(code)}${suffix}`;
+// 옆 패널 미리보기는 항상 이 사이트의 shelf.html 을 쓴다 (파일이 같으므로 학생용 사이트와 똑같이 보인다).
+const peekUrl = (code) => `${here}shelf.html?code=${encodeURIComponent(code)}${suffix}`;
 let user = null, shelves = [], data = {}, tab = {};
 let access = { admin: false, approved: false }, allowed = [], allShelves = [];
 
@@ -238,6 +258,7 @@ async function reload() {
     allShelves = await listAllShelves().catch(() => []);
   }
   render();
+  refreshPeek();
 }
 function render() {
   if (!shelves.length) { renderFirstRun(); return; }
@@ -274,6 +295,7 @@ function shelfCard(s) {
         <button class="btn small" data-a="copyCode">코드 복사</button>
         <button class="btn small" data-a="qr">QR 보기</button>
         <button class="btn small" data-a="copyUrl">주소 복사</button>
+        <button class="btn small go" data-a="peek">학생 화면 보기</button>
         <button class="btn small" data-a="csv">CSV 내보내기</button>
         <button class="btn small" data-a="settings">책장 설정</button>
       </div>
@@ -367,6 +389,7 @@ function wire() {
       if (a === "copyCode") return copy(s.code, "코드를");
       if (a === "copyUrl") return copy(shelfUrl(s.code), "주소를");
       if (a === "qr") return showQr(s);
+      if (a === "peek") return openPeek(s, btn);
       if (a === "csv") return exportCsv(s);
       if (a === "settings") return openSettings(s);
       if (a === "approveAll") {
@@ -386,6 +409,62 @@ function wire() {
     };
   });
 }
+
+/* ---------- 학생 화면 보기 (옆 패널) ---------- */
+let peekShelf = null, peekFrom = null;
+const peekWideKey = "sih-peek-wide";
+function openPeek(s, from) {
+  peekShelf = s; peekFrom = from || null;
+  const el = $("peek");
+  $("peekName").textContent = `${s.title} · ${s.code}`;
+  $("peekOpen").href = peekUrl(s.code);
+  $("peekFrame").src = peekUrl(s.code);
+  let wide = false;
+  try { wide = localStorage.getItem(peekWideKey) === "1"; } catch (e) { /* 무시 */ }
+  setPeekWide(wide);
+  el.hidden = false;
+  document.body.classList.add("peeking");
+  requestAnimationFrame(() => el.classList.add("on"));
+  $("peekClose").focus();
+}
+function closePeek() {
+  const el = $("peek");
+  if (el.hidden) return;
+  el.classList.remove("on");
+  document.body.classList.remove("peeking");
+  const done = () => { el.hidden = true; $("peekFrame").src = "about:blank"; };
+  if (matchMedia("(prefers-reduced-motion: reduce)").matches) done(); else setTimeout(done, 240);
+  if (peekFrom && document.contains(peekFrom)) peekFrom.focus();
+  peekShelf = null;
+}
+function refreshPeek() {
+  if ($("peek").hidden || !peekShelf) return;
+  const live = shelves.find((x) => x.id === peekShelf.id);
+  if (!live) { closePeek(); return; }          // 책장을 지웠으면 닫는다
+  peekShelf = live;
+  // 화면을 다시 그리면 단추도 새로 만들어지므로, 닫을 때 돌아갈 단추를 다시 찾아 둔다
+  peekFrom = document.querySelector(`.shelf-card[data-s="${live.id}"] [data-a="peek"]`) || peekFrom;
+  $("peekName").textContent = `${live.title} · ${live.code}`;
+  $("peekOpen").href = peekUrl(live.code);
+  $("peekFrame").src = peekUrl(live.code);     // 승인·숨김 직후 새로 그린다
+}
+function setPeekWide(wide) {
+  $("peek").classList.toggle("wide", wide);
+  document.body.classList.toggle("peek-wide", wide);
+  $("peekWide").setAttribute("aria-pressed", String(wide));
+  $("peekWide").textContent = wide ? "좁게" : "넓게";
+  $("peekWide").title = wide ? "휴대전화 폭으로 보기" : "컴퓨터 화면 폭으로 보기";
+}
+$("peekWide").onclick = () => {
+  const wide = !$("peek").classList.contains("wide");
+  setPeekWide(wide);
+  try { localStorage.setItem(peekWideKey, wide ? "1" : "0"); } catch (e) { /* 무시 */ }
+};
+$("peekReload").onclick = () => { if (peekShelf) { clearShelfCache(peekShelf.code); refreshPeek(); } };
+$("peekClose").onclick = closePeek;
+document.addEventListener("keydown", (ev) => {
+  if (ev.key === "Escape" && !$("peek").hidden && !document.querySelector("dialog[open]")) closePeek();
+});
 
 /* ---------- QR ---------- */
 async function showQr(s) {

@@ -6,3 +6,6 @@ firestore-debug.log
 storage-debug.log
 firebase-debug.log
 .firebase/
+
+# Netlify 빌드 때 deploy/netlify-redirects.mjs 가 만드는 파일
+_redirects
