@@ -211,12 +211,23 @@ function fileToDataUrl(file) {
 export async function onUser(cb) {
   if (DEMO) { cb({ uid: "demo-uid", displayName: "김선생", email: "demo@example.com", demo: true }); return () => {}; }
   const { U, auth } = await fb();
+  // 팝업이 막혀 같은 탭으로 로그인한 경우 돌아온 결과를 먼저 받는다
+  try { await U.getRedirectResult(auth); } catch (e) { console.warn("로그인 결과를 받지 못했습니다:", e.code || e.message); }
   return U.onAuthStateChanged(auth, (u) => cb(u ? { uid: u.uid, displayName: u.displayName, email: u.email } : null));
 }
 export async function login() {
   if (DEMO) return;
   const { U, auth } = await fb();
-  await U.signInWithPopup(auth, new U.GoogleAuthProvider());
+  const provider = new U.GoogleAuthProvider();
+  provider.setCustomParameters({ prompt: "select_account" });
+  try {
+    await U.signInWithPopup(auth, provider);
+  } catch (e) {
+    // 팝업 차단·미지원 환경에서는 같은 탭에서 로그인한다 (학교 크롬북·사내망 대비)
+    const fallback = ["auth/popup-blocked", "auth/cancelled-popup-request", "auth/operation-not-supported-in-this-environment"];
+    if (fallback.includes(e.code)) await U.signInWithRedirect(auth, provider);
+    else throw e;
+  }
 }
 export async function logout() {
   if (DEMO) return;
