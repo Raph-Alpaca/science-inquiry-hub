@@ -20,7 +20,19 @@ export const COVERS = [
   { id: "energy", label: "운동·에너지" }, { id: "weather", label: "날씨" }, { id: "reaction", label: "화학 반응" },
   { id: "life", label: "생물" }, { id: "electric", label: "전기·자기" }, { id: "earth", label: "지구" },
 ];
+// 저장하는 값은 예전과 같은 6가지 코드이고, 화면에는 책다운 차분한 색(tone)으로 바꿔 그린다.
 export const COVER_COLORS = ["#23A087", "#2C7FD1", "#EE6B57", "#8A5CD6", "#E29A2A", "#2E9E6B"];
+const TONES = {
+  "#23A087": { tone: "#2B8A7B", name: "청록" },
+  "#2C7FD1": { tone: "#35649C", name: "남색" },
+  "#EE6B57": { tone: "#C65A46", name: "주홍" },
+  "#8A5CD6": { tone: "#72569E", name: "보라" },
+  "#E29A2A": { tone: "#C68A30", name: "황토" },
+  "#2E9E6B": { tone: "#5B8446", name: "풀색" },
+};
+const toneOf = (c) => TONES[String(c || "").toUpperCase()];
+export const coverTone = (c) => (toneOf(c) ? toneOf(c).tone : /^#[0-9a-f]{3,8}$/i.test(c || "") ? c : TONES["#23A087"].tone);
+export const coverColorName = (c) => (toneOf(c) ? toneOf(c).name : "색");
 export const coverSrc = (kind) => `assets/covers/${COVERS.some((c) => c.id === kind) ? kind : "heat"}.svg`;
 
 /* ---------- 책장 코드 ---------- */
@@ -124,42 +136,180 @@ export function demoReset() {
 }
 
 /* ---------- 공개 화면 ---------- */
-const CACHE_MS = 5 * 60 * 1000;
-
+// 예전에는 5분짜리 세션 캐시를 써서, 선생님이 승인한 책이 새로고침해도 한동안 안 보였다.
+// 이제 캐시 없이 읽고, 책장 화면은 watchShelf 로 실시간 구독한다.
 export async function loadShelf(code) {
-  const key = "sih-shelf-" + code;
-  try {
-    const hit = JSON.parse(sessionStorage.getItem(key) || "null");
-    if (hit && Date.now() - hit.t < CACHE_MS) return hit.v;
-  } catch (e) { /* 무시 */ }
-
-  let value;
-  if (DEMO) {
-    const d = demoRead();
-    const shelf = d.shelves.find((s) => s.code.toUpperCase() === code.toUpperCase());
-    value = shelf
-      ? { shelf, books: (d.books[shelf.id] || []).filter((b) => b.status === "approved").sort((a, b) => a.createdAt - b.createdAt) }
-      : { shelf: null, books: [] };
-  } else {
-    const { F, db } = await fb();
-    const snap = await F.getDocs(F.query(F.collection(db, "shelves"), F.where("code", "==", code.toUpperCase()), F.limit(1)));
-    if (snap.empty) value = { shelf: null, books: [] };
-    else {
-      const shelf = { id: snap.docs[0].id, ...snap.docs[0].data() };
-      const bs = await F.getDocs(F.query(F.collection(db, "shelves", shelf.id, "books"), F.where("status", "==", "approved")));
-      const books = bs.docs.map((d) => ({ id: d.id, ...d.data() })).sort((a, b) => ms(a.createdAt) - ms(b.createdAt));
-      value = { shelf: plain(shelf), books: books.map(plain) };
-    }
-  }
-  try { sessionStorage.setItem(key, JSON.stringify({ t: Date.now(), v: value })); } catch (e) { /* 무시 */ }
-  return value;
+  if (DEMO) return demoShelf(code);
+  const { F, db } = await fb();
+  const snap = await F.getDocs(F.query(F.collection(db, "shelves"), F.where("code", "==", code.toUpperCase()), F.limit(1)));
+  if (snap.empty) return { shelf: null, books: [] };
+  const shelf = docOf(snap.docs[0]);
+  const bs = await F.getDocs(F.query(F.collection(db, "shelves", shelf.id, "books"), F.where("status", "==", "approved")));
+  return { shelf, books: sortBooks(bs.docs.map(docOf)) };
 }
+function demoShelf(code) {
+  const d = demoRead();
+  const shelf = d.shelves.find((s) => s.code.toUpperCase() === code.toUpperCase());
+  return shelf
+    ? { shelf, books: (d.books[shelf.id] || []).filter((b) => b.status === "approved").sort((a, b) => a.createdAt - b.createdAt) }
+    : { shelf: null, books: [] };
+}
+// 예전 캐시가 남아 있으면 지운다 (지금은 캐시를 쓰지 않는다)
 export function clearShelfCache(code) {
   try { sessionStorage.removeItem("sih-shelf-" + code); } catch (e) { /* 무시 */ }
 }
 
 const ms = (v) => (v && typeof v.toMillis === "function" ? v.toMillis() : typeof v === "number" ? v : 0);
 const plain = (o) => ({ ...o, createdAt: ms(o.createdAt) });
+// 방금 쓴 문서는 서버 시각이 아직 없으므로 추정값을 쓴다
+const docOf = (d) => plain({ id: d.id, ...d.data({ serverTimestamps: "estimate" }) });
+const sortBooks = (list) => list.sort((a, b) => a.createdAt - b.createdAt);
+
+/* ---------- 실시간 반영 ----------
+ * 실제 모드: Firestore onSnapshot 으로 바로 반영한다. 학교망에서 실시간 연결이 막히거나
+ *   처음 응답이 오지 않으면 POLL_MS 마다 다시 읽어서, 조금 늦더라도 새로고침 없이 반영되게 한다.
+ * 데모 모드: 다른 탭의 변경(storage 이벤트)과 같은 탭의 변경을 짧은 간격으로 확인한다.
+ * 돌려준 함수를 부르면 구독을 끊는다. */
+const POLL_MS = 20 * 1000;
+const FIRST_WAIT_MS = 8 * 1000;
+const isDenied = (e) => e && (e.code === "permission-denied" || /insufficient permissions/i.test(e.message || ""));
+
+function demoWatch(read, cb) {
+  let last = "";
+  const tick = () => {
+    const v = read();
+    const key = JSON.stringify(v);
+    if (key !== last) { last = key; cb(v); }
+  };
+  tick();
+  const t = setInterval(tick, 1500);
+  const onStorage = (e) => { if (!e.key || e.key === DEMO_KEY) tick(); };
+  addEventListener("storage", onStorage);
+  return () => { clearInterval(t); removeEventListener("storage", onStorage); };
+}
+
+function liveOrPoll({ listen, fetchOnce, cb, onError }) {
+  let stopped = false, got = false, unsub = null, poll = null, lastKey = "";
+  const emit = (v) => {
+    if (stopped) return;
+    const key = JSON.stringify(v);
+    if (key === lastKey) return;          // 바뀐 게 없으면 다시 그리지 않는다
+    lastKey = key; cb(v);
+  };
+  const fail = (e) => { if (isDenied(e) && onError) onError(e); };
+  const startPolling = () => {
+    if (poll || stopped) return;
+    const run = () => fetchOnce().then(emit).catch(fail);
+    run();
+    poll = setInterval(run, POLL_MS);
+  };
+  const guard = setTimeout(() => { if (!got) startPolling(); }, FIRST_WAIT_MS);
+  // 탭으로 돌아오면 한 번 더 확인한다 (잠자기에서 깨어난 크롬북 대비)
+  const onVisible = () => { if (document.visibilityState === "visible") fetchOnce().then(emit).catch(fail); };
+  document.addEventListener("visibilitychange", onVisible);
+  try {
+    unsub = listen((v) => {
+      got = true;
+      if (poll) { clearInterval(poll); poll = null; }
+      emit(v);
+    }, (e) => {
+      if (isDenied(e)) { fail(e); return; }
+      console.warn("실시간 연결이 끊겨 주기적으로 다시 읽습니다:", e.code || e.message);
+      startPolling();
+    });
+  } catch (e) { startPolling(); }
+  return () => {
+    stopped = true;
+    clearTimeout(guard);
+    if (poll) clearInterval(poll);
+    document.removeEventListener("visibilitychange", onVisible);
+    if (typeof unsub === "function") unsub();
+  };
+}
+
+/* 공개 책장: 책장 정보와 승인된 책을 함께 구독한다. cb({ shelf, books }) */
+export function watchShelf(code, cb, onError) {
+  const CODE = code.toUpperCase();
+  if (DEMO) return demoWatch(() => demoShelf(CODE), cb);
+  let stop = () => {}, cancelled = false;
+  fb().then(({ F, db }) => {
+    if (cancelled) return;
+    stop = liveOrPoll({
+      cb, onError,
+      fetchOnce: () => loadShelf(CODE),
+      listen: (next, fail) => {
+        let shelfId = null, shelf = null, books = null, unBooks = null;
+        const push = () => { if (!shelf) next({ shelf: null, books: [] }); else if (books) next({ shelf, books }); };
+        const unShelf = F.onSnapshot(
+          F.query(F.collection(db, "shelves"), F.where("code", "==", CODE), F.limit(1)),
+          (snap) => {
+            if (snap.empty) {
+              if (unBooks) { unBooks(); unBooks = null; }
+              shelfId = null; shelf = null; books = null;
+              push();
+              return;
+            }
+            const d = snap.docs[0];
+            shelf = docOf(d);
+            if (d.id !== shelfId) {
+              if (unBooks) unBooks();
+              shelfId = d.id; books = null;
+              unBooks = F.onSnapshot(
+                F.query(F.collection(db, "shelves", d.id, "books"), F.where("status", "==", "approved")),
+                (bs) => { books = sortBooks(bs.docs.map(docOf)); push(); },
+                fail,
+              );
+            }
+            push();
+          },
+          fail,
+        );
+        return () => { unShelf(); if (unBooks) unBooks(); };
+      },
+    });
+  }).catch((e) => { if (onError) onError(e); });
+  return () => { cancelled = true; stop(); };
+}
+
+/* 선생님 화면: 한 책장의 모든 책과 모둠원 이름을 구독한다. cb({ books, members }) */
+export function watchShelfBooks(shelfId, cb, onError) {
+  if (DEMO) {
+    return demoWatch(() => {
+      const d = demoRead();
+      const books = (d.books[shelfId] || []).slice().sort((a, b) => a.createdAt - b.createdAt);
+      const members = {};
+      books.forEach((b) => (members[b.id] = d.priv[b.id] || ""));
+      return { books, members };
+    }, cb);
+  }
+  let stop = () => {}, cancelled = false;
+  fb().then(({ F, db }) => {
+    if (cancelled) return;
+    stop = liveOrPoll({
+      cb, onError,
+      fetchOnce: async () => {
+        const books = await listBooks(shelfId);
+        return { books, members: await loadMembers(shelfId, books.map((b) => b.id)) };
+      },
+      listen: (next, fail) => {
+        let books = null, members = null;
+        const push = () => {
+          if (!books || !members) return;
+          const m = {};
+          books.forEach((b) => (m[b.id] = members[b.id] || ""));
+          next({ books, members: m });
+        };
+        const unB = F.onSnapshot(F.collection(db, "shelves", shelfId, "books"),
+          (snap) => { books = sortBooks(snap.docs.map(docOf)); push(); }, fail);
+        // 모둠원 이름은 책보다 한 박자 늦게 저장되므로 따로 구독해서 뒤따라 채운다
+        const unP = F.onSnapshot(F.collection(db, "shelves", shelfId, "private"),
+          (snap) => { members = {}; snap.docs.forEach((d) => (members[d.id] = d.data().memberNames || "")); push(); }, fail);
+        return () => { unB(); unP(); };
+      },
+    });
+  }).catch((e) => { if (onError) onError(e); });
+  return () => { cancelled = true; stop(); };
+}
 
 export async function loadTeacherExamples() {
   const res = await fetch("shelf/teacher.json", { cache: "no-cache" });
@@ -355,7 +505,7 @@ export async function listBooks(shelfId) {
   if (DEMO) return (demoRead().books[shelfId] || []).slice().sort((a, b) => a.createdAt - b.createdAt);
   const { F, db } = await fb();
   const snap = await F.getDocs(F.collection(db, "shelves", shelfId, "books"));
-  return snap.docs.map((d) => plain({ id: d.id, ...d.data() })).sort((a, b) => a.createdAt - b.createdAt);
+  return sortBooks(snap.docs.map(docOf));
 }
 export async function loadMembers(shelfId, ids) {
   const out = {};

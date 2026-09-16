@@ -74,10 +74,19 @@
       </div>
 
       <div class="field">
-        <span class="lab">표지 고르기</span>
+        <span class="lab">표지 그림</span>
         <div class="covers" id="coverPick" role="group" aria-label="표지 그림 고르기"></div>
-        <span class="lab" style="margin-top:12px">표지 색</span>
-        <div class="covers" id="colorPick" role="group" aria-label="표지 색 고르기" style="grid-template-columns:repeat(6,1fr)"></div>
+        <span class="lab" style="margin-top:16px">표지 색</span>
+        <div class="tones" id="colorPick" role="group" aria-label="표지 색 고르기"></div>
+        <div class="cover-live" aria-hidden="true">
+          <button class="book bk" type="button" tabindex="-1" id="liveBook" style="--dh:0px">
+            <span class="t" id="liveTitle">책 제목</span>
+            <img class="art" id="liveArt" alt="">
+            <span class="who" id="liveWho"></span>
+          </button>
+          <p class="desc"><b>책장에 꽂히면 이렇게 보여요</b>제목을 적으면 표지에도 바로 들어갑니다.</p>
+        </div>
+        <div class="cover-live-board" aria-hidden="true"></div>
         <p class="upload-note" id="uploadBox">
           <label for="capture" class="btn small" style="cursor:pointer">캡처 이미지 올리기 (선택)</label>
           <span id="capName"></span><br>
@@ -100,7 +109,7 @@
 
 <script type="module">
 import { codeEntryHtml, bindCodeEntry, lastCode } from "./assets/code-entry.js";
-import { DEMO, CAN_UPLOAD, loadShelf, submitBook, COVERS, COVER_COLORS, coverSrc, clearShelfCache } from "./assets/shelf-data.js";
+import { DEMO, CAN_UPLOAD, loadShelf, submitBook, COVERS, COVER_COLORS, coverSrc, coverTone, coverColorName, clearShelfCache } from "./assets/shelf-data.js";
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
@@ -114,21 +123,28 @@ if (!CAN_UPLOAD) { $("uploadBox").hidden = true; $("capture").disabled = true; }
 for (let i = 1; i <= 15; i++) $("classNo").insertAdjacentHTML("beforeend", `<option value="${i}"${i === 3 ? " selected" : ""}>${i}반</option>`);
 
 $("coverPick").innerHTML = COVERS.map((c) => `
-  <button type="button" data-k="${c.id}" aria-pressed="false" aria-label="${esc(c.label)} 그림" title="${esc(c.label)}" style="--cover:${COVER_COLORS[0]}">
+  <button type="button" data-k="${c.id}" aria-pressed="false" aria-label="${esc(c.label)} 그림" title="${esc(c.label)}">
     <img src="${coverSrc(c.id)}" alt=""></button>`).join("");
 $("colorPick").innerHTML = COVER_COLORS.map((c) => `
-  <button type="button" data-c="${c}" aria-pressed="false" aria-label="표지 색 ${c}" style="--cover:${c};aspect-ratio:1"></button>`).join("");
+  <button type="button" data-c="${c}" aria-pressed="false" style="--tone:${coverTone(c)}"><i></i>${esc(coverColorName(c))}</button>`).join("");
 
 function paint() {
+  const tone = coverTone(color);
   $("coverPick").querySelectorAll("button").forEach((b) => {
     b.setAttribute("aria-pressed", b.dataset.k === cover ? "true" : "false");
-    b.style.setProperty("--cover", color);
+    b.style.setProperty("--tone", tone);
   });
   $("colorPick").querySelectorAll("button").forEach((b) => b.setAttribute("aria-pressed", b.dataset.c === color ? "true" : "false"));
+  // 책장에 꽂힌 모습 미리보기
+  $("liveBook").style.setProperty("--tone", tone);
+  $("liveArt").src = coverSrc(cover);
+  $("liveTitle").textContent = $("title").value.trim() || "책 제목";
+  $("liveWho").textContent = `${$("grade").value}-${$("classNo").value} · ${$("team").value.trim() || "모둠명"}`;
 }
 $("coverPick").onclick = (e) => { const b = e.target.closest("button"); if (b) { cover = b.dataset.k; paint(); save(); } };
 $("colorPick").onclick = (e) => { const b = e.target.closest("button"); if (b) { color = b.dataset.c; paint(); save(); } };
 $("grade").onchange = () => { color = COVER_COLORS[+$("grade").value - 1] || color; paint(); save(); };
+["title", "team", "classNo"].forEach((id) => $(id).addEventListener("input", paint));
 paint();
 
 $("capture").onchange = () => {
@@ -152,7 +168,7 @@ function restore() {
     const o = JSON.parse(localStorage.getItem(KEY) || "null");
     if (!o) return;
     FIELDS.forEach((f) => { if (o[f] != null) $(f).value = o[f]; });
-    cover = o.cover || cover; color = o.color || color; paint();
+    cover = o.cover || cover; color = o.color || color;
   } catch (e) { /* 무시 */ }
 }
 FIELDS.forEach((f) => $(f).addEventListener("input", save));
@@ -180,6 +196,7 @@ FIELDS.forEach((f) => $(f).addEventListener("input", save));
     $("sub").innerHTML = `<span class="code-chip"><small>책장 코드</small><b>${esc(shelf.code)}</b></span> · ${esc(shelf.school)}`;
     $("form").hidden = false;
     restore();
+    paint();
   } catch (err) {
     $("sub").textContent = "책장을 확인하지 못했습니다";
     const deny = err && (err.code === "permission-denied" || /insufficient permissions/i.test(err.message || ""));
@@ -227,7 +244,7 @@ $("form").addEventListener("submit", async (e) => {
     $("done").hidden = false;
     $("done").innerHTML = `<div class="notice">
       <h2>보냈어요. 선생님 확인 후 책장에 꽂혀요</h2>
-      <p>선생님이 승인하면 우리 학교 책장에서 볼 수 있습니다. 모둠원 이름은 공개되지 않습니다.</p>
+      <p>선생님이 승인하면 우리 학교 책장에 저절로 나타납니다. 모둠원 이름은 공개되지 않습니다.</p>
       <p><a class="btn primary" href="shelf.html?code=${encodeURIComponent(code)}${suffix}">책장 보러 가기</a>
       <a class="btn" href="submit.html?code=${encodeURIComponent(code)}${suffix}">하나 더 제출하기</a></p></div>`;
     window.scrollTo({ top: 0, behavior: "smooth" });

@@ -102,6 +102,7 @@ import {
   DEMO, CONFIGURED, onUser, login, logout, myShelves, createShelf, regenerateCode,
   listBooks, loadMembers, setStatus, updateBook, deleteBook, clearShelfCache,
   checkAccess, listAllowed, addAllowed, removeAllowed, listAllShelves, renameShelf, deleteShelf,
+  watchShelfBooks,
 } from "./assets/shelf-data.js";
 import { SITE } from "./assets/site-config.js";
 
@@ -168,7 +169,7 @@ function renderPending(u) {
   $("main").innerHTML = `
     <div class="notice">
       <h2>아직 사용 승인이 되지 않은 계정입니다</h2>
-      <p>관리자에게 아래 주소를 알려 주시면 승인해 드립니다. 승인 뒤 이 화면을 새로 고치면 바로 책장을 만들 수 있습니다.</p>
+      <p>관리자에게 아래 주소를 알려 주시면 승인해 드립니다. 승인되면 이 화면이 저절로 넘어갑니다.</p>
       <div class="qr-box" style="gap:12px">
         <b style="font-size:18px" id="myMail">${esc(u.email || "")}</b>
         <button class="btn small" id="copyMail">주소 복사</button>
@@ -187,10 +188,19 @@ function renderPending(u) {
   $("copyMail").onclick = () => copy(u.email || "", "주소를");
   $("recheck").onclick = async () => {
     access = await checkAccess(u);
-    if (access.approved) { toast("승인됐습니다"); await reload(); }
+    if (access.approved) { stopPendingCheck(); toast("승인됐습니다"); await reload(); }
     else toast("아직 승인 전입니다");
   };
+  // 관리자가 승인하면 새로고침하지 않아도 넘어가도록 가끔 다시 확인한다
+  stopPendingCheck();
+  pendingTimer = setInterval(async () => {
+    if (!$("recheck") || user !== u) { stopPendingCheck(); return; }
+    const next = await checkAccess(u).catch(() => null);
+    if (next && next.approved) { access = next; stopPendingCheck(); toast("승인됐습니다"); await reload(); }
+  }, 30 * 1000);
 }
+let pendingTimer = null;
+function stopPendingCheck() { if (pendingTimer) { clearInterval(pendingTimer); pendingTimer = null; } }
 
 /* ---------- 관리자: 선생님 승인 ---------- */
 function adminCard() {
@@ -267,6 +277,41 @@ async function reload() {
   }
   render();
   refreshPeek();
+  watchAll();
+}
+
+/* ---------- 실시간 반영: 학생이 제출하면 새로고침 없이 목록에 뜬다 ---------- */
+const watchers = new Map();   // 책장 id → 구독 끊기 함수
+function watchAll() {
+  const ids = new Set(shelves.map((s) => s.id));
+  for (const [id, stop] of watchers) if (!ids.has(id)) { stop(); watchers.delete(id); }
+  shelves.forEach((s) => {
+    if (watchers.has(s.id)) return;
+    watchers.set(s.id, watchShelfBooks(s.id, (next) => onLive(s.id, next), (e) => console.warn("실시간 반영 오류:", e.code || e.message)));
+  });
+}
+function onLive(shelfId, next) {
+  const cur = data[shelfId];
+  if (!cur || !shelves.some((s) => s.id === shelfId)) return;
+  if (JSON.stringify(cur) === JSON.stringify(next)) return;
+  const known = new Set(cur.books.map((b) => b.id));
+  const arrived = next.books.filter((b) => !known.has(b.id) && b.status === "pending");
+  data[shelfId] = next;
+  liveRender();
+  if (arrived.length) toast(arrived.length === 1 ? `새 제출: ${arrived[0].title}` : `새 제출 ${arrived.length}권이 들어왔어요`);
+}
+// 다시 그려도 적던 글자와 커서 위치는 그대로 둔다
+function liveRender() {
+  if (!shelves.length || !$("main").querySelector(".shelf-card[data-s]")) return;
+  const kept = [...$("main").querySelectorAll("input[id], textarea[id]")].map((el) => [el.id, el.value]);
+  const active = document.activeElement && $("main").contains(document.activeElement) ? document.activeElement : null;
+  const focusKey = active && (active.id || active.dataset.a);
+  render();
+  kept.forEach(([id, v]) => { const el = $(id); if (el) el.value = v; });
+  if (focusKey) {
+    const el = $(focusKey) || $("main").querySelector(`[data-a="${focusKey}"]`);
+    if (el) el.focus({ preventScroll: true });
+  }
 }
 function render() {
   if (!shelves.length) { renderFirstRun(); return; }

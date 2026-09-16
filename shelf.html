@@ -25,15 +25,17 @@
     <div id="notice"></div>
     <div class="shelf-wrap" id="shelfWrap">
       <div class="bookcase" id="bookcase" aria-busy="true">
-        <div class="row-label"><span class="skeleton" style="width:180px;height:22px;border-radius:6px"></span></div>
-        <div class="row-inner">
-          <span class="skeleton sk-book"></span><span class="skeleton sk-book"></span><span class="skeleton sk-book"></span>
-          <span class="skeleton sk-book"></span><span class="skeleton sk-book"></span>
-        </div>
-        <div class="row-board"></div>
+        <section class="shelf-row">
+          <div class="row-label"><span class="skeleton" style="width:180px;height:22px;border-radius:6px"></span></div>
+          <div class="bay"><div class="row-inner">
+            <span class="skeleton sk-book"></span><span class="skeleton sk-book"></span><span class="skeleton sk-book"></span>
+            <span class="skeleton sk-book"></span><span class="skeleton sk-book"></span>
+          </div></div>
+          <div class="row-board"></div>
+        </section>
       </div>
     </div>
-    <p class="shelf-foot" id="foot" hidden>제출하신 산출물은 선생님 확인 후 책장에 꽂힙니다.</p>
+    <p class="shelf-foot" id="foot" hidden>제출하신 산출물은 선생님 확인 후 책장에 꽂힙니다. 승인되면 새로고침하지 않아도 저절로 나타나요.</p>
   </main>
 </div>
 
@@ -43,33 +45,42 @@
 <div class="reader" id="reader" hidden role="dialog" aria-modal="true" aria-labelledby="bkTitle">
   <div class="dim" id="dim"></div>
   <div class="stage">
-    <div class="spread" id="spread">
-      <div class="page left">
-        <div class="ink-in">
-          <div class="meta"><span class="chip" id="bkWho"></span><span class="chip amber" id="bkDate"></span></div>
-          <h2 id="bkTitle"></h2>
-          <section><h3>개발자의 의도</h3><p id="bkIntent"></p></section>
-          <section><h3>사용 방법</h3><p id="bkHowto"></p></section>
-          <section><h3>관련 과학 개념</h3><div class="concepts" id="bkConcepts"></div></section>
+    <div class="tome" id="tome">
+      <div class="spread" id="spread">
+        <div class="page left">
+          <div class="ink-in">
+            <div class="meta"><span class="chip" id="bkWho"></span><span class="chip amber" id="bkDate"></span></div>
+            <h2 id="bkTitle"></h2>
+            <section><h3>개발자의 의도</h3><p id="bkIntent"></p></section>
+            <section><h3>사용 방법</h3><p id="bkHowto"></p></section>
+            <section><h3>관련 과학 개념</h3><div class="concepts" id="bkConcepts"></div></section>
+          </div>
+        </div>
+        <div class="page right">
+          <div class="app-in">
+            <div class="preview" id="bkPreview"></div>
+            <div class="open-row"><a class="btn dark" id="bkOpen" target="_blank" rel="noopener noreferrer">시뮬레이션 열기 ↗</a></div>
+            <p class="link" id="bkLink"></p>
+          </div>
+        </div>
+        <div class="gutter" aria-hidden="true"></div>
+      </div>
+      <!-- 앞표지: 책장 자리에서 날아와 가운데에 닫힌 채로 놓인 뒤, 왼쪽으로 넘어가며 펼쳐진다 -->
+      <div class="cover-mover" id="mover" aria-hidden="true">
+        <div class="cover-flip" id="flip">
+          <div class="cover-face bk" id="coverFace">
+            <span class="t" id="cfTitle"></span>
+            <img class="art" id="cfArt" alt="">
+            <span class="who" id="cfWho"></span>
+            <span class="shade"></span>
+          </div>
+          <div class="cover-back"><span class="shade"></span></div>
         </div>
       </div>
-      <div class="spine-shadow"></div>
-      <div class="page right">
-        <div class="app-in" style="width:100%;flex:1;display:flex;flex-direction:column;align-items:center">
-          <div class="preview" id="bkPreview"></div>
-          <div class="open-row"><a class="btn dark" id="bkOpen" target="_blank" rel="noopener noreferrer">시뮬레이션 열기 ↗</a></div>
-          <p class="link" id="bkLink"></p>
-        </div>
-      </div>
-    </div>
-    <div class="cover-mover" id="mover" aria-hidden="true">
-      <div class="cover-flip" id="flip">
-        <div class="cover-face" id="coverFace">
-          <div class="t" id="cfTitle"></div>
-          <img id="cfArt" alt="">
-          <span class="who" id="cfWho"></span>
-        </div>
-        <div class="cover-back" aria-hidden="true"></div>
+      <!-- 이전·다음 책으로 넘길 때 넘어가는 종이 한 장 -->
+      <div class="leaf" id="leaf" aria-hidden="true">
+        <div class="leaf-face front"><span class="shade"></span></div>
+        <div class="leaf-face back"><span class="shade"></span></div>
       </div>
     </div>
   </div>
@@ -81,7 +92,7 @@
 
 <script type="module">
 import { codeEntryHtml, bindCodeEntry, rememberCode, lastCode } from "./assets/code-entry.js";
-import { DEMO, CONFIGURED, loadShelf, loadTeacherExamples, coverSrc } from "./assets/shelf-data.js";
+import { DEMO, watchShelf, loadTeacherExamples, coverSrc, coverTone } from "./assets/shelf-data.js";
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
@@ -91,10 +102,11 @@ const code = (params.get("code") || "").trim().toUpperCase();
 const PER_ROW = 10;
 let flat = [];            // 펼쳐 보기용 순서
 let openIndex = -1, animating = false, lastFocus = null;
+let examples = null, rendered = false, seen = null, waiting = null;
 
 if (DEMO) $("demoBar").hidden = false;
 
-/* ---------- 불러오기 ---------- */
+/* ---------- 불러오기 (실시간) ---------- */
 (async function start() {
   if (!code) {
     $("bookcase").parentElement.hidden = true;
@@ -110,25 +122,30 @@ if (DEMO) $("demoBar").hidden = false;
   }
   $("fab").href = `submit.html?code=${encodeURIComponent(code)}${DEMO ? "&demo=1" : ""}`;
   $("fab").hidden = false;
-  try {
-    const [examples, data] = await Promise.all([loadTeacherExamples().catch(() => null), loadShelf(code)]);
-    render(examples, data);
-  } catch (err) {
-    $("bookcase").parentElement.hidden = true;
-    $("sub").textContent = "책장을 불러오지 못했습니다";
-    const deny = err && (err.code === "permission-denied" || /insufficient permissions/i.test(err.message || ""));
-    $("notice").innerHTML = deny
-      ? `<div class="notice bad"><h2>아직 책장이 열리지 않았어요</h2>
-          <p>선생님께 알려 주세요. 저장소 보안 규칙을 올려야 책장이 열립니다.</p>
-          <p class="link">firebase deploy --only firestore:rules</p></div>`
-      : `<div class="notice bad"><h2>책장을 불러오지 못했어요</h2>
-          <p>인터넷 연결을 확인하고 새로고침해 보세요. 계속 같은 화면이면 선생님께 알려 주세요.</p>
-          <p class="link">${esc(err.message || err)}</p></div>`;
-  }
+  examples = await loadTeacherExamples().catch(() => null);
+  // 선생님이 승인·숨김하면 새로고침 없이 책장이 바뀐다. 책을 펼쳐 보는 중이면 덮은 뒤에 반영한다.
+  watchShelf(code, (data) => {
+    if (!$("reader").hidden) { waiting = data; return; }
+    render(data);
+  }, showError);
 })();
 
+function showError(err) {
+  if (rendered) { console.warn("책장을 새로 읽지 못했습니다:", err.code || err.message); return; }
+  $("bookcase").parentElement.hidden = true;
+  $("sub").textContent = "책장을 불러오지 못했습니다";
+  const deny = err && (err.code === "permission-denied" || /insufficient permissions/i.test(err.message || ""));
+  $("notice").innerHTML = deny
+    ? `<div class="notice bad"><h2>아직 책장이 열리지 않았어요</h2>
+        <p>선생님께 알려 주세요. 저장소 보안 규칙을 올려야 책장이 열립니다.</p>
+        <p class="link">firebase deploy --only firestore:rules</p></div>`
+    : `<div class="notice bad"><h2>책장을 불러오지 못했어요</h2>
+        <p>인터넷 연결을 확인하고 새로고침해 보세요. 계속 같은 화면이면 선생님께 알려 주세요.</p>
+        <p class="link">${esc(err.message || err)}</p></div>`;
+}
+
 /* ---------- 그리기 ---------- */
-function render(examples, { shelf, books }) {
+function render({ shelf, books }) {
   const bc = $("bookcase");
   bc.removeAttribute("aria-busy");
   if (!shelf) {
@@ -136,12 +153,17 @@ function render(examples, { shelf, books }) {
     $("codeChip").hidden = true;
     bc.parentElement.hidden = true;
     $("fab").hidden = true;
+    $("foot").hidden = true;
     $("notice").innerHTML = `<div class="notice bad"><h2>이런 코드의 책장이 없어요</h2>
       <p><b>${esc(code)}</b> 로 된 책장을 찾지 못했습니다. 코드를 다시 확인하거나 선생님께 물어보세요.</p>
       ${codeEntryHtml({ value: code, wrong: true, page: "shelf" })}</div>`;
     bindCodeEntry(DEMO);
+    rendered = false;
     return;
   }
+  $("notice").innerHTML = "";
+  bc.parentElement.hidden = false;
+  $("fab").hidden = false;
   $("codeText").textContent = shelf.code;
   rememberCode(shelf.code);
   $("codeChip").hidden = false;
@@ -152,14 +174,14 @@ function render(examples, { shelf, books }) {
   const sections = [];
   if (examples) {
     sections.push({
-      badge: "선생님 예시", label: examples.label || "선생님 예시 서가",
-      note: `${examples.books.length}권 · ${examples.note || "참고 예시"}`,
+      key: "teacher", label: examples.label || "선생님 예시",
+      note: `${examples.books.length}권${examples.note ? ` · ${examples.note}` : ""}`,
       books: examples.books.map((b) => ({ ...b, teacher: true })),
     });
   }
   const mine = books.filter((b) => b.example);
   if (mine.length) {
-    sections.push({ label: "우리 학교 예시", note: `${mine.length}권`, books: mine.map(toBook) });
+    sections.push({ key: "school", label: "우리 학교 예시", note: `${mine.length}권`, books: mine.map(toBook) });
   }
   const groups = new Map();
   books.filter((b) => !b.example).forEach((b) => {
@@ -173,20 +195,30 @@ function render(examples, { shelf, books }) {
     const [g, c] = k.split("-");
     const last = list.length ? new Date(Math.max(...list.map((b) => b.createdAt || 0))) : null;
     sections.push({
-      label: `${g}학년 ${c}반`,
+      key: k, label: `${g}학년 ${c}반`,
       note: list.length ? `${list.length}권${last ? ` · 최근 제출 ${last.getMonth() + 1}월 ${last.getDate()}일` : ""}` : "0권",
       books: list,
     });
   });
 
-  flat = sections.flatMap((s) => s.books);
-  bc.innerHTML = sections.map(rowsOf).join("");
-  bc.querySelectorAll("[data-i]").forEach((el) => (el.onclick = () => openBook(+el.dataset.i)));
+  // 다시 그려도 옆으로 넘겨 둔 위치는 그대로
+  const scrolls = {};
+  bc.querySelectorAll(".row-inner[data-key]").forEach((el) => (scrolls[el.dataset.key] = el.scrollLeft));
 
-  if (location.hash.startsWith("#book=")) {
+  flat = sections.flatMap((s) => s.books);
+  const fresh = seen ? new Set(flat.filter((b) => !seen.has(b.id)).map((b) => b.id)) : new Set();
+  seen = new Set(flat.map((b) => b.id));
+  bc.innerHTML = sections.map((s) => rowsOf(s, fresh)).join("");
+  bc.querySelectorAll("[data-i]").forEach((el) => (el.onclick = () => openBook(+el.dataset.i)));
+  bc.querySelectorAll(".row-inner[data-key]").forEach((el) => { if (scrolls[el.dataset.key]) el.scrollLeft = scrolls[el.dataset.key]; });
+  bays.clear();
+  bc.querySelectorAll(".bay").forEach(wireBay);
+
+  if (!rendered && location.hash.startsWith("#book=")) {
     const i = flat.findIndex((b) => b.id === decodeURIComponent(location.hash.slice(6)));
     if (i >= 0) openBook(i, true);
   }
+  rendered = true;
 }
 const byClass = (a, b) => {
   const [ag, ac] = a.split("-").map(Number), [bg, bc2] = b.split("-").map(Number);
@@ -194,40 +226,83 @@ const byClass = (a, b) => {
 };
 const toBook = (b) => ({ ...b, who: `${b.grade}-${b.classNo} · ${b.team}` });
 
-function rowsOf(sec) {
+function rowsOf(sec, fresh) {
   const chunks = [];
   for (let i = 0; i < Math.max(1, sec.books.length); i += PER_ROW) chunks.push(sec.books.slice(i, i + PER_ROW));
   return chunks.map((chunk, ci) => `
-    <div class="row-label">
-      ${sec.badge && ci === 0 ? `<span class="badge-teacher">${esc(sec.badge)}</span>` : ""}
-      <h2>${esc(sec.label)}${ci ? " (이어서)" : ""}</h2>
-      ${ci === 0 ? `<span class="count">${esc(sec.note)}</span>` : ""}
-    </div>
-    <div class="row-inner">
-      ${chunk.length ? chunk.map(bookHtml).join("") : `<p class="row-empty">아직 꽂힌 책이 없어요. 첫 산출물을 제출해 보세요!</p>`}
-    </div>
-    <div class="row-board"></div>`).join("");
+    <section class="shelf-row${chunk.length ? "" : " empty"}">
+      <div class="row-label">
+        <h2>${esc(sec.label)}${ci ? " (이어서)" : ""}</h2>
+        ${ci === 0 ? `<span class="count">${esc(sec.note)}</span>` : ""}
+      </div>
+      <div class="bay">
+        <button class="row-nav prev" type="button" aria-label="${esc(sec.label)} 왼쪽 책 보기" hidden>‹</button>
+        <div class="row-inner" data-key="${esc(sec.key)}-${ci}">
+          ${chunk.length ? chunk.map((b) => bookHtml(b, fresh.has(b.id))).join("") : `<p class="row-empty">아직 꽂힌 책이 없어요. 첫 산출물을 제출해 보세요!</p>`}
+        </div>
+        <button class="row-nav next" type="button" aria-label="${esc(sec.label)} 오른쪽 책 보기" hidden>›</button>
+      </div>
+      <div class="row-board"></div>
+    </section>`).join("");
 }
-function bookHtml(b) {
+// 책마다 키가 조금씩 달라야 진짜 책장처럼 보인다 (id 로 정해서 늘 같은 높이)
+function heightOf(id) {
+  let h = 0;
+  for (const ch of String(id)) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+  return h % 4 * 4;
+}
+function bookHtml(b, isNew) {
   const i = flat.indexOf(b);
   const art = b.coverPath || coverSrc(b.coverKind);
-  const color = b.coverColor || "#23A087";
+  const tone = coverTone(b.coverColor);
+  const cls = isNew && !reduced ? " arrive" : "";
   return `
-    <button class="book" data-i="${i}" style="--cover:${esc(color)}" aria-label="${esc(b.title)} 펼쳐 보기">
-      <span class="spine"></span>
+    <button class="book bk${cls}" data-i="${i}" style="--tone:${esc(tone)};--dh:${heightOf(b.id)}px" aria-label="${esc(b.title)} 펼쳐 보기">
       <span class="t">${esc(b.title)}</span>
       <img class="art" src="${esc(art)}" alt="" aria-hidden="true">
       <span class="who">${esc(b.who)}</span>
     </button>
-    <button class="book-row" data-i="${i}" style="--cover:${esc(color)}" aria-label="${esc(b.title)} 펼쳐 보기">
+    <button class="book-row${cls}" data-i="${i}" style="--tone:${esc(tone)}" aria-label="${esc(b.title)} 펼쳐 보기">
       <span class="cov"><img src="${esc(art)}" alt="" aria-hidden="true"></span>
       <span class="tx"><b>${esc(b.title)}</b><small>${esc(b.who)}</small></span>
       <span class="chev" aria-hidden="true">›</span>
     </button>`;
 }
 
-/* ---------- 책 펼치기 (모션 사양 9:2) ---------- */
-const reader = $("reader"), mover = $("mover");
+/* 한 줄에 다 안 들어가면 옆으로 넘길 수 있게 (손가락으로 밀거나 ‹ › 단추) */
+function wireBay(bay) {
+  const row = bay.querySelector(".row-inner");
+  const prev = bay.querySelector(".row-nav.prev"), next = bay.querySelector(".row-nav.next");
+  const update = () => {
+    const over = row.scrollWidth > row.clientWidth + 2;
+    const atStart = row.scrollLeft <= 2, atEnd = row.scrollLeft + row.clientWidth >= row.scrollWidth - 2;
+    prev.hidden = !over || atStart;
+    next.hidden = !over || atEnd;
+    bay.classList.toggle("more-left", over && !atStart);
+    bay.classList.toggle("more-right", over && !atEnd);
+  };
+  const go = (d) => row.scrollBy({ left: d * Math.max(160, row.clientWidth * 0.8), behavior: reduced ? "auto" : "smooth" });
+  prev.onclick = () => go(-1);
+  next.onclick = () => go(1);
+  row.addEventListener("scroll", update, { passive: true });
+  update();
+  bays.add(update);
+}
+const bays = new Set();   // 창 크기가 바뀌면 ‹ › 단추를 다시 맞춘다
+addEventListener("resize", () => { bays.forEach((f) => f()); });
+
+/* ---------- 책 펼치기 ----------
+ * 1) 책장에 꽂힌 책이 그 자리에서 떠올라 화면 가운데로 온다 (닫힌 책)
+ * 2) 앞표지가 책등을 축으로 원근감 있게 왼쪽으로 넘어가고, 책은 펼친 모양이 가운데 오도록 옆으로 옮겨진다
+ * 3) 표지 안쪽 면이 왼쪽 쪽이 되어 글이 스며 나온다
+ * 닫을 때는 거꾸로. 휴대전화 폭에서는 아래에서 올라오는 시트로 연다. */
+const reader = $("reader"), tome = $("tome"), mover = $("mover"), leaf = $("leaf");
+const T = { fly: 540, turn: 900, prefade: 100, close: 460, back: 320, out: 140, leaf: 680 };
+const simple = () => reduced || matchMedia("(max-width: 860px)").matches;
+let timers = [], srcEl = null;
+const later = (fn, ms) => timers.push(setTimeout(fn, ms));
+const clearTimers = () => { timers.forEach(clearTimeout); timers = []; };
+
 function fill(b) {
   $("bkWho").textContent = b.who;
   $("bkDate").textContent = b.teacher ? "선생님 예시" : b.createdAt ? `${new Date(b.createdAt).toLocaleDateString("ko-KR")} 승인` : "승인";
@@ -242,8 +317,8 @@ function fill(b) {
   $("cfTitle").textContent = b.title;
   $("cfWho").textContent = b.who;
   $("cfArt").src = b.coverPath || coverSrc(b.coverKind);
-  $("coverFace").style.setProperty("--cover", b.coverColor || "#23A087");
-  $("bkPreview").style.setProperty("--cover", b.coverColor || "#23A087");
+  $("coverFace").style.setProperty("--tone", coverTone(b.coverColor));
+  $("bkPreview").style.setProperty("--tone", coverTone(b.coverColor));
   $("bkPreview").innerHTML = "";
   $("bkPrev").disabled = openIndex <= 0;
   $("bkNext").disabled = openIndex >= flat.length - 1;
@@ -273,75 +348,142 @@ function mountApp(b) {
     }, 3500);
   };
 }
+// 지금 보이는(책장 모양 또는 목록 모양) 책 단추
+const shelfEl = (i) => [...document.querySelectorAll(`#bookcase [data-i="${i}"]`)].find((el) => el.offsetParent !== null) || null;
+function setSource(i) {
+  if (srcEl) srcEl.classList.remove("lifted");
+  srcEl = shelfEl(i);
+}
+// 책장 속 책 자리·크기 → 가운데 닫힌 책 자리로 옮기는 변환. 책이 화면 밖이면 null
+function fromShelf(el) {
+  tome.style.transition = "none";
+  tome.style.transform = "translateX(-25%)";
+  if (!el) return null;
+  const from = el.getBoundingClientRect();
+  if (!from.width || from.bottom < 0 || from.top > innerHeight) return null;
+  const to = mover.getBoundingClientRect();
+  if (!to.height) return null;
+  const s = from.height / to.height;
+  const dx = from.left + from.width / 2 - (to.left + to.width / 2);
+  const dy = from.top + from.height / 2 - (to.top + to.height / 2);
+  return `translate(${dx.toFixed(1)}px, ${dy.toFixed(1)}px) translateX(-25%) scale(${s.toFixed(4)})`;
+}
+
 function openBook(i, fromHash) {
   if (animating || i < 0 || i >= flat.length) return;
   const b = flat[i];
-  const src = document.querySelector(`[data-i="${i}"]:not([hidden])`);
+  clearTimers();
   lastFocus = document.activeElement;
   openIndex = i;
+  setSource(i);
   fill(b);
   reader.hidden = false;
   document.body.classList.add("reading");
   history.replaceState(null, "", `#book=${encodeURIComponent(b.id)}`);
 
   if (reduced) {
-    reader.classList.add("on", "open");
+    reader.classList.add("on", "open", "landed");
     mountApp(b);
     $("bkClose").focus();
     return;
   }
   animating = true;
-  requestAnimationFrame(() => {
-    reader.classList.add("on");
-    const to = mover.getBoundingClientRect();
-    const from = (src && !fromHash) ? src.getBoundingClientRect() : null;
-    if (from && from.width && to.width) {
-      mover.style.transition = "none";
-      mover.style.transform = `translate(${from.left - to.left}px, ${from.top - to.top}px) scale(${from.width / to.width}, ${from.height / to.height})`;
-      requestAnimationFrame(() => {
-        mover.style.transition = "transform var(--t-move) var(--ease)";
-        mover.style.transform = "";
-        reader.classList.add("open");
-      });
-    } else {
-      mover.style.transition = "none";
-      mover.style.transform = "";
-      requestAnimationFrame(() => reader.classList.add("open"));
-    }
-  });
-  // 표지가 다 열린 뒤에 앱을 올린다 (모션이 끊기지 않게)
-  setTimeout(() => { mountApp(b); animating = false; $("bkClose").focus(); }, 1180);
+  if (simple()) {
+    void reader.offsetWidth;
+    reader.classList.add("on", "open", "landed");
+    later(() => { mountApp(b); animating = false; $("bkClose").focus(); }, 340);
+    return;
+  }
+  const start = fromHash ? null : fromShelf(srcEl);
+  tome.style.transform = start || "translateX(-25%) translateY(24px) scale(.94)";
+  tome.style.opacity = start ? "1" : "0";
+  void tome.offsetWidth;
+  if (start && srcEl) srcEl.classList.add("lifted");
+  reader.classList.add("on");
+  tome.style.transition = `transform ${T.fly}ms var(--ease-fly), opacity 260ms ease-out`;
+  tome.style.transform = "translateX(-25%)";
+  tome.style.opacity = "1";
+  const turnAt = start ? T.fly - 80 : 260;
+  later(() => {
+    reader.classList.add("open");
+    tome.style.transition = `transform ${T.turn}ms var(--ease-turn)`;
+    tome.style.transform = "translateX(0)";
+  }, turnAt);
+  later(() => reader.classList.add("landed"), turnAt + T.turn);
+  later(() => { mountApp(b); animating = false; $("bkClose").focus({ preventScroll: true }); }, turnAt + T.turn + 80);
 }
+
 function closeBook() {
   if (reader.hidden) return;
-  reader.classList.remove("open");
-  reader.classList.remove("on");
-  const done = () => {
+  clearTimers();
+  leaf.className = "leaf";
+  reader.classList.remove("swap", "turn-next", "turn-prev");
+  const finish = () => {
     reader.hidden = true;
-    reader.classList.remove("quick");
-    mover.style.transition = "none";
-    mover.style.transform = "";
+    reader.classList.remove("on", "open", "landed", "closing");
+    tome.style.transition = "none";
+    tome.style.transform = "";
+    tome.style.opacity = "";
+    if (srcEl) srcEl.classList.remove("lifted");
     $("bkPreview").innerHTML = "";
     document.body.classList.remove("reading");
     history.replaceState(null, "", location.pathname + location.search);
-    if (lastFocus && lastFocus.isConnected) lastFocus.focus();
+    animating = false;
+    if (lastFocus && lastFocus.isConnected) lastFocus.focus({ preventScroll: true });
+    if (waiting) { const d = waiting; waiting = null; render(d); }
   };
-  reduced ? done() : setTimeout(done, 430);
+  if (simple()) {
+    reader.classList.remove("on", "open", "landed");
+    if (reduced) finish(); else { animating = true; later(finish, 340); }
+    return;
+  }
+  animating = true;
+  $("bkPreview").innerHTML = "";
+  reader.classList.add("closing");                      // 왼쪽 글을 먼저 거둔다
+  later(() => {
+    reader.classList.remove("landed", "open");          // 표지 안쪽 면이 다시 덮으며 닫힌다
+    tome.style.transition = `transform ${T.close}ms var(--ease-turn)`;
+    tome.style.transform = "translateX(-25%)";
+  }, T.prefade);
+  later(() => {
+    const back = srcEl && srcEl.isConnected ? fromShelf(srcEl) : null;
+    void tome.offsetWidth;
+    reader.classList.remove("on");                      // 배경이 밝아지며 책장 제자리로 돌아간다
+    tome.style.transition = `transform ${T.back}ms var(--ease-back), opacity ${back ? 0 : T.back}ms ease-in`;
+    tome.style.transform = back || "translateX(-25%) translateY(24px) scale(.94)";
+    if (!back) tome.style.opacity = "0";
+    later(finish, T.back + 20);
+  }, T.prefade + T.close);
 }
+
 function step(d) {
   const next = openIndex + d;
   if (animating || next < 0 || next >= flat.length) return;
-  if (reduced) { openIndex = next; fill(flat[next]); mountApp(flat[next]); return; }
-  // 이전·다음은 책을 다시 덮었다 여는 대신 펼친 채로 내용만 넘긴다 (책장을 넘기는 느낌)
+  if (reduced) { openIndex = next; setSource(next); fill(flat[next]); mountApp(flat[next]); return; }
   animating = true;
-  reader.classList.add("quick", "swap");
+  history.replaceState(null, "", `#book=${encodeURIComponent(flat[next].id)}`);
+  reader.classList.add("swap");                         // 지금 내용을 살짝 거두고
   $("bkPreview").innerHTML = "";
-  setTimeout(() => {
+  later(() => {
     openIndex = next;
+    setSource(next);
     fill(flat[next]);
     reader.classList.remove("swap");
-    setTimeout(() => { mountApp(flat[next]); animating = false; }, 320);
-  }, 240);
+    if (simple()) {
+      reader.querySelector(".spread").scrollTop = 0;
+      later(() => { mountApp(flat[next]); animating = false; }, 220);
+      return;
+    }
+    // 종이 한 장이 넘어가며 새 내용이 드러난다
+    reader.classList.add(d > 0 ? "turn-next" : "turn-prev");
+    leaf.className = `leaf ${d > 0 ? "go-next" : "go-prev"}`;
+    later(() => {
+      leaf.className = "leaf";
+      reader.classList.remove("turn-next", "turn-prev");
+      mountApp(flat[next]);
+      animating = false;
+    }, T.leaf);
+  }, T.out);
 }
 $("bkClose").onclick = closeBook;
 $("dim").onclick = closeBook;
@@ -361,18 +503,5 @@ document.addEventListener("keydown", (e) => {
   }
 });
 </script>
-<style>
-  /* 닫을 때는 열림의 역순으로 한 번에 */
-  .cover-flip { transition: transform var(--t-close) ease-in; }
-  .page.left .ink-in, .page.right .app-in { transition: opacity var(--t-close) ease-in; }
-
-  /* 이전·다음으로 넘길 때: 표지는 그대로 두고 양쪽 면 내용만 바꾼다 */
-  .reader.swap .page.left .ink-in, .reader.swap .page.right .app-in {
-    opacity: 0; transform: translateY(6px);
-    transition: opacity 200ms ease-in, transform 200ms ease-in;
-  }
-  .reader.quick.open .page.left .ink-in { transition: opacity 240ms ease-out 40ms, transform 240ms ease-out 40ms; }
-  .reader.quick.open .page.right .app-in { transition: opacity 240ms ease-out 140ms, transform 240ms ease-out 140ms; }
-</style>
 </body>
 </html>

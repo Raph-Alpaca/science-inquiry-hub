@@ -81,7 +81,7 @@ for (const [vn, vp] of Object.entries(VIEWS)) {
     const t2 = await page.textContent("#bkTitle");
     check(`${vn}: → 키로 다음 책`, t2 === "달 위상 계산기", t2);
     await page.keyboard.press("Escape");
-    await page.waitForTimeout(500);
+    await page.waitForTimeout(1100);       // 닫힘 모션(표지 덮기 → 책장으로 돌아가기)이 끝날 때까지
     check(`${vn}: Esc 로 닫힘`, await page.evaluate(() => document.getElementById("reader").hidden));
     // 선생님 예시는 iframe 으로
     await page.click(`${first}[data-i="0"]`);
