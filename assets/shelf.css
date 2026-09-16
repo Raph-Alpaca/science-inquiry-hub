@@ -211,13 +211,17 @@ img { max-width: 100%; }
 .code-form label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 6px; color: var(--ink); }
 .code-form .row { display: flex; gap: 8px; flex-wrap: wrap; }
 .code-form input {
-  flex: 1 1 200px; min-width: 0; font: inherit; font-size: 20px; font-weight: 600; letter-spacing: .06em;
+  flex: 1 1 230px; min-width: 0; font: inherit; font-size: 20px; font-weight: 600; letter-spacing: .06em;
   text-transform: uppercase; font-variant-numeric: tabular-nums; padding: 9px 14px;
   border: 1px solid var(--line); border-radius: var(--r-card-s); background: var(--white); color: var(--ink);
 }
 .code-form input::placeholder { color: #B9A995; font-weight: 500; text-transform: none; letter-spacing: 0; }
 .code-form input[aria-invalid="true"] { border-color: var(--coral-ink); }
 .code-form .err { color: var(--coral-ink); font-size: 13px; margin: 8px 0 0; }
+@media (max-width: 640px) {
+  .code-form input { font-size: 18px; letter-spacing: .04em; }
+  .code-form .row .btn { flex: 1 1 auto; }
+}
 .demo-bar { background: #FAEBCF; color: var(--amber-ink); border-bottom: 1px solid #EBD7AE; font-size: 13.5px; padding: 8px 20px; text-align: center; }
 
 /* ---------- 책 펼침(리더) ---------- */
