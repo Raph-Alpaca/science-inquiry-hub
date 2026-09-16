@@ -1,16 +1,36 @@
 rules_version = '2';
 
 // 산출물 책장 보안 규칙
-//  - 공개 화면(비로그인): 승인된 책만 읽는다. 모둠원 이름(private)은 절대 읽지 못한다.
-//  - 학생 제출(비로그인): status가 pending이고, 요청에 담긴 code가 그 책장의 code와 같을 때만 만들 수 있다.
-//  - 승인·수정·삭제: 그 책장을 만든 선생님(teacherUid) 본인만.
+//
+//  누가 무엇을 하는가
+//   - 학생(비로그인): 승인된 책만 읽고, 책장 코드가 맞을 때만 제출할 수 있다.
+//   - 선생님(승인된 구글 계정): 자기 책장을 만들고, 자기 책장의 책만 승인·수정한다.
+//   - 관리자: 선생님 승인 명단을 관리하고, 필요하면 책장·책을 정리한다.
+//
+//  관리자와 승인 명단은 이메일을 소문자로 바꾼 값을 문서 이름으로 쓴다.
+//   admins/{이메일}   ← Firebase 콘솔에서 직접 만든다 (규칙으로는 못 바꾼다)
+//   allowed/{이메일}  ← 관리자가 선생님 화면에서 추가·삭제한다
+//
+//  모둠원 이름(private)은 그 책장을 만든 선생님만 읽는다. 관리자도 읽지 않는다.
 service cloud.firestore {
   match /databases/{database}/documents {
 
+    function signedIn() {
+      return request.auth != null
+             && request.auth.token.email_verified == true
+             && request.auth.token.email is string;
+    }
+    function em() { return request.auth.token.email.lower(); }
+    function isAdmin() {
+      return signedIn() && exists(/databases/$(database)/documents/admins/$(em()));
+    }
+    function isApproved() {
+      return signedIn() && (exists(/databases/$(database)/documents/allowed/$(em())) || isAdmin());
+    }
     function shelf(shelfId) {
       return get(/databases/$(database)/documents/shelves/$(shelfId)).data;
     }
-    function isTeacher(shelfId) {
+    function isOwner(shelfId) {
       return request.auth != null && request.auth.uid == shelf(shelfId).teacherUid;
     }
     function codeMatches(shelfId) {
@@ -20,11 +40,32 @@ service cloud.firestore {
       return v is string && v.size() <= maxLen;
     }
 
+    // 관리자 명단: 콘솔에서만 만든다. 본인 것과 관리자만 읽을 수 있다.
+    match /admins/{mail} {
+      allow get: if signedIn() && (mail == em() || isAdmin());
+      allow list: if isAdmin();
+      allow write: if false;
+    }
+
+    // 사용 승인 명단: 관리자가 선생님 이메일을 추가한다.
+    match /allowed/{mail} {
+      allow get: if signedIn() && (mail == em() || isAdmin());
+      allow list: if isAdmin();
+      allow create, update: if isAdmin()
+                            && request.resource.data.keys().hasOnly(['email', 'school', 'note', 'addedAt', 'addedBy'])
+                            && str(request.resource.data.email, 120)
+                            && request.resource.data.email.lower() == mail
+                            && str(request.resource.data.school, 40)
+                            && str(request.resource.data.note, 120);
+      allow delete: if isAdmin();
+    }
+
     match /shelves/{shelfId} {
       // 학생이 코드로 책장을 찾아야 하므로 읽기는 공개. 교사 이메일 같은 개인정보는 넣지 않는다.
       allow read: if true;
 
-      allow create: if request.auth != null
+      // 책장 만들기는 승인된 선생님만.
+      allow create: if isApproved()
                     && request.resource.data.teacherUid == request.auth.uid
                     && request.resource.data.keys().hasOnly(['code', 'school', 'teacherName', 'title', 'teacherUid', 'createdAt'])
                     && str(request.resource.data.code, 24)
@@ -33,16 +74,21 @@ service cloud.firestore {
                     && str(request.resource.data.title, 40)
                     && request.resource.data.createdAt == request.time;
 
-      allow update: if request.auth != null
-                    && resource.data.teacherUid == request.auth.uid
+      // 이름 바꾸기·코드 재발급·반 목록 추가. 주인은 바꿀 수 없다(관리자도 마찬가지).
+      allow update: if ((request.auth != null && resource.data.teacherUid == request.auth.uid) || isAdmin())
                     && request.resource.data.teacherUid == resource.data.teacherUid
-                    && request.resource.data.createdAt == resource.data.createdAt;
+                    && request.resource.data.createdAt == resource.data.createdAt
+                    && request.resource.data.keys().hasOnly(['code', 'school', 'teacherName', 'title', 'teacherUid', 'createdAt', 'classes'])
+                    && str(request.resource.data.code, 24)
+                    && str(request.resource.data.school, 40)
+                    && str(request.resource.data.teacherName, 20)
+                    && str(request.resource.data.title, 40);
 
-      allow delete: if request.auth != null && resource.data.teacherUid == request.auth.uid;
+      allow delete: if (request.auth != null && resource.data.teacherUid == request.auth.uid) || isAdmin();
 
       match /books/{bookId} {
         // 공개 목록은 status == 'approved' 로 걸러 질의해야 통과한다.
-        allow read: if resource.data.status == 'approved' || isTeacher(shelfId);
+        allow read: if resource.data.status == 'approved' || isOwner(shelfId) || isAdmin();
 
         allow create: if request.resource.data.status == 'pending'
                       && request.resource.data.example == false
@@ -67,19 +113,19 @@ service cloud.firestore {
                       && str(request.resource.data.coverPath, 300)
                       && request.resource.data.createdAt == request.time;
 
-        allow update, delete: if isTeacher(shelfId);
+        allow update, delete: if isOwner(shelfId) || isAdmin();
       }
 
-      // 모둠원 이름: 공개 화면은 읽지 않는다. 책장 주인 선생님만 읽는다.
+      // 모둠원 이름: 그 책장을 만든 선생님만. 관리자도 읽지 못한다.
       match /private/{bookId} {
-        allow read: if isTeacher(shelfId);
+        allow read: if isOwner(shelfId);
 
         allow create: if codeMatches(shelfId)
                       && request.resource.data.keys().hasOnly(['memberNames', 'code', 'createdAt'])
                       && str(request.resource.data.memberNames, 200)
                       && request.resource.data.createdAt == request.time;
 
-        allow update, delete: if isTeacher(shelfId);
+        allow update, delete: if isOwner(shelfId);
       }
     }
   }

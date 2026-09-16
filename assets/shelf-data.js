@@ -234,6 +234,82 @@ export async function logout() {
   const { U, auth } = await fb();
   await U.signOut(auth);
 }
+/* ---------- 사용 권한 ----------
+ * admins/{이메일}  : 관리자 (Firebase 콘솔에서 직접 만든다)
+ * allowed/{이메일} : 관리자가 승인한 선생님
+ * 규칙상 본인 문서와 관리자만 읽을 수 있으므로, 못 읽으면 "승인 안 됨"으로 본다.
+ */
+const mailKey = (u) => String(u.email || "").trim().toLowerCase();
+
+export async function checkAccess(user) {
+  if (DEMO) return { admin: true, approved: true };
+  const { F, db } = await fb();
+  const key = mailKey(user);
+  if (!key) return { admin: false, approved: false };
+  const admin = await F.getDoc(F.doc(db, "admins", key)).then((d) => d.exists()).catch(() => false);
+  if (admin) return { admin: true, approved: true };
+  const approved = await F.getDoc(F.doc(db, "allowed", key)).then((d) => d.exists()).catch(() => false);
+  return { admin: false, approved };
+}
+export async function listAllowed() {
+  if (DEMO) return [{ id: "teacher@example.com", email: "teacher@example.com", school: "보기 학교", note: "", addedAt: Date.now() }];
+  const { F, db } = await fb();
+  const snap = await F.getDocs(F.collection(db, "allowed"));
+  return snap.docs.map((d) => plain({ id: d.id, ...d.data() })).sort((a, b) => (a.email || "").localeCompare(b.email || ""));
+}
+export async function addAllowed({ email, school, note, by }) {
+  const key = String(email).trim().toLowerCase();
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(key)) throw new Error("이메일 형식이 아닙니다");
+  if (DEMO) return key;
+  const { F, db } = await fb();
+  await F.setDoc(F.doc(db, "allowed", key), {
+    email: key, school: school || "", note: note || "", addedBy: by || "", addedAt: F.serverTimestamp(),
+  });
+  return key;
+}
+export async function removeAllowed(key) {
+  if (DEMO) return;
+  const { F, db } = await fb();
+  await F.deleteDoc(F.doc(db, "allowed", key));
+}
+export async function listAllShelves() {
+  if (DEMO) return demoRead().shelves;
+  const { F, db } = await fb();
+  const snap = await F.getDocs(F.collection(db, "shelves"));
+  return snap.docs.map((d) => plain({ id: d.id, ...d.data() })).sort((a, b) => b.createdAt - a.createdAt);
+}
+
+/* ---------- 책장 이름 바꾸기·삭제 ---------- */
+export async function renameShelf(shelf, { school, teacherName, title }) {
+  if (DEMO) {
+    const d = demoRead();
+    const s = d.shelves.find((x) => x.id === shelf.id);
+    if (s) Object.assign(s, { school, teacherName, title });
+    demoWrite(d);
+    return;
+  }
+  const { F, db } = await fb();
+  await F.updateDoc(F.doc(db, "shelves", shelf.id), { school, teacherName, title });
+}
+export async function deleteShelf(shelf) {
+  if (DEMO) {
+    const d = demoRead();
+    (d.books[shelf.id] || []).forEach((b) => delete d.priv[b.id]);
+    delete d.books[shelf.id];
+    d.shelves = d.shelves.filter((x) => x.id !== shelf.id);
+    demoWrite(d);
+    return;
+  }
+  const { F, db } = await fb();
+  // 책과 모둠원 이름을 먼저 지우고 마지막에 책장을 지운다 (하위 문서는 자동으로 지워지지 않는다)
+  const snap = await F.getDocs(F.collection(db, "shelves", shelf.id, "books"));
+  for (const d of snap.docs) {
+    await F.deleteDoc(F.doc(db, "shelves", shelf.id, "books", d.id));
+    await F.deleteDoc(F.doc(db, "shelves", shelf.id, "private", d.id)).catch(() => {});
+  }
+  await F.deleteDoc(F.doc(db, "shelves", shelf.id));
+}
+
 export async function myShelves(uid) {
   if (DEMO) return demoRead().shelves;
   const { F, db } = await fb();

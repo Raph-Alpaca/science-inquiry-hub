@@ -41,6 +41,26 @@
   <div class="ft"><button class="btn" id="qrPrint">인쇄하기</button><button class="btn dark" id="qrClose">닫기</button></div>
 </dialog>
 
+<dialog class="sheet" id="shelfDlg">
+  <div class="bd">
+    <h2>책장 설정</h2>
+    <div class="field"><label for="sh-school">학교 이름</label><input type="text" id="sh-school" maxlength="40"></div>
+    <div class="field"><label for="sh-name">선생님 성함</label><input type="text" id="sh-name" maxlength="20"></div>
+    <div class="field"><label for="sh-title">책장 이름</label><input type="text" id="sh-title" maxlength="40"></div>
+    <div class="field">
+      <span class="lab">책장 코드</span>
+      <div class="row"><b id="sh-code" style="font-size:18px"></b><button type="button" class="btn small" id="sh-recode">코드 재발급</button></div>
+      <p class="upload-note">이름을 바꿔도 코드는 그대로입니다. 재발급하면 예전 코드로는 제출할 수 없습니다.</p>
+    </div>
+    <div class="result" style="background:var(--coral-soft)">
+      <b>책장 삭제</b>
+      <p class="upload-note" id="sh-delnote" style="margin:4px 0 10px"></p>
+      <button type="button" class="btn" id="sh-del" style="color:var(--coral-ink);border-color:var(--coral-ink)">이 책장을 지웁니다</button>
+    </div>
+  </div>
+  <div class="ft"><button class="btn" id="sh-cancel">취소</button><button class="btn primary" id="sh-save">저장</button></div>
+</dialog>
+
 <dialog class="sheet" id="editDlg">
   <form method="dialog" class="bd" id="editForm">
     <h2>책 수정</h2>
@@ -67,7 +87,8 @@
 <script type="module">
 import {
   DEMO, CONFIGURED, onUser, login, logout, myShelves, createShelf, regenerateCode,
-  listBooks, loadMembers, setStatus, updateBook, deleteBook, clearShelfCache, COVERS,
+  listBooks, loadMembers, setStatus, updateBook, deleteBook, clearShelfCache,
+  checkAccess, listAllowed, addAllowed, removeAllowed, listAllShelves, renameShelf, deleteShelf,
 } from "./assets/shelf-data.js";
 
 const $ = (id) => document.getElementById(id);
@@ -75,6 +96,7 @@ const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<
 const suffix = DEMO ? "&demo=1" : "";
 const shelfUrl = (code) => `${location.origin}${location.pathname.replace(/teacher\.html$/, "")}shelf.html?code=${code}${suffix}`;
 let user = null, shelves = [], data = {}, tab = {};
+let access = { admin: false, approved: false }, allowed = [], allShelves = [];
 
 if (DEMO) $("demoBar").hidden = false;
 
@@ -95,6 +117,8 @@ onUser(async (u) => {
   $("logout").hidden = !u;
   if (!u) { renderSignedOut(); return; }
   $("who").textContent = `${u.displayName || "선생님"}${u.email ? ` (${u.email})` : ""}`;
+  access = await checkAccess(u);
+  if (!access.approved) { renderPending(u); return; }
   await reload();
 });
 $("logout").onclick = async () => { await logout(); location.reload(); };
@@ -105,6 +129,7 @@ function renderSignedOut() {
     <div class="notice">
       <h2>구글 계정으로 로그인하세요</h2>
       <p>선생님이 하실 일은 네 가지뿐입니다. 로그인 → 학교 책장 만들기 → 학생에게 코드 알려 주기 → 제출된 책 승인하기.</p>
+      <p class="upload-note">미리 사용 승인을 받은 계정만 책장을 만들 수 있습니다. 아직 신청 전이라면 관리자에게 쓰실 구글 계정 주소를 알려 주세요.</p>
       <p><button class="btn primary" id="loginBtn">구글로 로그인</button></p>
       ${CONFIGURED ? "" : `<p class="link" style="color:var(--amber-ink)">아직 Firebase 설정이 들어오지 않아 미리보기(데모)로 열립니다. 설정을 넣으면 실제 저장이 됩니다.</p>`}
     </div>
@@ -116,6 +141,79 @@ function renderSignedOut() {
   $("loginBtn").onclick = async () => {
     try { await login(); } catch (e) { toast("로그인하지 못했어요: " + (e.code || e.message)); }
   };
+}
+
+/* ---------- 승인 대기 ---------- */
+function renderPending(u) {
+  $("main").innerHTML = `
+    <div class="notice">
+      <h2>아직 사용 승인이 되지 않은 계정입니다</h2>
+      <p>관리자에게 아래 주소를 알려 주시면 승인해 드립니다. 승인 뒤 이 화면을 새로 고치면 바로 책장을 만들 수 있습니다.</p>
+      <div class="qr-box" style="gap:12px">
+        <b style="font-size:18px" id="myMail">${esc(u.email || "")}</b>
+        <button class="btn small" id="copyMail">주소 복사</button>
+      </div>
+      <p class="upload-note" style="margin-top:14px">다른 계정으로 신청하셨다면 로그아웃한 뒤 그 계정으로 다시 로그인해 주세요.</p>
+      <p><button class="btn" id="recheck">승인됐는지 다시 확인</button></p>
+    </div>`;
+  $("copyMail").onclick = () => copy(u.email || "", "주소를");
+  $("recheck").onclick = async () => {
+    access = await checkAccess(u);
+    if (access.approved) { toast("승인됐습니다"); await reload(); }
+    else toast("아직 승인 전입니다");
+  };
+}
+
+/* ---------- 관리자: 선생님 승인 ---------- */
+function adminCard() {
+  return `
+  <section class="card shelf-card" id="adminCard">
+    <h2 style="margin-top:0">관리자 · 선생님 승인</h2>
+    <p class="upload-note" style="margin-bottom:14px">승인한 이메일의 구글 계정만 학교 책장을 만들 수 있습니다. 선생님이 알려 준 주소를 그대로 넣으세요.</p>
+    <div class="two field">
+      <div><label for="ad-mail">선생님 이메일</label><input type="email" id="ad-mail" placeholder="teacher@school.kr"></div>
+      <div><label for="ad-school">학교 (메모, 선택)</label><input type="text" id="ad-school" maxlength="40" placeholder="예: 서울○○중학교"></div>
+    </div>
+    <button class="btn primary" id="ad-add">승인 명단에 추가</button>
+    <table class="books" style="margin-top:18px">
+      <thead><tr><th>이메일</th><th>학교</th><th>추가한 날</th><th></th></tr></thead>
+      <tbody>${allowed.length ? allowed.map((a) => `
+        <tr><td data-l="이메일">${esc(a.email || a.id)}</td>
+            <td data-l="학교">${esc(a.school || "-")}</td>
+            <td data-l="추가">${a.addedAt ? new Date(a.addedAt).toLocaleDateString("ko-KR") : "-"}</td>
+            <td><span class="row-acts"><button class="btn small" data-ad="${esc(a.id)}">승인 취소</button></span></td></tr>`).join("")
+        : `<tr><td colspan="4" class="upload-note">아직 승인한 선생님이 없습니다.</td></tr>`}</tbody>
+    </table>
+    <h3 style="margin-top:22px">전체 책장 ${allShelves.length}개</h3>
+    <table class="books">
+      <thead><tr><th>학교</th><th>책장</th><th>코드</th><th>만든 날</th></tr></thead>
+      <tbody>${allShelves.length ? allShelves.map((x) => `
+        <tr><td data-l="학교">${esc(x.school)}</td><td data-l="책장">${esc(x.title)}</td>
+            <td data-l="코드">${esc(x.code)}</td>
+            <td data-l="만든 날">${x.createdAt ? new Date(x.createdAt).toLocaleDateString("ko-KR") : "-"}</td></tr>`).join("")
+        : `<tr><td colspan="4" class="upload-note">아직 만들어진 책장이 없습니다.</td></tr>`}</tbody>
+    </table>
+  </section>`;
+}
+function wireAdmin() {
+  const add = $("ad-add");
+  if (!add) return;
+  add.onclick = async () => {
+    const mail = $("ad-mail").value.trim();
+    if (!mail) { toast("이메일을 적어 주세요"); return; }
+    add.disabled = true;
+    try {
+      await addAllowed({ email: mail, school: $("ad-school").value.trim(), by: user.email || "" });
+      $("ad-mail").value = ""; $("ad-school").value = "";
+      await reload(); toast("승인했습니다");
+    } catch (e) { toast("추가하지 못했어요: " + (e.code || e.message)); }
+    add.disabled = false;
+  };
+  document.querySelectorAll("[data-ad]").forEach((b) => (b.onclick = async () => {
+    if (!confirm(`${b.dataset.ad} 의 사용 승인을 취소할까요? 이미 만든 책장은 그대로 남습니다.`)) return;
+    await removeAllowed(b.dataset.ad);
+    await reload(); toast("승인을 취소했습니다");
+  }));
 }
 
 /* ---------- 책장 목록 ---------- */
@@ -135,6 +233,10 @@ async function reload() {
     data[s.id] = { books, members };
     tab[s.id] = tab[s.id] || "pending";
   }));
+  if (access.admin) {
+    allowed = await listAllowed().catch(() => []);
+    allShelves = await listAllShelves().catch(() => []);
+  }
   render();
 }
 function render() {
@@ -148,8 +250,10 @@ function render() {
       <div class="step"><span class="n">3</span><div><b>제출된 책을 승인하면 책장에 꽂혀요</b><small>${pending ? `대기 ${pending}권` : "대기 없음"}</small></div></div>
     </div>
     ${shelves.map(shelfCard).join("")}
-    <button class="add-shelf" id="addShelf">+ 책장 하나 더 만들기 (예: 3학년 책장)</button>`;
+    <button class="add-shelf" id="addShelf">+ 책장 하나 더 만들기 (예: 3학년 책장)</button>
+    ${access.admin ? adminCard() : ""}`;
   wire();
+  wireAdmin();
 }
 function shelfCard(s) {
   const d = data[s.id], t = tab[s.id];
@@ -171,7 +275,7 @@ function shelfCard(s) {
         <button class="btn small" data-a="qr">QR 보기</button>
         <button class="btn small" data-a="copyUrl">주소 복사</button>
         <button class="btn small" data-a="csv">CSV 내보내기</button>
-        <button class="btn small" data-a="recode">코드 재발급</button>
+        <button class="btn small" data-a="settings">책장 설정</button>
       </div>
     </div>
     <div class="tabs-pill" role="tablist">
@@ -223,7 +327,9 @@ function renderFirstRun(edit) {
       <div class="field"><label for="nw-name">선생님 성함</label><input type="text" id="nw-name" maxlength="20" placeholder="예: 김선생"></div>
       <div class="field"><label for="nw-title">책장 이름</label><input type="text" id="nw-title" maxlength="40" placeholder="예: 2학년 책장"></div>
       <button class="btn primary" id="nw-make">책장 만들기</button>
-    </section>`;
+    </section>
+    ${access.admin ? adminCard() : ""}`;
+  wireAdmin();
   const mk = $("nw-make");
   if (edit) { $("nw-school").value = edit.school || ""; $("nw-name").value = edit.teacherName || ""; }
   mk.onclick = async () => {
@@ -262,14 +368,7 @@ function wire() {
       if (a === "copyUrl") return copy(shelfUrl(s.code), "주소를");
       if (a === "qr") return showQr(s);
       if (a === "csv") return exportCsv(s);
-      if (a === "recode") {
-        if (!confirm("코드를 새로 만들면 예전 코드로는 제출할 수 없습니다. 계속할까요?")) return;
-        const before = s.code;
-        s.code = await regenerateCode(s);
-        clearShelfCache(before); clearShelfCache(s.code);
-        render(); toast("새 코드: " + s.code);
-        return;
-      }
+      if (a === "settings") return openSettings(s);
       if (a === "approveAll") {
         const ids = data[s.id].books.filter((b) => b.status === "pending").map((b) => b.id);
         await setStatus(s, ids, "approved");
@@ -324,6 +423,57 @@ function exportCsv(s) {
   setTimeout(() => URL.revokeObjectURL(a.href), 1000);
   toast("CSV를 내려받았어요");
 }
+
+/* ---------- 책장 설정 (이름 바꾸기·코드 재발급·삭제) ---------- */
+let editingShelf = null;
+function openSettings(s) {
+  editingShelf = s;
+  $("sh-school").value = s.school || "";
+  $("sh-name").value = s.teacherName || "";
+  $("sh-title").value = s.title || "";
+  $("sh-code").textContent = s.code;
+  const n = (data[s.id]?.books || []).length;
+  $("sh-delnote").textContent = n
+    ? `이 책장과 안에 든 책 ${n}권, 모둠원 이름까지 모두 지워집니다. 되돌릴 수 없습니다.`
+    : "이 책장을 지웁니다. 되돌릴 수 없습니다.";
+  $("shelfDlg").showModal();
+}
+$("sh-cancel").onclick = () => $("shelfDlg").close();
+$("sh-save").onclick = async () => {
+  if (!editingShelf) return;
+  const school = $("sh-school").value.trim(), teacherName = $("sh-name").value.trim(), title = $("sh-title").value.trim();
+  if (!school || !teacherName || !title) { toast("빈 칸을 채워 주세요"); return; }
+  const s = editingShelf;
+  $("shelfDlg").close();
+  try {
+    await renameShelf(s, { school, teacherName, title });
+    clearShelfCache(s.code);
+    await reload(); toast("바꿨습니다");
+  } catch (e) { toast("바꾸지 못했어요: " + (e.code || e.message)); }
+};
+$("sh-recode").onclick = async () => {
+  if (!editingShelf) return;
+  if (!confirm("코드를 새로 만들면 예전 코드로는 제출할 수 없습니다. 계속할까요?")) return;
+  const s = editingShelf, before = s.code;
+  try {
+    s.code = await regenerateCode(s);
+    clearShelfCache(before); clearShelfCache(s.code);
+    $("sh-code").textContent = s.code;
+    await reload(); toast("새 코드: " + s.code);
+  } catch (e) { toast("바꾸지 못했어요: " + (e.code || e.message)); }
+};
+$("sh-del").onclick = async () => {
+  if (!editingShelf) return;
+  const s = editingShelf;
+  if (!confirm(`"${s.title}" 책장을 지울까요? ${$("sh-delnote").textContent}`)) return;
+  $("shelfDlg").close();
+  try {
+    await deleteShelf(s);
+    clearShelfCache(s.code);
+    delete data[s.id];
+    await reload(); toast("책장을 지웠습니다");
+  } catch (e) { toast("지우지 못했어요: " + (e.code || e.message)); }
+};
 
 /* ---------- 수정 ---------- */
 let editing = null;

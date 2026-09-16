@@ -42,6 +42,7 @@ reference/                  무선 센서 연결 참고 코드 (이번 작업에
 
 ### 흐름
 
+0. 관리자가 선생님 화면에서 그 선생님의 구글 계정을 **사용 승인** (승인된 계정만 책장을 만들 수 있음)
 1. 선생님이 `teacher.html` 에서 구글 로그인 → 학교 책장 생성 → `SEO-2026-4K7Q` 같은 코드 발급
 2. 학생은 로그인 없이 `shelf.html?code=…` 로 들어와 `submit.html` 에서 제출 (상태: 대기)
 3. 선생님이 승인하면 공개 책장에 꽂힘
@@ -50,12 +51,16 @@ reference/                  무선 센서 연결 참고 코드 (이번 작업에
 ### 개인정보
 
 - 모둠원 이름은 `shelves/{id}/private/{bookId}` 에만 저장하고, 공개 화면 코드에서는 읽지 않습니다.
-- 보안 규칙에서도 `private` 은 책장 주인 교사만 읽을 수 있습니다.
+- 보안 규칙에서도 `private` 은 책장 주인 교사만 읽습니다. **관리자도 읽지 못합니다.**
 - 공개 책장에는 학년·반·모둠명만 나옵니다.
+- 관리자 이메일은 코드에 넣지 않고 Firestore `admins` 문서로 정합니다.
 
 ### Firestore 구조
 
 ```
+admins/{이메일}                      관리자. Firebase 콘솔에서 직접 만든다
+allowed/{이메일}                     관리자가 승인한 선생님. 관리자 화면에서 추가·삭제
+  email, school, note, addedBy, addedAt
 shelves/{shelfId}
   code, school, teacherName, title, teacherUid, createdAt, classes[]
 shelves/{shelfId}/books/{bookId}
@@ -79,7 +84,9 @@ Storage: `covers/{shelfId}/…` (2 MB 이하 이미지, 공개 읽기)
 5. **Authentication → Settings → 승인된 도메인**에 `raph-alpaca.github.io` 추가.
 6. **프로젝트 설정 → 내 앱 → 웹 앱 추가** 후 나오는 `firebaseConfig` 값을
    `assets/firebase-config.js` 에 옮겨 적습니다. (공개되는 값입니다. 보호는 규칙이 합니다.)
-7. 규칙을 올립니다.
+7. **Firestore → 컬렉션 시작 → `admins`** 에 관리자 이메일(소문자)을 **문서 ID**로 하는 문서를
+   하나 만듭니다. 필드는 `email`(문자열) 하나면 됩니다. 이 문서가 있는 계정이 관리자입니다.
+8. 규칙을 올립니다.
 
 ```bash
 npx firebase login
