@@ -78,7 +78,7 @@
         <div class="covers" id="coverPick" role="group" aria-label="표지 그림 고르기"></div>
         <span class="lab" style="margin-top:12px">표지 색</span>
         <div class="covers" id="colorPick" role="group" aria-label="표지 색 고르기" style="grid-template-columns:repeat(6,1fr)"></div>
-        <p class="upload-note">
+        <p class="upload-note" id="uploadBox">
           <label for="capture" class="btn small" style="cursor:pointer">캡처 이미지 올리기 (선택)</label>
           <span id="capName"></span><br>
           링크가 나중에 끊겨도 책이 남아요. 2 MB 이하 이미지만 올릴 수 있습니다.
@@ -99,7 +99,7 @@
 </div>
 
 <script type="module">
-import { DEMO, loadShelf, submitBook, COVERS, COVER_COLORS, coverSrc, clearShelfCache } from "./assets/shelf-data.js";
+import { DEMO, CAN_UPLOAD, loadShelf, submitBook, COVERS, COVER_COLORS, coverSrc, clearShelfCache } from "./assets/shelf-data.js";
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
@@ -109,6 +109,7 @@ const suffix = DEMO ? "&demo=1" : "";
 let shelf = null, cover = "heat", color = COVER_COLORS[0], file = null;
 
 if (DEMO) $("demoBar").hidden = false;
+if (!CAN_UPLOAD) { $("uploadBox").hidden = true; $("capture").disabled = true; }
 for (let i = 1; i <= 15; i++) $("classNo").insertAdjacentHTML("beforeend", `<option value="${i}"${i === 3 ? " selected" : ""}>${i}반</option>`);
 
 $("coverPick").innerHTML = COVERS.map((c) => `

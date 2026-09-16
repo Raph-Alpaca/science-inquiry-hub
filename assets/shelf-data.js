@@ -5,12 +5,13 @@
  *
  * 공개 화면에서는 모둠원 이름(shelves/{id}/private)을 절대 읽지 않습니다.
  */
-import { firebaseConfig } from "./firebase-config.js";
+import { firebaseConfig, FEATURES } from "./firebase-config.js";
 
 const SDK = "https://www.gstatic.com/firebasejs/10.14.1";
 const params = new URLSearchParams(location.search);
 
 export const CONFIGURED = !!(firebaseConfig.apiKey && firebaseConfig.projectId);
+export const CAN_UPLOAD = !!(FEATURES && FEATURES.coverUpload);
 export const DEMO = params.get("demo") === "1" || !CONFIGURED;
 
 export const COVERS = [
@@ -44,14 +45,19 @@ export const makeCode = (school) => `${schoolAbbr(school)}-${new Date().getFullY
 let _fb = null;
 async function fb() {
   if (_fb) return _fb;
-  const [A, F, U, S] = await Promise.all([
+  const [A, F, U] = await Promise.all([
     import(`${SDK}/firebase-app.js`),
     import(`${SDK}/firebase-firestore.js`),
     import(`${SDK}/firebase-auth.js`),
-    import(`${SDK}/firebase-storage.js`),
   ]);
   const app = A.initializeApp(firebaseConfig);
-  _fb = { F, U, S, db: F.getFirestore(app), auth: U.getAuth(app), storage: S.getStorage(app) };
+  _fb = { F, U, db: F.getFirestore(app), auth: U.getAuth(app), app };
+  // Storage 는 표지 업로드를 켠 경우에만 불러온다 (안 쓰면 45 KB를 내려받지 않는다)
+  if (CAN_UPLOAD) {
+    const S = await import(`${SDK}/firebase-storage.js`);
+    _fb.S = S;
+    _fb.storage = S.getStorage(app);
+  }
   return _fb;
 }
 
@@ -169,6 +175,7 @@ export async function submitBook(shelf, data, coverFile) {
     coverKind: data.coverKind, coverColor: data.coverColor, coverPath: "",
     status: "pending", example: false, code: shelf.code,
   };
+  if (!CAN_UPLOAD) coverFile = null;              // Storage 를 쓰지 않는 동안은 캡처 업로드를 건너뛴다
   if (DEMO) {
     const d = demoRead();
     const id = "u" + Date.now();
