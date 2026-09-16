@@ -120,7 +120,15 @@ function renderSignedOut() {
 
 /* ---------- 책장 목록 ---------- */
 async function reload() {
-  shelves = await myShelves(user.uid);
+  try {
+    shelves = await myShelves(user.uid);
+  } catch (e) {
+    const deny = e && (e.code === "permission-denied" || /insufficient permissions/i.test(e.message || ""));
+    $("main").innerHTML = `<div class="notice bad"><h2>${deny ? "저장소 보안 규칙을 아직 올리지 않았어요" : "책장을 불러오지 못했어요"}</h2>
+      <p>${deny ? "프로젝트 폴더에서 아래 명령을 한 번 실행하면 열립니다." : "잠시 뒤 새로고침해 주세요."}</p>
+      <p class="link">${deny ? "npx firebase login<br>npx firebase deploy --only firestore:rules --project science-inquiry-hub" : esc(e.message || e)}</p></div>`;
+    return;
+  }
   await Promise.all(shelves.map(async (s) => {
     const books = await listBooks(s.id);
     const members = await loadMembers(s.id, books.map((b) => b.id));

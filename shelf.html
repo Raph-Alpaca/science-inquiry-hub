@@ -114,9 +114,14 @@ if (DEMO) $("demoBar").hidden = false;
   } catch (err) {
     $("bookcase").parentElement.hidden = true;
     $("sub").textContent = "책장을 불러오지 못했습니다";
-    $("notice").innerHTML = `<div class="notice bad"><h2>책장을 불러오지 못했어요</h2>
-      <p>인터넷 연결을 확인하고 새로고침해 보세요. 계속 같은 화면이면 선생님께 알려 주세요.</p>
-      <p class="link">${esc(err.message || err)}</p></div>`;
+    const deny = err && (err.code === "permission-denied" || /insufficient permissions/i.test(err.message || ""));
+    $("notice").innerHTML = deny
+      ? `<div class="notice bad"><h2>아직 책장이 열리지 않았어요</h2>
+          <p>선생님께 알려 주세요. 저장소 보안 규칙을 올려야 책장이 열립니다.</p>
+          <p class="link">firebase deploy --only firestore:rules</p></div>`
+      : `<div class="notice bad"><h2>책장을 불러오지 못했어요</h2>
+          <p>인터넷 연결을 확인하고 새로고침해 보세요. 계속 같은 화면이면 선생님께 알려 주세요.</p>
+          <p class="link">${esc(err.message || err)}</p></div>`;
   }
 })();
 
