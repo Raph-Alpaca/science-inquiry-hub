@@ -29,8 +29,14 @@ firestore.rules             Firestore 보안 규칙
 storage.rules               Storage 보안 규칙
 firebase.json               규칙 배포·에뮬레이터 설정
 docs/teacher-guide.md       선생님께 나눠 줄 한 쪽짜리 안내
+docs/manual.html            운영 설명서 (수업 절차·문제 해결·고칠 파일 위치)
 reference/                  무선 센서 연결 참고 코드 (이번 작업에서 건드리지 않음)
 ```
+
+## 문서
+
+- 선생님께 나눠 줄 안내: [docs/teacher-guide.md](docs/teacher-guide.md)
+- 운영 설명서: https://raph-alpaca.github.io/science-inquiry-hub/docs/manual.html
 
 ## 산출물 책장
 
@@ -68,7 +74,7 @@ Storage: `covers/{shelfId}/…` (2 MB 이하 이미지, 공개 읽기)
 
 1. [Firebase 콘솔](https://console.firebase.google.com/)에서 프로젝트를 만듭니다.
 2. **빌드 → Firestore Database → 데이터베이스 만들기** (프로덕션 모드, 위치 `asia-northeast3`).
-3. **빌드 → Storage → 시작하기** (같은 위치).
+3. (선택) 표지 캡처 업로드를 쓸 때만 **빌드 → Storage → 시작하기**. 지금은 쓰지 않습니다.
 4. **빌드 → Authentication → Sign-in method → Google** 사용 설정.
 5. **Authentication → Settings → 승인된 도메인**에 `raph-alpaca.github.io` 추가.
 6. **프로젝트 설정 → 내 앱 → 웹 앱 추가** 후 나오는 `firebaseConfig` 값을
@@ -77,8 +83,11 @@ Storage: `covers/{shelfId}/…` (2 MB 이하 이미지, 공개 읽기)
 
 ```bash
 npx firebase login
-npx firebase deploy --only firestore:rules,storage --project 프로젝트ID
+npx firebase deploy --only firestore:rules
 ```
+
+`.firebaserc` 에 프로젝트가 고정되어 있어 `--project` 는 생략해도 됩니다.
+Storage 를 켠 경우에만 `--only firestore:rules,storage` 로 함께 올립니다.
 
 설정이 비어 있으면 모든 화면이 **미리보기(데모)** 로 열립니다. 주소에 `?demo=1` 을 붙여도 같습니다.
 데모 모드는 그 브라우저에만 저장되고 다른 사람에게는 보이지 않습니다.

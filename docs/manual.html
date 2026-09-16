@@ -1,0 +1,445 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>산출물 책장 운영 노트</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&family=Noto+Serif+KR:wght@600;700&family=IBM+Plex+Mono:wght@400;600&display=swap">
+<style>
+  :root {
+    --cream: #F4EADB;
+    --paper: #FFF9EE;
+    --ink: #3A2A1D;
+    --ink-2: #6F5A49;
+    --ink-3: #8A7460;
+    --wood: #8C5A30;
+    --wood-light: #A9713F;
+    --line: #E2D3BC;
+    --amber: #E29A2A;
+    --amber-ink: #8F5D0E;
+    --amber-soft: #FAEBCF;
+    --mint: #1C8A74;
+    --mint-soft: #E4F1EC;
+    --coral-ink: #B8402B;
+    --coral-soft: #FBE7E1;
+    --serif: "Noto Serif KR", "Nanum Myeongjo", Georgia, serif;
+    --sans: "Noto Sans KR", "Malgun Gothic", system-ui, sans-serif;
+    --mono: "IBM Plex Mono", "D2Coding", Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --cream: #1B1510;
+      --paper: #241C15;
+      --ink: #F2E7D8;
+      --ink-2: #C7B49F;
+      --ink-3: #A08D79;
+      --wood: #B07A46;
+      --wood-light: #C18B54;
+      --line: #3B2D22;
+      --amber: #E7A73F;
+      --amber-ink: #F0BC63;
+      --amber-soft: #3A2B12;
+      --mint: #57C0A6;
+      --mint-soft: #16302A;
+      --coral-ink: #F09076;
+      --coral-soft: #3A1F18;
+    }
+  }
+  :root[data-theme="dark"] {
+    --cream: #1B1510;
+    --paper: #241C15;
+    --ink: #F2E7D8;
+    --ink-2: #C7B49F;
+    --ink-3: #A08D79;
+    --wood: #B07A46;
+    --wood-light: #C18B54;
+    --line: #3B2D22;
+    --amber: #E7A73F;
+    --amber-ink: #F0BC63;
+    --amber-soft: #3A2B12;
+    --mint: #57C0A6;
+    --mint-soft: #16302A;
+    --coral-ink: #F09076;
+    --coral-soft: #3A1F18;
+  }
+
+  body {
+    background: var(--cream);
+    color: var(--ink);
+    font-family: var(--sans);
+    font-size: 16px;
+    line-height: 1.75;
+    word-break: keep-all;
+    overflow-wrap: anywhere;
+  }
+  .page { max-width: 760px; margin: 0 auto; padding-inline: 20px; padding-block: 0 72px; }
+
+  /* 붙박이 주소 띠 */
+  .bar {
+    position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5;
+    background: color-mix(in srgb, var(--cream) 92%, transparent);
+    backdrop-filter: blur(8px);
+    border-bottom: 1px solid var(--line);
+    margin-inline: -20px; padding: 8px 20px;
+    display: flex; gap: 8px 18px; flex-wrap: wrap; align-items: baseline;
+    font-size: 12.5px; font-family: var(--mono);
+  }
+  .bar b { font-family: var(--sans); font-weight: 700; font-size: 12px; color: var(--ink-3); letter-spacing: .06em; }
+  .bar a { color: var(--wood); text-decoration: none; border-bottom: 1px solid var(--line); }
+  .bar a:hover { color: var(--ink); border-color: var(--wood); }
+
+  header.top { padding-block: 44px 8px; }
+  header.top .eyebrow { font-size: 12.5px; letter-spacing: .14em; color: var(--ink-3); font-weight: 700; }
+  h1 { font-family: var(--serif); font-size: clamp(30px, 6vw, 42px); line-height: 1.25; margin: 10px 0 12px; text-wrap: balance; font-weight: 700; }
+  header.top p { margin: 0; color: var(--ink-2); font-size: 16.5px; max-width: 60ch; }
+
+  /* 선반 판 구분선 */
+  .shelf { height: 10px; border-radius: 0 0 5px 5px; background: var(--wood); box-shadow: inset 0 -3px 0 rgba(0,0,0,.18); margin: 44px 0 26px; }
+
+  section { margin-block: 0; }
+  h2 { font-family: var(--serif); font-size: 24px; line-height: 1.35; margin: 0 0 4px; font-weight: 700; text-wrap: balance; }
+  h2 + .lede { margin: 0 0 20px; color: var(--ink-2); font-size: 15px; }
+  h3 { font-size: 16px; margin: 26px 0 8px; font-weight: 700; }
+  p { margin: 0 0 14px; max-width: 66ch; }
+  ul, ol { margin: 0 0 14px; padding-left: 22px; max-width: 66ch; }
+  li { margin-bottom: 6px; }
+  strong { font-weight: 700; }
+  code {
+    font-family: var(--mono); font-size: .88em; background: var(--paper);
+    border: 1px solid var(--line); border-radius: 5px; padding: 1px 5px;
+  }
+  a { color: var(--wood); }
+
+  /* 순서가 있는 단계 */
+  .steps { list-style: none; padding: 0; margin: 0 0 8px; display: grid; gap: 14px; counter-reset: s; }
+  .steps > li {
+    counter-increment: s; display: grid; grid-template-columns: 30px 1fr; gap: 14px;
+    margin: 0; padding-bottom: 14px; border-bottom: 1px solid var(--line);
+  }
+  .steps > li:last-child { border-bottom: 0; padding-bottom: 0; }
+  .steps > li::before {
+    content: counter(s); grid-row: span 2;
+    width: 30px; height: 30px; border-radius: 50%;
+    background: var(--amber); color: #2A1E14;
+    display: grid; place-items: center; font-weight: 700; font-size: 14px;
+    font-variant-numeric: tabular-nums;
+  }
+  .steps b { display: block; font-size: 16.5px; }
+  .steps p { margin: 4px 0 0; color: var(--ink-2); font-size: 15px; }
+
+  /* 화면 카드 */
+  .screens { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-bottom: 16px; }
+  .screen { background: var(--paper); border: 1px solid var(--line); border-radius: 12px; padding: 16px 18px; }
+  .screen h4 { margin: 0 0 2px; font-size: 15.5px; }
+  .screen .who { font-size: 12.5px; color: var(--amber-ink); font-weight: 700; letter-spacing: .03em; }
+  .screen p { margin: 8px 0 0; font-size: 14px; color: var(--ink-2); }
+  .screen .path { font-family: var(--mono); font-size: 12px; color: var(--ink-3); display: block; margin-top: 8px; }
+
+  table { width: 100%; border-collapse: collapse; font-size: 14.5px; margin: 0 0 16px; }
+  .scroll { overflow-x: auto; margin-bottom: 16px; }
+  .scroll table { margin-bottom: 0; min-width: 520px; }
+  th { text-align: left; font-size: 12.5px; letter-spacing: .04em; color: var(--ink-3); font-weight: 700; padding: 0 10px 6px 0; border-bottom: 1px solid var(--line); }
+  td { padding: 10px 10px 10px 0; border-bottom: 1px solid var(--line); vertical-align: top; }
+  td:last-child, th:last-child { padding-right: 0; }
+  td.k { font-family: var(--mono); font-size: 13px; white-space: nowrap; }
+
+  .cmd {
+    background: var(--ink); color: var(--paper); border-radius: 10px;
+    padding: 14px 16px; font-family: var(--mono); font-size: 13.5px; line-height: 1.7;
+    overflow-x: auto; margin: 0 0 8px;
+  }
+  .cmd .c { color: #E9C583; }
+  .cmd .hash { color: #A08D79; }
+
+  .note {
+    border-left: 3px solid var(--amber); background: var(--amber-soft);
+    padding: 12px 16px; border-radius: 0 8px 8px 0; margin: 0 0 16px; font-size: 15px;
+  }
+  .note.warn { border-left-color: var(--coral-ink); background: var(--coral-soft); }
+  .note.ok { border-left-color: var(--mint); background: var(--mint-soft); }
+  .note p:last-child { margin-bottom: 0; }
+
+  .pill { display: inline-block; font-size: 12px; font-weight: 700; padding: 2px 9px; border-radius: 999px; background: var(--mint-soft); color: var(--mint); }
+  .pill.no { background: var(--coral-soft); color: var(--coral-ink); }
+
+  .facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(185px, 1fr)); gap: 10px; margin-bottom: 18px; }
+  .fact { background: var(--paper); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; }
+  .fact dt { font-size: 12px; color: var(--ink-3); font-weight: 700; letter-spacing: .04em; margin-bottom: 2px; }
+  .fact dd { margin: 0; font-family: var(--mono); font-size: 12.5px; overflow-wrap: normal; }
+
+  footer { margin-top: 40px; padding-top: 18px; border-top: 1px solid var(--line); font-size: 13.5px; color: var(--ink-3); }
+
+  @media (max-width: 560px) {
+    body { font-size: 15.5px; }
+    .screens { grid-template-columns: 1fr; }
+    .bar { font-size: 11.5px; gap: 6px 12px; }
+  }
+  @media print {
+    body { background: #fff; color: #000; }
+    .bar { position: static; backdrop-filter: none; }
+    .shelf { background: #999; box-shadow: none; }
+    .cmd { background: #f2f2f2; color: #000; border: 1px solid #ccc; }
+    section, .screen, .steps > li { break-inside: avoid; }
+  }
+</style>
+</head>
+<body>
+<div class="page">
+  <div class="bar">
+    <b>주소</b>
+    <span>허브 <a href="https://raph-alpaca.github.io/science-inquiry-hub/">raph-alpaca.github.io/science-inquiry-hub</a></span>
+    <span>선생님 <a href="https://raph-alpaca.github.io/science-inquiry-hub/teacher.html">/teacher.html</a></span>
+    <span>저장소 <a href="https://github.com/Raph-Alpaca/science-inquiry-hub">github.com/Raph-Alpaca</a></span>
+  </div>
+
+  <header class="top">
+    <div class="eyebrow">운영 노트 · 2026학년도</div>
+    <h1>산출물 책장 운영 노트</h1>
+    <p>학생 모둠이 만든 시뮬레이션을 학교 책장에 모으는 서비스입니다. 이 노트는 만든 사람이자 운영자인 선생님용입니다. 다른 선생님께 나눠 줄 한 쪽짜리 안내는 저장소의 <code>docs/teacher-guide.md</code> 에 따로 있습니다.</p>
+  </header>
+
+  <dl class="facts">
+    <div class="fact"><dt>FIREBASE 프로젝트</dt><dd>science-inquiry-hub</dd></div>
+    <div class="fact"><dt>로그인</dt><dd>구글 계정</dd></div>
+    <div class="fact"><dt>STORAGE</dt><dd>사용 안 함</dd></div>
+    <div class="fact"><dt>보안 규칙</dt><dd>배포 완료</dd></div>
+  </dl>
+
+  <div class="shelf"></div>
+
+  <section>
+    <h2>수업 전에 하는 일</h2>
+    <p class="lede">한 번만 하면 학기 내내 그대로 씁니다. 5분이면 끝납니다.</p>
+    <ol class="steps">
+      <li>
+        <div>
+          <b>선생님 화면에서 구글 로그인</b>
+          <p>주소 끝이 <code>/teacher.html</code> 입니다. 처음 한 번만 계정을 고르면 다음부터는 바로 들어갑니다.</p>
+        </div>
+      </li>
+      <li>
+        <div>
+          <b>학교 책장 만들기</b>
+          <p>학교 이름, 성함, 책장 이름 세 칸만 채우면 <code>SEO-2026-4K7Q</code> 모양의 코드가 자동으로 나옵니다. 앞 세 글자는 학교 이름에서 따옵니다. 학년별로 나누고 싶으면 “책장 하나 더 만들기”로 여러 개 만드세요.</p>
+        </div>
+      </li>
+      <li>
+        <div>
+          <b>학생에게 코드 알려 주기</b>
+          <p>QR 보기로 띄우거나 인쇄해 교실에 붙입니다. 주소 복사로 학급 게시판에 올려도 됩니다. 코드만 칠판에 적어도 됩니다.</p>
+        </div>
+      </li>
+    </ol>
+  </section>
+
+  <div class="shelf"></div>
+
+  <section>
+    <h2>수업 중</h2>
+    <p class="lede">1차시 시연과 학생 제출을 같은 화면에서 합니다.</p>
+
+    <h3>시연할 때</h3>
+    <p>주소 끝에 <code>?demo=1</code> 을 붙이면 미리보기 책장이 열립니다. 예시 책 네 권이 이미 꽂혀 있어서 빈 책장을 보여 주지 않아도 됩니다. 이 모드는 그 컴퓨터에만 저장되고 실제 데이터에 영향을 주지 않습니다.</p>
+    <div class="cmd"><span class="hash">미리보기 책장</span><br>raph-alpaca.github.io/science-inquiry-hub/shelf.html?code=DEMO-2026-BOOK&amp;demo=1</div>
+    <p>책을 누르면 앞표지가 왼쪽으로 열리면서 펼쳐집니다. 왼쪽 면은 만든 이유와 사용 방법, 오른쪽 면은 시뮬레이션입니다. 화살표 키로 다음 책, <code>Esc</code> 로 닫기가 됩니다. 휴대폰에서는 아래에서 시트가 올라옵니다.</p>
+
+    <h3>학생에게 시킬 때</h3>
+    <p>학생은 로그인하지 않습니다. 책장 화면 오른쪽 아래 “산출물 제출하기”를 누르고 아홉 칸을 채우면 끝입니다. 적는 항목은 학년·반, 모둠명, 책 제목, 개발자의 의도, 시뮬레이션 링크, 사용 방법, 관련 과학 개념, 모둠원 이름, 표지입니다.</p>
+    <div class="note">
+      <p>작품 자체는 이 사이트에 올리지 않습니다. 제미나이·캔바·러버블 어디서 만들었든 <strong>공유 링크만</strong> 받습니다. 링크는 <code>https://</code> 로 시작해야 접수됩니다.</p>
+    </div>
+  </section>
+
+  <div class="shelf"></div>
+
+  <section>
+    <h2>수업 뒤에 하는 일</h2>
+    <p class="lede">승인해야 책장에 꽂힙니다. 그전에는 아무에게도 보이지 않습니다.</p>
+    <div class="scroll">
+      <table>
+        <thead><tr><th>하고 싶은 일</th><th>누르는 곳</th><th>결과</th></tr></thead>
+        <tbody>
+          <tr><td>한 권만 공개</td><td>그 줄의 <strong>승인</strong></td><td>바로 공개 책장에 꽂힘</td></tr>
+          <tr><td>쌓인 것 한꺼번에 공개</td><td><strong>대기 중인 N권 모두 승인</strong></td><td>반 서가가 자동으로 생김</td></tr>
+          <tr><td>내용 고치기</td><td><strong>수정</strong></td><td>제목·링크·설명·개념·학년반 변경</td></tr>
+          <tr><td>잠깐 내리기</td><td><strong>숨김</strong></td><td>공개 책장에서 사라짐. 되돌릴 수 있음</td></tr>
+          <tr><td>아주 지우기</td><td>수정 → <strong>이 책 삭제</strong></td><td>모둠원 이름까지 함께 지워짐</td></tr>
+          <tr><td>잘 만든 작품 올리기</td><td>수정 → <strong>우리 학교 예시로 올리기</strong></td><td>책장 위쪽 칸으로 옮겨짐</td></tr>
+          <tr><td>평가 자료 뽑기</td><td><strong>CSV 내보내기</strong></td><td>엑셀 파일. 모둠원 이름 포함</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="note">
+      <p>승인한 뒤 학생이 이미 열어 둔 화면에는 최대 5분 뒤에 반영됩니다. 화면을 새로 고치면 바로 보입니다.</p>
+    </div>
+  </section>
+
+  <div class="shelf"></div>
+
+  <section>
+    <h2>화면 네 개</h2>
+    <p class="lede">누가 어디로 들어오는지만 알면 됩니다.</p>
+    <div class="screens">
+      <div class="screen">
+        <div class="who">모두</div>
+        <h4>허브</h4>
+        <p>탐구 앱 9개와 책장 입구. 1차시에 이 화면부터 엽니다.</p>
+        <span class="path">index.html</span>
+      </div>
+      <div class="screen">
+        <div class="who">학생 · 학부모</div>
+        <h4>공개 책장</h4>
+        <p>선생님 예시 9권과 반별 서가. 코드가 없으면 안내만 뜹니다.</p>
+        <span class="path">shelf.html?code=코드</span>
+      </div>
+      <div class="screen">
+        <div class="who">학생</div>
+        <h4>제출 폼</h4>
+        <p>로그인 없이 제출. 쓰던 내용은 같은 기기에서 되살아납니다.</p>
+        <span class="path">submit.html?code=코드</span>
+      </div>
+      <div class="screen">
+        <div class="who">선생님만</div>
+        <h4>선생님 화면</h4>
+        <p>책장 만들기, 코드와 QR, 승인, 수정, CSV.</p>
+        <span class="path">teacher.html</span>
+      </div>
+    </div>
+  </section>
+
+  <div class="shelf"></div>
+
+  <section>
+    <h2>다른 선생님도 쓰게 하려면</h2>
+    <p class="lede">등록해 줄 것이 없습니다. 주소만 알려 주면 됩니다.</p>
+    <p>다른 학교 선생님이 <code>teacher.html</code> 에서 구글 로그인을 하면 그 순간 계정이 만들어지고, 자기 학교 책장을 스스로 만듭니다. 선생님이 명단에 넣어 주거나 초대장을 보낼 필요가 없습니다.</p>
+    <div class="scroll">
+      <table>
+        <thead><tr><th>궁금한 것</th><th>답</th></tr></thead>
+        <tbody>
+          <tr><td>가입 승인을 해 줘야 하나요</td><td>아니요. 구글 로그인이 곧 가입입니다</td></tr>
+          <tr><td>서로의 책장이 보이나요</td><td>아니요. 각자 자기 책장만 보입니다</td></tr>
+          <tr><td>학생도 계정이 필요한가요</td><td>아니요. 코드만 있으면 됩니다</td></tr>
+          <tr><td>나눠 줄 것은</td><td>teacher.html 주소와 <code>docs/teacher-guide.md</code></td></tr>
+          <tr><td>비용은</td><td>무료 한도 안입니다. 하루 읽기 5만 건, 쓰기 2만 건</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="note warn">
+      <p><strong>대신 아무나 만들 수 있습니다.</strong> 주소를 아는 사람은 누구든 구글 로그인만 하면 이 프로젝트에 자기 책장을 만들 수 있습니다. 30개교 정도는 문제가 없지만, 범위를 정해 두고 싶으면 두 가지 방법이 있습니다. 허용할 이메일이나 학교 도메인을 보안 규칙에 적어 두는 방법, 그리고 책장을 만들 때 가입 코드를 한 번 받게 하는 방법입니다. 필요하시면 둘 중 하나를 넣어 드리겠습니다.</p>
+    </div>
+    <p>한 책장을 두 선생님이 함께 관리하는 기능은 아직 없습니다. 만든 사람만 승인하고 수정할 수 있습니다.</p>
+  </section>
+
+  <div class="shelf"></div>
+
+  <section>
+    <h2>공개되는 것과 안 되는 것</h2>
+    <p class="lede">학생 이름은 설계 단계부터 공개 화면에 나오지 않게 막아 두었습니다.</p>
+    <div class="scroll">
+      <table>
+        <thead><tr><th>항목</th><th>공개 책장</th><th>선생님 화면</th></tr></thead>
+        <tbody>
+          <tr><td>학년·반·모둠명</td><td><span class="pill">보임</span></td><td><span class="pill">보임</span></td></tr>
+          <tr><td>책 제목·의도·사용 방법·개념</td><td><span class="pill">보임</span></td><td><span class="pill">보임</span></td></tr>
+          <tr><td>작품 링크</td><td><span class="pill">보임</span></td><td><span class="pill">보임</span></td></tr>
+          <tr><td>모둠원 이름</td><td><span class="pill no">안 보임</span></td><td><span class="pill">보임</span></td></tr>
+          <tr><td>승인 전 제출물</td><td><span class="pill no">안 보임</span></td><td><span class="pill">보임</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>화면에서 가리는 정도가 아니라 저장소 규칙으로 막혀 있습니다. 주소를 직접 두드려도 승인 전 제출물과 모둠원 이름은 거부됩니다. 다른 선생님이 남의 책장을 고치는 것도 막힙니다.</p>
+    <div class="note warn">
+      <p><strong>코드가 밖으로 새면</strong> 선생님 화면에서 <strong>코드 재발급</strong>을 누르세요. 예전 코드로는 더 이상 제출할 수 없고, 이미 꽂힌 책은 그대로 남습니다.</p>
+    </div>
+  </section>
+
+  <div class="shelf"></div>
+
+  <section>
+    <h2>문제가 생기면</h2>
+    <p class="lede">거의 다 아래 다섯 가지 안에서 해결됩니다.</p>
+    <div class="scroll">
+      <table>
+        <thead><tr><th>증상</th><th>원인</th><th>해결</th></tr></thead>
+        <tbody>
+          <tr><td>“이런 코드의 책장이 없어요”</td><td>코드 오타 또는 재발급된 코드</td><td>선생님 화면에서 현재 코드 확인</td></tr>
+          <tr><td>“아직 책장이 열리지 않았어요”</td><td>보안 규칙이 안 올라감</td><td>아래 규칙 배포 명령 실행</td></tr>
+          <tr><td>학생이 제출했다는데 안 보임</td><td>정상. 승인 전임</td><td>선생님 화면 승인 대기 칸 확인</td></tr>
+          <tr><td>작품이 책 안에서 안 열림</td><td>그 사이트가 외부 삽입을 막음</td><td>“시뮬레이션 열기”로 새 창에서 보기</td></tr>
+          <tr><td>로그인 창이 안 뜸</td><td>팝업 차단</td><td>같은 탭 로그인으로 자동 전환됨. 한 번 더 누르기</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <div class="shelf"></div>
+
+  <section>
+    <h2>손보고 싶을 때</h2>
+    <p class="lede">고칠 곳이 어디인지만 적어 둡니다. 저장소에 올리면 1분 안에 실제 주소에 반영됩니다.</p>
+    <div class="scroll">
+      <table>
+        <thead><tr><th>바꾸고 싶은 것</th><th>파일</th></tr></thead>
+        <tbody>
+          <tr><td>선생님 예시 9권의 제목·설명·링크</td><td class="k">shelf/teacher.json</td></tr>
+          <tr><td>표지 그림 12종</td><td class="k">assets/covers/*.svg</td></tr>
+          <tr><td>표지 목록·색, 반 개수, 캐시 시간</td><td class="k">assets/shelf-data.js</td></tr>
+          <tr><td>색·간격·모션</td><td class="k">assets/shelf.css</td></tr>
+          <tr><td>제출 항목과 문구</td><td class="k">submit.html</td></tr>
+          <tr><td>승인 화면과 CSV 항목</td><td class="k">teacher.html</td></tr>
+          <tr><td>누가 무엇을 읽고 쓸 수 있는지</td><td class="k">firestore.rules</td></tr>
+          <tr><td>Firebase 설정, 표지 업로드 켜기</td><td class="k">assets/firebase-config.js</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>저장소에 올리기</h3>
+    <div class="cmd"><span class="hash">프로젝트 폴더에서</span><br><span class="c">git</span> add -A<br><span class="c">git</span> commit -m "바꾼 내용"<br><span class="c">git</span> push</div>
+
+    <h3>보안 규칙을 고쳤을 때</h3>
+    <div class="cmd"><span class="c">npx</span> firebase login<br><span class="c">npx</span> firebase deploy --only firestore:rules</div>
+    <p><code>.firebaserc</code> 에 프로젝트가 고정되어 있어 <code>--project</code> 는 붙이지 않아도 됩니다. <code>--only firestore:rules</code> 없이 실행하면 쓰지 않는 Storage까지 올리려다 실패합니다.</p>
+
+    <h3>표지 캡처 업로드를 켜고 싶을 때</h3>
+    <p>Firebase 콘솔에서 Storage를 시작한 뒤 <code>assets/firebase-config.js</code> 의 <code>coverUpload</code> 를 <code>true</code> 로 바꾸고, <code>storage.rules</code> 를 함께 배포하면 제출 폼에 업로드 칸이 다시 나타납니다. 최근 만든 프로젝트는 Storage를 켤 때 결제 등록을 요구할 수 있습니다.</p>
+  </section>
+
+  <div class="shelf"></div>
+
+  <section>
+    <h2>지금까지 확인한 것</h2>
+    <p class="lede">실제 계정과 실제 데이터로 끝까지 돌려 본 결과입니다.</p>
+    <div class="scroll">
+      <table>
+        <thead><tr><th>검사</th><th>결과</th></tr></thead>
+        <tbody>
+          <tr><td>탐구 앱 10쪽 (1920 · 1280 · 380)</td><td>53항목 통과</td></tr>
+          <tr><td>책장 3화면 (1920 · 1200 · 380)</td><td>92항목 통과</td></tr>
+          <tr><td>보안 규칙 (에뮬레이터)</td><td>40항목 통과</td></tr>
+          <tr><td>실제 계정 전체 흐름</td><td>27항목 통과</td></tr>
+          <tr><td>콘솔 오류</td><td>0개</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="note ok">
+      <p>제출 → 승인 → 공개 → 숨김까지 실제 Firestore에서 확인했고, 확인용으로 만든 책장과 책은 지웠습니다. 지금 남아 있는 데이터는 없습니다.</p>
+    </div>
+
+    <h3>아직 없는 기능</h3>
+    <ul>
+      <li>만든 책장의 <strong>이름을 바꾸거나 책장을 지우는 화면</strong>이 없습니다. 학교 이름을 잘못 적으면 지금은 고칠 방법이 없습니다.</li>
+      <li>표지 캡처 업로드는 꺼 둔 상태입니다.</li>
+      <li>제출 횟수를 제한하는 장치는 없습니다. 코드를 아는 사람은 제출할 수 있고, 승인 전 비공개로 막습니다.</li>
+    </ul>
+  </section>
+
+  <footer>
+    다른 선생님께 나눠 줄 한 쪽짜리 안내는 저장소의 <code>docs/teacher-guide.md</code> 에 있습니다.
+    이 노트는 2026년 9월 16일 기준입니다.
+  </footer>
+</div>
+</body>
+</html>
