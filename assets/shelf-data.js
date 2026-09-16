@@ -246,10 +246,13 @@ export async function checkAccess(user) {
   const { F, db } = await fb();
   const key = mailKey(user);
   if (!key) return { admin: false, approved: false };
-  const admin = await F.getDoc(F.doc(db, "admins", key)).then((d) => d.exists()).catch(() => false);
-  if (admin) return { admin: true, approved: true };
-  const approved = await F.getDoc(F.doc(db, "allowed", key)).then((d) => d.exists()).catch(() => false);
-  return { admin: false, approved };
+  // 규칙이 옛 버전이면(admins 항목이 없는 규칙) 읽기 자체가 거부된다. 그 경우를 denied 로 알려 준다.
+  let denied = false;
+  const isDeny = (e) => e && (e.code === "permission-denied" || /insufficient permissions/i.test(e.message || ""));
+  const admin = await F.getDoc(F.doc(db, "admins", key)).then((d) => d.exists()).catch((e) => { if (isDeny(e)) denied = true; return false; });
+  if (admin) return { admin: true, approved: true, denied: false };
+  const approved = await F.getDoc(F.doc(db, "allowed", key)).then((d) => d.exists()).catch((e) => { if (isDeny(e)) denied = true; return false; });
+  return { admin: false, approved, denied };
 }
 export async function listAllowed() {
   if (DEMO) return [{ id: "teacher@example.com", email: "teacher@example.com", school: "보기 학교", note: "", addedAt: Date.now() }];

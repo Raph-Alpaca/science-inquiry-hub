@@ -175,7 +175,15 @@ function renderPending(u) {
       </div>
       <p class="upload-note" style="margin-top:14px">다른 계정으로 신청하셨다면 로그아웃한 뒤 그 계정으로 다시 로그인해 주세요.</p>
       <p><button class="btn" id="recheck">승인됐는지 다시 확인</button></p>
-    </div>`;
+    </div>
+    ${access.denied ? `
+    <div class="notice bad" style="margin-top:16px">
+      <h2>저장소 규칙이 아직 옛 버전입니다</h2>
+      <p>승인 명단을 읽으려다 거부되었습니다. 관리자 문서를 만들어도 규칙이 옛 버전이면 이 화면이 계속 뜹니다.
+      Firebase 콘솔 → Firestore → 규칙 탭에 저장소의 <b>firestore.rules</b> 내용을 붙여 넣고 <b>게시</b>한 뒤,
+      위의 "승인됐는지 다시 확인"을 누르세요.</p>
+      <p class="link">npx firebase deploy --only firestore:rules</p>
+    </div>` : ""}`;
   $("copyMail").onclick = () => copy(u.email || "", "주소를");
   $("recheck").onclick = async () => {
     access = await checkAccess(u);
