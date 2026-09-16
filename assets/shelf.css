@@ -70,6 +70,7 @@ body {
 a { color: inherit; }
 button, input, select, textarea { font: inherit; color: inherit; }
 button { cursor: pointer; touch-action: manipulation; }
+[hidden] { display: none !important; }   /* .btn 등의 display 규칙이 hidden 을 덮지 않도록 */
 :focus-visible { outline: 3px solid var(--amber-ink); outline-offset: 2px; }
 img { max-width: 100%; }
 .sr { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
