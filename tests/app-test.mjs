@@ -1,4 +1,4 @@
-// 10개 페이지를 3개 화면 크기로 열고, 콘솔 오류·가로 넘침·과학 계산을 점검하고 스크린샷을 남긴다.
+// 12개 페이지를 3개 화면 크기로 열고, 콘솔 오류·가로 넘침·과학 계산을 점검하고 스크린샷을 남긴다.
 import { chromium } from "playwright";
 import http from "node:http";
 import fs from "node:fs";
@@ -18,7 +18,7 @@ const server = http.createServer((req, res) => {
 }).listen(0);
 const BASE = `http://127.0.0.1:${server.address().port}`;
 
-const PAGES = ["index", "g1-insulation", "g1-heating", "g1-sound", "g2-gas", "g2-photosynthesis", "g2-solar", "g3-energy", "g3-dewpoint", "g3-equation"];
+const PAGES = ["index", "g1-insulation", "g1-heating", "g1-sound", "g1-sound-lab", "g1-color", "g2-gas", "g2-photosynthesis", "g2-solar", "g3-energy", "g3-dewpoint", "g3-equation"];
 const VIEWS = { mobile: { width: 380, height: 800 }, laptop: { width: 1280, height: 800 }, classroom: { width: 1920, height: 1080 } };
 const url = p => p === "index" ? `${BASE}/index.html` : `${BASE}/apps/${p}.html`;
 const results = [];
@@ -52,6 +52,8 @@ const ACT = {
   "g1-insulation": async pg => { await pg.click("#run"); await pg.waitForTimeout(2500); await pg.fill("#memo", "차이 벌어짐"); await pg.click("#addMemo"); },
   "g1-heating": async pg => { await pg.selectOption("#spd", "60"); await pg.click("#heat"); await pg.waitForTimeout(3500); },
   "g1-sound": async pg => { await pg.check("#use2"); await pg.click(".keys .btn >> nth=3"); },
+  "g1-sound-lab": async pg => { await pg.click('.keys .btn[data-f="392"]'); await pg.click("#capA"); await pg.click("#tabSpec"); },
+  "g1-color": async pg => { await pg.selectOption("#target", "100,100,100"); await pg.selectOption("#pred", "흰색"); await pg.click("#measure"); },
   "g2-gas": async pg => { for (const v of [60, 30, 20]) { await pg.$eval("#vol", (el, v) => { el.value = v; el.dispatchEvent(new Event("input")); }, v); await pg.fill("#pred", String(60 / v + 0.2)); await pg.click("#measure"); } await pg.check("#curve"); await pg.waitForTimeout(2100); },
   "g2-photosynthesis": async pg => { await pg.click("#run"); await pg.waitForTimeout(2500); await pg.click("#slopeAll"); await pg.click("#save"); },
   "g2-solar": async pg => { await pg.$eval("#day", el => { el.value = 7.4; el.dispatchEvent(new Event("input")); }); },

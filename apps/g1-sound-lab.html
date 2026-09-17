@@ -1,0 +1,385 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>소리 측정실 · 과학탐구 앱 허브</title>
+<link rel="stylesheet" href="../assets/hub.css">
+<style>
+  .stage .tabs { margin-bottom: 10px; max-width: 320px; }
+  .stage .readout { grid-template-columns: repeat(4, minmax(0, 1fr)); margin-top: 12px; }
+  .stage .result:empty { display: none; }
+  .stage .result { margin: 10px 0 0; }
+  .keys { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+  .keys .btn { padding: 8px 4px; font-size: .9em; }
+  .two { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .two .field select { width: 100%; }
+  #micBtn.on { background: var(--coral); border-color: var(--coral); color: #fff; }
+  .slotA { color: var(--mint-ink); font-weight: 700; } .slotB { color: var(--coral-ink); font-weight: 700; }
+  @media (max-width: 640px) { .stage .readout { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+</style>
+</head>
+<body>
+<section class="lab">
+  <div class="stage">
+    <div class="tabs" role="group" aria-label="그래프 종류">
+      <button class="btn" id="tabWave">파형</button>
+      <button class="btn" id="tabSpec">진동수 분석</button>
+    </div>
+    <canvas id="w" role="img" aria-label="소리 그래프"></canvas>
+    <p class="cap" id="cap"></p>
+    <div class="readout" aria-live="off">
+      <div><small>진동수</small><b id="fNow">–</b></div>
+      <div><small>주기</small><b id="tNow">–</b></div>
+      <div><small>진폭(상댓값)</small><b id="aNow">–</b></div>
+      <div><small>가까운 음</small><b id="nNow">–</b></div>
+    </div>
+    <p class="result" id="msg" role="status"></p>
+  </div>
+  <aside class="controls">
+    <h3>소리 받기</h3>
+    <div class="row"><button class="btn primary" id="micBtn">마이크 켜기</button></div>
+    <p class="hint">마이크를 켜면 폰에 대고 낸 소리의 파형을 바로 봅니다. 조용한 곳에서, 입이나 악기와 폰 사이 거리를 같게 두고 비교하세요.</p>
+    <div class="sim-only" id="simBox">
+      <div class="field"><label>연습용 소리 (마이크 없이)</label></div>
+      <div class="keys" role="group" aria-label="음 고르기"><button class="btn" data-f="262">도</button><button class="btn" data-f="330">미</button><button class="btn" data-f="392">솔</button><button class="btn" data-f="523">높은 도</button></div>
+      <div class="field" style="margin-top:10px"><label for="amp">진폭 <b></b></label><input type="range" id="amp" min="5" max="100" step="1" value="60"></div>
+      <div class="field"><label for="timbre">소리 종류</label>
+        <select id="timbre"><option value="sine">소리굽쇠 (매끈한 파형)</option><option value="recorder">리코더 느낌</option><option value="violin">바이올린 느낌</option></select></div>
+      <div class="row"><button class="btn" id="play">들어 보기</button></div>
+    </div>
+    <h3>그래프 보기</h3>
+    <div class="two">
+      <div class="field"><label for="span">시간 폭</label><select id="span"><option value="5">5 ms</option><option value="10">10 ms</option><option value="20" selected>20 ms</option><option value="50">50 ms</option></select></div>
+      <div class="field"><label for="zoom">세로 확대</label><select id="zoom"><option value="1">1배</option><option value="4">4배</option><option value="16">16배</option></select></div>
+    </div>
+    <div class="field"><label><input type="checkbox" id="freeze"> 화면 멈추기</label></div>
+    <h3>담아서 비교하기</h3>
+    <div class="field"><label for="lbl">이름</label><input type="text" id="lbl" maxlength="20" placeholder="예: 리코더 도, 큰 목소리"></div>
+    <div class="row"><button class="btn" id="capA">A에 담기</button><button class="btn" id="capB">B에 담기</button></div>
+    <table>
+      <thead><tr><th></th><th>진동수</th><th>주기</th><th>진폭</th></tr></thead>
+      <tbody>
+        <tr><td class="slotA" id="nameA">A</td><td id="fA">–</td><td id="tA">–</td><td id="aA">–</td></tr>
+        <tr><td class="slotB" id="nameB">B</td><td id="fB">–</td><td id="tB">–</td><td id="aB">–</td></tr>
+      </tbody>
+    </table>
+    <h3>측정 기록</h3>
+    <ul class="list" id="log"><li>담은 소리가 여기에 쌓입니다.</li></ul>
+    <div class="row"><button class="btn small" id="csv" disabled>CSV 내려받기</button><button class="btn small" id="clearLog" disabled>기록 지우기</button></div>
+  </aside>
+</section>
+<script src="../assets/hub.js"></script>
+<script>
+window.APP = {
+  id: "g1-sound-lab", grade: 1, unit: "빛과 파동", sensor: "기기 마이크", mediaIn: true, icon: "🎤",
+  title: "소리 측정실",
+  question: "높은 소리, 큰 소리, 악기마다 다른 소리는 실제 파형에서 무엇이 다를까?",
+  how: "마이크를 켜고 소리를 낸 뒤 A와 B에 담아 겹쳐 보세요. 높낮이는 진동수, 크기는 진폭, 소리의 맵시(음색)는 파형의 모양과 연결됩니다.",
+  notes: ["같은 '도'를 크게 낼 때와 작게 낼 때, 진동수와 진폭 중 무엇이 바뀔까요?", "A·B에 담은 두 소리의 진동수·진폭 숫자와 파형 모양을 그대로 적어 보세요.", "소리의 세기·높낮이·맵시를 진폭·진동수·파형으로 설명해 보세요."],
+  prompt: "중학교 1학년 '빛과 파동' 단원의 소리의 특성(진폭, 진동수, 파형) 탐구용 웹앱을 만들어 줘. 휴대폰 브라우저에서 마이크 권한을 받아 소리의 파형을 실시간으로 그리고, 자기상관으로 진동수를 구해 주기·진폭·가까운 음 이름과 함께 보여 줘. 파형과 진동수 분석(FFT) 그래프를 전환할 수 있게 하고, 소리를 A·B 두 칸에 담아 겹쳐 비교하고 측정 기록을 CSV로 내려받게 해 줘. 마이크를 쓸 수 없을 때는 도·미·솔 연습용 소리로 같은 화면을 쓰게 하고, 소리는 녹음·저장·전송하지 마.",
+  next: "리코더와 목소리가 같은 음을 낼 때 진동수 분석 그래프의 막대가 어떻게 다르게 나타났나? 그 차이를 무엇이라고 부를까?"
+};
+SIH.shell();
+
+const $ = id => document.getElementById(id);
+const cv = $("w"), ctx = SIH.dpr(cv, 760, 360);
+const SIM_RATE = 48000, SIM_N = 8192;
+const COL = { live: "#17302e", A: "#23a087", B: "#ee6b57" };
+
+let view = "wave", spanMs = 20, zoom = 1;
+let rate = SIM_RATE, frame = new Float32Array(SIM_N);
+let est = { f: null, a: 0, clear: 0, rms: 0 };
+const slots = { A: null, B: null };
+const log = [];
+
+// ---------- 분석 ----------
+// 정규화 자기상관(NSDF). 처음 음수로 내려간 뒤의 봉우리 중, 가장 높은 봉우리의 90% 를 넘는 첫 봉우리를 주기로 본다.
+// 배음이 센 리코더·바이올린 소리에서 한 옥타브 낮게/높게 읽는 실수를 줄이는 방법이다.
+function detectPitch(x, sr) {
+  const n = x.length;
+  let ss = 0, peak = 0;
+  for (let i = 0; i < n; i++) { ss += x[i] * x[i]; const v = Math.abs(x[i]); if (v > peak) peak = v; }
+  const rms = Math.sqrt(ss / n);
+  const a = Math.min(100, rms * Math.SQRT2 * 100);
+  if (rms < 0.004) return { f: null, a, clear: 0, rms, quiet: true };
+  const maxLag = Math.ceil(sr / 70);
+  const W = Math.min(Math.round(sr * 0.04), n - maxLag - 1);
+  const nsdf = new Float32Array(maxLag + 2);
+  for (let t = 0; t <= maxLag + 1; t++) {
+    let ac = 0, m = 0;
+    for (let i = 0; i < W; i++) { const p = x[i], q = x[i + t]; ac += p * q; m += p * p + q * q; }
+    nsdf[t] = m > 0 ? (2 * ac) / m : 0;
+  }
+  const peaks = [];
+  let t = 1;
+  while (t <= maxLag && nsdf[t] > 0) t++;
+  while (t <= maxLag) {
+    while (t <= maxLag && nsdf[t] <= 0) t++;
+    let best = -1, bi = -1;
+    while (t <= maxLag && nsdf[t] > 0) { if (nsdf[t] > best) { best = nsdf[t]; bi = t; } t++; }
+    if (bi > 0 && bi < maxLag) peaks.push([bi, best]);
+  }
+  if (!peaks.length) return { f: null, a, clear: 0, rms };
+  const top = Math.max(...peaks.map(p => p[1]));
+  const [ti, tv] = peaks.find(p => p[1] >= 0.9 * top);
+  if (tv < 0.6) return { f: null, a, clear: tv, rms };
+  const y0 = nsdf[ti - 1], y1 = nsdf[ti], y2 = nsdf[ti + 1];
+  const d = y0 - 2 * y1 + y2;
+  const lag = ti + (d ? (0.5 * (y0 - y2)) / d : 0);
+  const f = sr / lag;
+  if (f < 70 || f > 3000) return { f: null, a, clear: tv, rms };
+  return { f, a, clear: tv, rms };
+}
+
+function spectrum(x, sr) {
+  let N = 1; while (N * 2 <= Math.min(x.length, 8192)) N *= 2;
+  const re = new Float64Array(N), im = new Float64Array(N);
+  for (let i = 0; i < N; i++) re[i] = x[i] * (0.5 - 0.5 * Math.cos((2 * Math.PI * i) / (N - 1)));
+  for (let i = 1, j = 0; i < N; i++) {
+    let bit = N >> 1; for (; j & bit; bit >>= 1) j ^= bit; j ^= bit;
+    if (i < j) { [re[i], re[j]] = [re[j], re[i]]; [im[i], im[j]] = [im[j], im[i]]; }
+  }
+  for (let len = 2; len <= N; len <<= 1) {
+    const ang = (-2 * Math.PI) / len, wr = Math.cos(ang), wi = Math.sin(ang);
+    for (let i = 0; i < N; i += len) {
+      let cr = 1, ci = 0;
+      for (let k = 0; k < len / 2; k++) {
+        const a = i + k, b = a + len / 2;
+        const tr = re[b] * cr - im[b] * ci, tim = re[b] * ci + im[b] * cr;
+        re[b] = re[a] - tr; im[b] = im[a] - tim; re[a] += tr; im[a] += tim;
+        const ncr = cr * wr - ci * wi; ci = cr * wi + ci * wr; cr = ncr;
+      }
+    }
+  }
+  const df = sr / N, maxBin = Math.min(N / 2, Math.floor(3000 / df));
+  const mag = []; let mx = 0;
+  for (let k = 0; k <= maxBin; k++) { const m = Math.hypot(re[k], im[k]); mag.push(m); if (m > mx) mx = m; }
+  return mag.map((m, k) => [k * df, mx > 0 ? (m / mx) * 100 : 0]);
+}
+
+const NOTE = ["도", "도#", "레", "레#", "미", "파", "파#", "솔", "솔#", "라", "라#", "시"];
+const LETTER = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
+function noteName(f) {
+  const m = Math.round(12 * Math.log2(f / 440) + 69);
+  return `${NOTE[((m % 12) + 12) % 12]} (${LETTER[((m % 12) + 12) % 12]}${Math.floor(m / 12) - 1})`;
+}
+
+// 파형이 화면에서 흔들리지 않게, 올라가며 0을 지나는 곳에서 그리기 시작한다
+function triggerIndex(x, sr, need) {
+  let peak = 0; for (let i = 0; i < x.length; i++) peak = Math.max(peak, Math.abs(x[i]));
+  const look = Math.round(sr / 400), limit = x.length - need;
+  for (let i = 1; i < limit; i++) {
+    if (x[i - 1] < 0 && x[i] >= 0) {
+      let hi = 0; for (let j = i; j < i + look; j++) hi = Math.max(hi, x[j]);
+      if (hi > 0.25 * peak) return i;
+    }
+  }
+  return 0;
+}
+function segment(x, sr, ms) {
+  const need = Math.round((sr * ms) / 1000);
+  const s = triggerIndex(x, sr, need), step = Math.max(1, Math.floor(need / 900)), pts = [];
+  for (let i = 0; i <= need && s + i < x.length; i += step) pts.push([(i / sr) * 1000, x[s + i] * 100]);
+  return pts;
+}
+
+// ---------- 연습용 소리 ----------
+const HARM = {
+  sine: [1],
+  recorder: [1, 0.32, 0.14, 0.06, 0.03],
+  violin: Array.from({ length: 14 }, (_, k) => 1 / (k + 1)),
+};
+const sim = { f: 262, a: 60, timbre: "sine" };
+function simFrame() {
+  const h = HARM[sim.timbre], norm = h.reduce((s, v) => s + v * v, 0) ** 0.5;
+  const out = new Float32Array(SIM_N), ph = Math.random() * 2 * Math.PI;
+  for (let i = 0; i < SIM_N; i++) {
+    let v = 0; const w = (2 * Math.PI * sim.f * i) / SIM_RATE + ph;
+    for (let k = 0; k < h.length; k++) v += h[k] * Math.sin((k + 1) * w + k * 0.7);
+    out[i] = (sim.a / 100) * (v / norm) + (Math.random() - 0.5) * 0.004;
+  }
+  return out;
+}
+let AC = null;
+function audio() {
+  AC = AC || new (window.AudioContext || window.webkitAudioContext)();
+  if (AC.state === "suspended") AC.resume();
+  return AC;
+}
+function play() {
+  const ac = audio(), h = HARM[sim.timbre];
+  const real = new Float32Array(h.length + 1), imag = new Float32Array(h.length + 1);
+  h.forEach((v, k) => (imag[k + 1] = v));
+  const o = ac.createOscillator(), g = ac.createGain(), now = ac.currentTime;
+  o.setPeriodicWave(ac.createPeriodicWave(real, imag));
+  o.frequency.setValueAtTime(sim.f, now);
+  const peakGain = 0.3 * (sim.a / 100) + 0.0001;
+  g.gain.setValueAtTime(0.0001, now);
+  g.gain.exponentialRampToValueAtTime(peakGain, now + 0.03);
+  g.gain.setValueAtTime(peakGain, now + 0.8);
+  g.gain.exponentialRampToValueAtTime(0.0001, now + 1.05);
+  o.connect(g); g.connect(ac.destination); o.start(now); o.stop(now + 1.1);
+}
+
+// ---------- 마이크 ----------
+let stream = null, analyser = null, micBuf = null, srcNode = null;
+// 같은 문장을 되풀이해 쓰면 화면 낭독기가 계속 읽으므로, 바뀔 때만 쓴다
+function say(t, good) { const m = $("msg"); if (m.textContent !== t) m.textContent = t; m.classList.toggle("good", !!good); }
+function micError(e) {
+  const n = e && e.name;
+  if (n === "NotAllowedError" || n === "SecurityError") return "마이크 사용이 허용되지 않았습니다. 주소창 왼쪽의 사이트 설정에서 마이크를 '허용'으로 바꾼 뒤 다시 켜세요. 카카오톡 같은 앱 안에서 열었다면 크롬이나 사파리로 다시 여세요.";
+  if (n === "NotFoundError" || n === "OverconstrainedError") return "이 기기에서 마이크를 찾지 못했습니다.";
+  if (n === "NotReadableError") return "다른 앱이 마이크를 쓰고 있습니다. 통화·녹음 앱을 닫고 다시 켜세요.";
+  return "마이크를 켜지 못했습니다. (" + (e && e.message || e) + ")";
+}
+let failed = false, req = 0;
+function fail(t) { say(t); failed = true; SIH.setSource("sim"); }
+async function startMic() {
+  const my = ++req;
+  if (!window.isSecureContext) return fail("마이크는 https 주소로 연 페이지에서만 쓸 수 있습니다.");
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) return fail("이 브라우저는 마이크 입력을 지원하지 않습니다. 크롬이나 사파리 최신판에서 열어 주세요.");
+  const ac = audio();
+  say("마이크 허용을 기다리는 중…");
+  let s;
+  try { s = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false }, video: false }); }
+  catch (e) { if (my === req) fail(micError(e)); return; }
+  // 기다리는 사이 껐다 켰으면 이 요청은 버린다 (마이크가 켜진 채 남지 않게)
+  if (my !== req || SIH.source !== "sensor") { s.getTracks().forEach(t => t.stop()); return; }
+  stream = s;
+  s.getAudioTracks().forEach(t => t.addEventListener("ended", () => { if (stream === s) fail("마이크 연결이 끊겼습니다. 다시 켜 주세요."); }));
+  srcNode = ac.createMediaStreamSource(stream);
+  analyser = ac.createAnalyser();
+  analyser.fftSize = 8192; analyser.smoothingTimeConstant = 0;
+  srcNode.connect(analyser);   // 스피커로는 보내지 않는다 (삐 소리 되먹임 방지)
+  micBuf = new Float32Array(analyser.fftSize);
+  rate = ac.sampleRate;
+  say("마이크가 켜졌습니다. 소리를 내 보세요.", true);
+}
+function stopMic() {
+  req++;
+  if (stream) stream.getTracks().forEach(t => t.stop());
+  if (srcNode) srcNode.disconnect();
+  stream = analyser = micBuf = srcNode = null;
+}
+function syncMode() {
+  const live = SIH.source === "sensor";
+  $("micBtn").textContent = live ? "마이크 끄기" : "마이크 켜기";
+  $("micBtn").classList.toggle("on", live);
+  $("simBox").hidden = live;
+}
+window.addEventListener("sih:source", e => {
+  syncMode();
+  if (e.detail.source === "sensor") { hist.length = 0; frame = new Float32Array(SIM_N); analyze(); draw(); startMic(); }
+  else { stopMic(); rate = SIM_RATE; frame = simFrame(); if (!failed) say(""); failed = false; analyze(); draw(); }
+});
+$("micBtn").onclick = () => SIH.setSource(SIH.source === "sensor" ? "sim" : "sensor");
+window.addEventListener("pagehide", stopMic);
+// 뒤로 가기로 돌아온 페이지는 마이크가 닫혀 있으므로 연습용 소리 상태로 맞춘다
+window.addEventListener("pageshow", e => { if (e.persisted && SIH.source === "sensor") SIH.setSource("sim"); });
+// 잠금 화면·다른 앱에 다녀오면 iOS 가 오디오를 멈춰 두므로 다시 깨운다
+document.addEventListener("visibilitychange", () => { if (!document.hidden && AC && SIH.source === "sensor" && AC.state !== "running") AC.resume().catch(() => {}); });
+
+// ---------- 화면 ----------
+const hist = [];
+function analyze() {
+  const r = detectPitch(frame, rate);
+  if (SIH.source === "sensor") {
+    hist.push(r.f); if (hist.length > 5) hist.shift();
+    const ok = hist.filter(v => v).sort((a, b) => a - b);
+    r.f = ok.length >= 3 ? ok[ok.length >> 1] : null;
+  }
+  est = r;
+  $("fNow").textContent = r.f ? r.f.toFixed(r.f < 100 ? 1 : 0) + " Hz" : "–";
+  $("tNow").textContent = r.f ? (1000 / r.f).toFixed(2) + " ms" : "–";
+  $("aNow").textContent = r.a.toFixed(1);
+  $("nNow").textContent = r.f ? noteName(r.f) : "–";
+  if (SIH.source === "sensor" && stream) {
+    if (r.quiet) say("소리가 거의 들어오지 않습니다. 폰 마이크(보통 아래쪽) 가까이에서 소리를 내 보세요.");
+    else if (!r.f) say("진동수를 찾기 어려운 소리입니다. 한 음을 길게 내 보세요.");
+    else say("측정 중입니다. 알맞은 순간에 A나 B에 담으세요.", true);
+  }
+}
+const short = t => (t.length > 8 ? t.slice(0, 7) + "…" : t);
+function draw() {
+  const series = [], legend = [];
+  if (view === "wave") {
+    const z = pts => pts.map(p => [p[0], p[1] * zoom]);
+    series.push({ pts: [[0, 0], [spanMs, 0]], color: "#c4d4d0", width: 1 });
+    ["A", "B"].forEach(k => { if (slots[k]) { series.push({ pts: z(segment(slots[k].x, slots[k].sr, spanMs)), color: COL[k], width: 2.4 }); legend.push({ label: `${k} ${short(slots[k].label)}`, color: COL[k] }); } });
+    series.push({ pts: z(segment(frame, rate, spanMs)), color: COL.live, width: 1.8 });
+    legend.push({ label: SIH.source === "sensor" ? "마이크" : "연습용 소리", color: COL.live });
+    SIH.drawChart(ctx, { x: 0, y: 0, w: 760, h: 360, xMin: 0, xMax: spanMs, yMin: -100, yMax: 100, xTicks: spanMs === 5 ? 5 : 10, yTicks: 4, xLabel: "시간(ms)", yLabel: `공기 압력 변화(상댓값${zoom > 1 ? ", " + zoom + "배 확대" : ""})`, series, legend });
+    $("cap").textContent = "가로축은 시간, 세로축은 공기 압력의 변화입니다. 모양이 한 번 반복되는 시간이 주기, 1초 동안 반복되는 횟수가 진동수, 가운데 선에서 위아래로 흔들리는 크기가 진폭입니다. 진폭 숫자는 파형 전체의 평균적인 흔들림 크기로 계산해서, 매끈한 파형에서는 가장 높은 곳의 높이와 같고 울퉁불퉁한 파형에서는 그보다 작게 나옵니다.";
+  } else {
+    const marks = [];
+    ["A", "B"].forEach(k => { if (slots[k]) { series.push({ pts: slots[k].spec, color: COL[k], width: 1.8 }); legend.push({ label: `${k} ${short(slots[k].label)}`, color: COL[k] }); } });
+    series.push({ pts: spectrum(frame, rate), color: COL.live, width: 1.6 });
+    legend.push({ label: SIH.source === "sensor" ? "마이크" : "연습용 소리", color: COL.live });
+    if (est.f) marks.push({ x: est.f, y: 100, color: "#e29a2a", label: `기본 진동수 ${Math.round(est.f)} Hz` });
+    SIH.drawChart(ctx, { x: 0, y: 0, w: 760, h: 360, xMin: 0, xMax: 3000, yMin: 0, yMax: 110, xTicks: 6, yTicks: 5, xLabel: "진동수(Hz)", yLabel: "세기(가장 센 것 = 100)", series, legend, marks });
+    $("cap").textContent = "소리를 이루는 진동수별 세기입니다. 가장 왼쪽의 큰 봉우리가 기본 진동수(음의 높이)이고, 그 정수배 자리의 봉우리(배음)가 얼마나 센지에 따라 같은 높이라도 소리의 맵시가 달라집니다. 그래프마다 가장 센 봉우리를 100으로 맞춰 그리므로, 큰 소리와 작은 소리의 비교는 파형 그래프와 진폭 숫자로 하세요.";
+  }
+}
+function capture(k) {
+  if (!est.f && !est.a) return;
+  const label = $("lbl").value.trim() || (SIH.source === "sensor" ? "마이크 소리" : ({ 262: "도", 330: "미", 392: "솔", 523: "높은 도" }[sim.f] || sim.f + " Hz"));
+  slots[k] = { label, f: est.f, a: est.a, x: frame.slice(), sr: rate, spec: spectrum(frame, rate) };
+  $("name" + k).textContent = `${k} ${label}`;
+  $("f" + k).textContent = est.f ? Math.round(est.f) + " Hz" : "–";
+  $("t" + k).textContent = est.f ? (1000 / est.f).toFixed(2) + " ms" : "–";
+  $("a" + k).textContent = est.a.toFixed(1);
+  log.push({ slot: k, label, f: est.f, a: est.a, src: SIH.source === "sensor" ? "마이크" : "연습용" });
+  renderLog(); draw();
+}
+function renderLog() {
+  const ul = $("log");
+  ul.replaceChildren();
+  if (!log.length) { const li = document.createElement("li"); li.textContent = "담은 소리가 여기에 쌓입니다."; ul.appendChild(li); }
+  log.forEach(r => { const li = document.createElement("li"); const s = document.createElement("span"); s.textContent = `${r.slot} · ${r.label}`; const b = document.createElement("b"); b.textContent = `${r.f ? Math.round(r.f) + " Hz" : "진동수 –"} · 진폭 ${r.a.toFixed(1)}`; li.append(s, b); ul.appendChild(li); });
+  $("csv").disabled = $("clearLog").disabled = !log.length;
+}
+$("csv").onclick = () => {
+  // 이름이 = + - @ 로 시작하면 엑셀이 수식으로 실행하므로 앞에 ' 를 붙인다
+  const q = v => { let t = String(v); if (typeof v === "string" && /^[=+\-@\t\r]/.test(t)) t = "'" + t; return `"${t.replace(/"/g, '""')}"`; };
+  const rows = [["순서", "칸", "이름", "입력", "진동수(Hz)", "주기(ms)", "진폭(상댓값)"]].concat(log.map((r, i) => [i + 1, r.slot, r.label, r.src, r.f ? r.f.toFixed(1) : "", r.f ? (1000 / r.f).toFixed(3) : "", r.a.toFixed(1)]));
+  const a = document.createElement("a");
+  const url = URL.createObjectURL(new Blob(["﻿" + rows.map(r => r.map(q).join(",")).join("\r\n")], { type: "text/csv;charset=utf-8" }));
+  a.href = url; a.download = "소리측정-기록.csv"; document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+};
+$("clearLog").onclick = () => { log.length = 0; renderLog(); };
+$("capA").onclick = () => capture("A");
+$("capB").onclick = () => capture("B");
+
+SIH.tabs([{ btn: "tabWave", key: "wave" }, { btn: "tabSpec", key: "spec" }], k => { view = k; draw(); });
+$("span").onchange = () => { spanMs = +$("span").value; draw(); };
+$("zoom").onchange = () => { zoom = +$("zoom").value; draw(); };
+const refreshSim = () => { if (SIH.source !== "sensor") { frame = simFrame(); analyze(); draw(); } };
+SIH.bind("amp", v => { sim.a = v; refreshSim(); });
+$("timbre").onchange = () => { sim.timbre = $("timbre").value; refreshSim(); };
+document.querySelectorAll(".keys .btn").forEach(b => b.onclick = () => {
+  sim.f = +b.dataset.f;
+  document.querySelectorAll(".keys .btn").forEach(x => x.setAttribute("aria-pressed", x === b ? "true" : "false"));
+  refreshSim();
+});
+document.querySelector('.keys .btn[data-f="262"]').setAttribute("aria-pressed", "true");
+$("play").onclick = play;
+window.addEventListener("sih:resize", draw);
+
+let lastA = 0, lastD = 0;
+function loop(ts) {
+  if (analyser && SIH.source === "sensor" && !$("freeze").checked) {
+    if (ts - lastD > 33) {
+      analyser.getFloatTimeDomainData(micBuf); frame = micBuf.slice(); lastD = ts;
+      if (ts - lastA > 120) { analyze(); lastA = ts; }
+      draw();
+    }
+  }
+  requestAnimationFrame(loop);
+}
+syncMode();
+frame = simFrame(); analyze(); draw();
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>

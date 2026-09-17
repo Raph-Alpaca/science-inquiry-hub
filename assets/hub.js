@@ -8,6 +8,9 @@
      SIH.source                                                     // 지금 데이터 소스
    앱은 SIHSensor.on(sample => …) 으로 표준 스트림 {quantity, unit, value, t} 만 받는다 (assets/sensor.js).
 
+   기기 마이크·카메라: APP.mediaIn = true 인 앱은 블루투스 모듈 없이 "sih:source" 이벤트만 받고,
+   getUserMedia 는 앱이 직접 연다. 권한 실패 등으로 되돌릴 때는 SIH.setSource("sim").
+
    도우미:
      SIH.reduced                    prefers-reduced-motion 여부
      SIH.dpr(canvas, w, h)          고해상도 2D 컨텍스트 (표시 크기에 맞춰 오버샘플링)
@@ -55,7 +58,7 @@
           <label for="srcSel">데이터</label>
           <select id="srcSel">
             <option value="sim">시뮬레이션</option>
-            <option value="sensor"${A.sensorIn ? "" : " disabled"}>실시간 센서 (${esc(A.sensor || "준비 중")})${A.sensorIn ? "" : " · 준비 중"}</option>
+            <option value="sensor"${A.sensorIn || A.mediaIn ? "" : " disabled"}>실시간 센서 (${esc(A.sensor || "준비 중")})${A.sensorIn || A.mediaIn ? "" : " · 준비 중"}</option>
           </select>
         </div>
       </header>
@@ -96,10 +99,11 @@
 
     const foot = document.createElement("footer");
     foot.className = "app-foot";
-    foot.textContent = "시뮬레이션 값은 교과서 수준의 단순화된 모형으로 계산한 것이며, 실제 측정값과 다를 수 있습니다." + (A.sensorIn ? " 실시간 센서의 측정값은 이 기기 안에서만 처리하며 어디로도 전송하지 않습니다." : "");
+    foot.textContent = "시뮬레이션 값은 교과서 수준의 단순화된 모형으로 계산한 것이며, 실제 측정값과 다를 수 있습니다." + (A.sensorIn ? " 실시간 센서의 측정값은 이 기기 안에서만 처리하며 어디로도 전송하지 않습니다." : "") + (A.mediaIn ? " 마이크·카메라 입력은 이 기기 안에서 바로 계산만 하고, 녹음·촬영해 저장하거나 어디로도 전송하지 않습니다." : "");
     wrap.appendChild(foot);
 
     if (A.sensorIn) sensorSetup(A);
+    else if (A.mediaIn) mediaSetup();
 
     // 기록 저장
     const key = "sih-note-" + A.id;
@@ -170,6 +174,17 @@
         for (let i = 0; i < n; i++) await window.SIHSensor.connectVirtual(list[i], A.sensorIn.want);
       }, 0);
     }
+  }
+
+  function mediaSetup() {
+    const sel = document.getElementById("srcSel"), dot = document.getElementById("srcDot");
+    // 이벤트는 동기로 보낸다: iOS 는 사용자 조작 안에서 만든 AudioContext 만 소리를 받는다
+    SIH.setSource = function (v) {
+      sel.value = v; SIH.source = v;
+      dot.classList.toggle("live", v === "sensor");
+      window.dispatchEvent(new CustomEvent("sih:source", { detail: { source: v } }));
+    };
+    sel.addEventListener("change", () => SIH.setSource(sel.value));
   }
 
   // ---------- 캔버스 도우미 ----------

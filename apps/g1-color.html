@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>빛의 색 측정기 · 과학탐구 앱 허브</title>
+<link rel="stylesheet" href="../assets/hub.css">
+<style>
+  .stage .split { --cols: minmax(0, 1.5fr) minmax(0, 1fr); }
+  #view { border-radius: var(--radius-s); background: #0b1418; }
+  .side { display: flex; flex-direction: column; gap: 10px; }
+  .swatch { display: flex; gap: 10px; align-items: center; text-align: left; }
+  .swatch i { flex: none; width: 54px; height: 54px; border-radius: 12px; border: 1px solid var(--line); background: #000; }
+  .swatch b { display: block; font-size: 1.35em; color: var(--ink); line-height: 1.2; }
+  .swatch small { color: var(--muted); font-variant-numeric: tabular-nums; }
+  .bars { display: grid; gap: 6px; text-align: left; }
+  .bar { display: grid; grid-template-columns: 4.6em minmax(0, 1fr) 3.2em; gap: 8px; align-items: center; font-size: .9em; }
+  .bar .track { height: 12px; background: var(--paper); border-radius: 6px; overflow: hidden; }
+  .bar .fill { height: 100%; width: 0; border-radius: 6px; }
+  .bar output { text-align: right; font-variant-numeric: tabular-nums; font-weight: 700; color: var(--ink); }
+  .stage .result:empty { display: none; }
+  .stage .result { margin: 12px 0 0; }
+  .mix { display: grid; gap: 8px; }
+  .mix .field label { align-items: center; }
+  #camBtn.on { background: var(--coral); border-color: var(--coral); color: #fff; }
+  .logwrap { overflow-x: auto; }
+  .logwrap td, .logwrap th { white-space: nowrap; }
+  .logwrap td:nth-child(2), .logwrap td:nth-child(3), .logwrap th:nth-child(2), .logwrap th:nth-child(3) { text-align: left; }
+
+  .screen { position: fixed; inset: 0; z-index: 50; background: #f00; display: flex; flex-direction: column; justify-content: flex-end; }
+  .screen[hidden] { display: none; }
+  .screen .bar2 { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; padding: 14px 16px calc(14px + env(safe-area-inset-bottom)); background: rgba(0,0,0,.55); }
+  .screen .bar2.off { opacity: 0; pointer-events: none; }
+  .screen .bar2 .btn { min-width: 64px; }
+  .screen .bar2 .btn[aria-pressed="true"] { background: #fff; color: #111; border-color: #fff; outline: 3px solid #111; }
+</style>
+</head>
+<body>
+<section class="lab">
+  <div class="stage">
+    <div class="split">
+      <div><canvas id="view" role="img" aria-label="측정하는 화면. 가운데 네모 안의 색을 잽니다"></canvas></div>
+      <div class="side">
+        <canvas id="wheel" role="img" aria-label="색상환 위에 측정한 색의 위치" style="--w: 230px"></canvas>
+        <div class="swatch"><i id="sw"></i><div><b id="cname">–</b><small id="hsv">색상 – · 채도 –</small></div></div>
+        <div class="bars" aria-label="빛의 삼원색 비율">
+          <div class="bar"><span>빨강 빛</span><div class="track"><div class="fill" id="bR" style="background:#e53935"></div></div><output id="pR">–</output></div>
+          <div class="bar"><span>초록 빛</span><div class="track"><div class="fill" id="bG" style="background:#2e9e44"></div></div><output id="pG">–</output></div>
+          <div class="bar"><span>파랑 빛</span><div class="track"><div class="fill" id="bB" style="background:#2c6fd1"></div></div><output id="pB">–</output></div>
+        </div>
+      </div>
+    </div>
+    <p class="cap" id="cap"></p>
+    <p class="result" id="msg" role="status"></p>
+  </div>
+  <aside class="controls">
+    <h3>색 받기</h3>
+    <div class="row"><button class="btn primary" id="camBtn">카메라 켜기</button></div>
+    <p class="hint">폰 뒷면 카메라로 가운데 네모 안의 색을 잽니다. 네모 안이 한 가지 색으로 가득 차게 가까이 대세요.</p>
+    <div class="sim-only mix" id="simBox">
+      <div class="field"><label>빛 섞기 (카메라 없이)</label></div>
+      <div class="field"><label for="lR">빨강 빛 <b></b></label><input type="range" id="lR" min="0" max="100" step="5" value="100"></div>
+      <div class="field"><label for="lG">초록 빛 <b></b></label><input type="range" id="lG" min="0" max="100" step="5" value="0"></div>
+      <div class="field"><label for="lB">파랑 빛 <b></b></label><input type="range" id="lB" min="0" max="100" step="5" value="0"></div>
+    </div>
+    <h3>예측하고 측정하기</h3>
+    <div class="field"><label for="target">무엇을 재나요?</label>
+      <select id="target">
+        <option value="100,0,0">빨강 빛</option><option value="0,100,0">초록 빛</option><option value="0,0,100">파랑 빛</option>
+        <option value="100,100,0">빨강 + 초록 빛</option><option value="0,100,100">초록 + 파랑 빛</option><option value="100,0,100">빨강 + 파랑 빛</option>
+        <option value="100,100,100">빨강 + 초록 + 파랑 빛</option><option value="free">직접 적기 (셀로판, 색종이 등)</option>
+      </select></div>
+    <div class="field" id="freeBox" hidden><label for="freeText">대상 이름</label><input type="text" id="freeText" maxlength="24" placeholder="예: 빨강 셀로판 + 흰 빛"></div>
+    <div class="field"><label for="pred">예측한 색</label>
+      <select id="pred"><option value="">고르기</option><option>빨강</option><option>주황</option><option>노랑</option><option>연두</option><option>초록</option><option>청록</option><option>파랑</option><option>보라</option><option>자홍</option><option>흰색</option><option>회색</option><option>검정</option></select></div>
+    <div class="row"><button class="btn primary" id="measure">측정해서 기록</button></div>
+    <div class="logwrap"><table>
+      <thead><tr><th>#</th><th>대상</th><th>예측 → 측정</th><th>빨·초·파 %</th></tr></thead>
+      <tbody id="log"><tr><td colspan="4" style="text-align:left;color:var(--muted)">아직 기록이 없습니다.</td></tr></tbody>
+    </table></div>
+    <div class="row"><button class="btn small" id="csv" disabled>CSV 내려받기</button><button class="btn small" id="clearLog" disabled>기록 지우기</button></div>
+    <h3>색 화면 띄우기</h3>
+    <p class="hint">모둠의 다른 기기(태블릿·노트북)에서 이 버튼을 누르면 화면 전체가 한 가지 빛의 색이 됩니다. 측정하는 폰의 카메라를 그 화면에 대세요.</p>
+    <div class="row"><button class="btn" id="screenBtn">색 화면 열기</button></div>
+  </aside>
+</section>
+<div class="screen" id="screen" role="dialog" aria-modal="true" aria-label="색 화면" hidden>
+  <div class="bar2" id="bar2" role="group" aria-label="화면 색 고르기">
+    <button class="btn" data-c="#ff0000">빨강</button><button class="btn" data-c="#00ff00">초록</button><button class="btn" data-c="#0000ff">파랑</button>
+    <button class="btn" data-c="#ffff00">빨+초</button><button class="btn" data-c="#00ffff">초+파</button><button class="btn" data-c="#ff00ff">빨+파</button>
+    <button class="btn" data-c="#ffffff">빨+초+파</button><button class="btn primary" id="screenClose">닫기</button>
+  </div>
+</div>
+<script src="../assets/hub.js"></script>
+<script>
+window.APP = {
+  id: "g1-color", grade: 1, unit: "빛과 파동", sensor: "기기 카메라", mediaIn: true, icon: "🌈",
+  title: "빛의 색 측정기",
+  question: "빨강·초록·파랑 빛을 섞으면 어떤 색으로 보일까? 색이 있는 물체는 어떤 빛을 반사할까?",
+  how: "무엇을 잴지 고르고 색을 먼저 예측한 뒤, 카메라로 측정해 기록하세요. 색 화면은 다른 기기에서 띄우면 됩니다. 폰 카메라를 컴퓨터 화면에 아주 가까이 대면 빨강·초록·파랑의 작은 점(화소)도 보입니다.",
+  notes: ["빨강 빛과 초록 빛을 함께 비추면 무슨 색으로 보일까요? 이유도 적어 보세요.", "측정한 색 이름과 빨강·초록·파랑 빛의 비율(%)을 표에서 옮겨 적어 보세요.", "영상 장치가 세 가지 빛만으로 여러 색을 만드는 원리를 빛의 합성으로 설명해 보세요."],
+  prompt: "중학교 1학년 '빛과 파동' 단원의 빛의 합성과 물체의 색 탐구용 웹앱을 만들어 줘. 휴대폰 브라우저에서 뒷면 카메라를 켜고 화면 가운데 네모 안의 평균 색을 구해, 색 이름·색상·채도와 빨강·초록·파랑 빛의 비율 막대, 색상환 위의 점으로 보여 줘. '빨강+초록 빛' 같은 측정 대상을 고르고 색을 예측한 뒤 측정하면 표에 예측과 결과를 기록하고 CSV로 내려받게 해 줘. 다른 기기에서 화면 전체를 빨강·초록·파랑과 그 합성색으로 띄우는 색 화면 모드와, 카메라가 없을 때 세 빛의 세기를 슬라이더로 섞어 보는 시뮬레이션도 넣어 줘. 영상은 저장하거나 전송하지 마.",
+  next: "빨강 셀로판을 댄 손전등으로 초록 색종이를 비추면 어떤 색으로 보일까? 측정으로 확인하려면 무엇을 같게 두어야 할까?"
+};
+SIH.shell();
+
+const $ = id => document.getElementById(id);
+const VW = 480, VH = 360;
+const vctx = SIH.dpr($("view"), VW, VH), wctx = SIH.dpr($("wheel"), 230, 230);
+
+// ---------- 색 계산 ----------
+// 화소의 sRGB 값은 밝기에 비례하지 않으므로, 빛의 양으로 되돌려(선형화) 평균한다
+const lin = c => { c /= 255; return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4; };
+const unlin = l => 255 * (l <= 0.0031308 ? 12.92 * l : 1.055 * l ** (1 / 2.4) - 0.055);
+const LUT = Array.from({ length: 256 }, (_, i) => lin(i));
+function analyzePixels(data) {
+  let r = 0, g = 0, b = 0, n = 0;
+  for (let i = 0; i < data.length; i += 4) { r += LUT[data[i]]; g += LUT[data[i + 1]]; b += LUT[data[i + 2]]; n++; }
+  r /= n; g /= n; b /= n;
+  const R = unlin(r), G = unlin(g), B = unlin(b);
+  const mx = Math.max(R, G, B), mn = Math.min(R, G, B), d = mx - mn;
+  let h = 0;
+  if (d > 0) h = mx === R ? 60 * (((G - B) / d) % 6) : mx === G ? 60 * ((B - R) / d + 2) : 60 * ((R - G) / d + 4);
+  if (h < 0) h += 360;
+  const s = mx > 0 ? d / mx : 0, v = mx / 255, sum = r + g + b;
+  const share = sum > 1e-6 ? [r / sum, g / sum, b / sum].map(x => x * 100) : [0, 0, 0];
+  return { rgb: [R, G, B].map(Math.round), h, s, v, share, name: colorName(h, s, v) };
+}
+function colorName(h, s, v) {
+  if (v < 0.16) return "검정";
+  if (s < 0.22) return v > 0.72 ? "흰색" : "회색";
+  if (h < 15 || h >= 335) return "빨강";
+  if (h < 42) return "주황";
+  if (h < 70) return "노랑";
+  if (h < 100) return "연두";
+  if (h < 150) return "초록";
+  if (h < 195) return "청록";
+  if (h < 255) return "파랑";
+  if (h < 290) return "보라";
+  return "자홍";
+}
+
+// ---------- 화면 ----------
+let est = null;
+const logRows = [];
+function say(t, good) { const m = $("msg"); if (m.textContent !== t) m.textContent = t; m.classList.toggle("good", !!good); }
+function clearEst() {
+  est = null;
+  $("sw").style.background = "#000"; $("cname").textContent = "–"; $("hsv").textContent = "색상 – · 채도 –";
+  ["R", "G", "B"].forEach(k => { $("b" + k).style.width = "0"; $("p" + k).textContent = "–"; });
+  drawWheel();
+}
+function showEst(e) {
+  est = e;
+  $("sw").style.background = `rgb(${e.rgb.join(",")})`;
+  $("cname").textContent = e.name;
+  $("hsv").textContent = e.s < 0.22 ? `채도 ${Math.round(e.s * 100)}% · 밝기 ${Math.round(e.v * 100)}%` : `색상 ${Math.round(e.h)}° · 채도 ${Math.round(e.s * 100)}%`;
+  ["R", "G", "B"].forEach((k, i) => { $("b" + k).style.width = e.share[i].toFixed(1) + "%"; $("p" + k).textContent = Math.round(e.share[i]) + "%"; });
+  drawWheel();
+}
+function drawWheel() {
+  const c = wctx, R = 88, cx = 115, cy = 115;
+  c.clearRect(0, 0, 230, 230);
+  for (let a = 0; a < 360; a += 2) {
+    c.beginPath(); c.moveTo(cx, cy);
+    c.arc(cx, cy, R, ((a - 90 - 1.2) * Math.PI) / 180, ((a - 90 + 1.2) * Math.PI) / 180);
+    c.fillStyle = `hsl(${a},100%,50%)`; c.fill();
+  }
+  const g = c.createRadialGradient(cx, cy, 0, cx, cy, R);
+  g.addColorStop(0, "rgba(255,255,255,1)"); g.addColorStop(1, "rgba(255,255,255,0)");
+  c.fillStyle = g; c.beginPath(); c.arc(cx, cy, R, 0, Math.PI * 2); c.fill();
+  c.font = SIH.px(c, 12, 600); c.textAlign = "center"; c.textBaseline = "middle"; c.fillStyle = "#3f5956";
+  [["빨강", 0], ["노랑", 60], ["초록", 120], ["청록", 180], ["파랑", 240], ["자홍", 300]].forEach(([t, a]) => {
+    const rad = ((a - 90) * Math.PI) / 180; c.fillText(t, cx + Math.cos(rad) * (R + 17), cy + Math.sin(rad) * (R + 13));
+  });
+  const pt = (e, r, fill, label) => {
+    const rad = ((e.h - 90) * Math.PI) / 180, d = Math.min(1, e.s) * R;
+    const x = cx + Math.cos(rad) * d, y = cy + Math.sin(rad) * d;
+    c.beginPath(); c.arc(x, y, r, 0, Math.PI * 2); c.fillStyle = fill; c.fill();
+    c.lineWidth = 2.5; c.strokeStyle = "#17302e"; c.stroke();
+    if (label) { c.fillStyle = "#17302e"; c.font = SIH.px(c, 11, 700); c.fillText(label, x, y - r - 7); }
+  };
+  logRows.forEach((r, i) => pt(r.est, 5, `rgb(${r.est.rgb.join(",")})`, String(i + 1)));
+  if (est) pt(est, 8, `rgb(${est.rgb.join(",")})`);
+}
+window.addEventListener("sih:resize", () => { drawWheel(); if (SIH.source !== "sensor") drawSim(); });
+
+// ---------- 빛 섞기 (시뮬레이션) ----------
+const mix = { R: 100, G: 0, B: 0 };
+function drawSim() {
+  const c = vctx;
+  c.save();
+  c.fillStyle = "#05090b"; c.fillRect(0, 0, VW, VH);
+  c.globalCompositeOperation = "lighter";
+  const r = 118, cx = VW / 2, cy = VH / 2 + 8;
+  [["R", 0, -58, [255, 0, 0]], ["G", -52, 34, [0, 255, 0]], ["B", 52, 34, [0, 0, 255]]].forEach(([k, dx, dy, col]) => {
+    const f = mix[k] / 100; if (!f) return;
+    c.beginPath(); c.arc(cx + dx, cy + dy, r, 0, Math.PI * 2);
+    c.fillStyle = `rgb(${col.map(v => Math.round(v * f)).join(",")})`; c.fill();
+  });
+  c.restore();
+  box(c);
+  c.save(); c.font = SIH.px(c, 13, 600); c.fillStyle = "rgba(255,255,255,.8)"; c.textAlign = "left";
+  c.fillText("빛 섞기 시뮬레이션: 세 빛이 모두 겹치는 가운데를 잽니다", 12, 22); c.restore();
+}
+function box(c) {
+  const s = Math.min(VW, VH) * 0.22;
+  c.save(); c.lineWidth = 3; c.strokeStyle = "#fff"; c.strokeRect(VW / 2 - s / 2, VH / 2 - s / 2, s, s);
+  c.lineWidth = 1.5; c.strokeStyle = "#000"; c.strokeRect(VW / 2 - s / 2 - 2.5, VH / 2 - s / 2 - 2.5, s + 5, s + 5); c.restore();
+}
+function simMeasure() {
+  const px = new Uint8ClampedArray(16 * 16 * 4);
+  for (let i = 0; i < px.length; i += 4) {
+    const n = () => (Math.random() - 0.5) * 3;
+    px[i] = 255 * mix.R / 100 + n(); px[i + 1] = 255 * mix.G / 100 + n(); px[i + 2] = 255 * mix.B / 100 + n(); px[i + 3] = 255;
+  }
+  showEst(analyzePixels(px));
+}
+const refreshSim = () => { if (SIH.source !== "sensor") { drawSim(); simMeasure(); } };
+["R", "G", "B"].forEach(k => SIH.bind("l" + k, v => { mix[k] = v; refreshSim(); }, "%"));
+
+// ---------- 카메라 ----------
+let stream = null, video = null, failed = false, raf = 0, req = 0;
+const probe = document.createElement("canvas"); probe.width = probe.height = 24;
+const pctx = probe.getContext("2d", { willReadFrequently: true });
+function fail(t) { say(t); failed = true; SIH.setSource("sim"); }
+function camError(e) {
+  const n = e && e.name;
+  if (n === "NotAllowedError" || n === "SecurityError") return "카메라 사용이 허용되지 않았습니다. 주소창 왼쪽의 사이트 설정에서 카메라를 '허용'으로 바꾼 뒤 다시 켜세요. 카카오톡 같은 앱 안에서 열었다면 크롬이나 사파리로 다시 여세요.";
+  if (n === "NotFoundError" || n === "OverconstrainedError") return "이 기기에서 카메라를 찾지 못했습니다.";
+  if (n === "NotReadableError") return "다른 앱이 카메라를 쓰고 있습니다. 카메라 앱을 닫고 다시 켜세요.";
+  return "카메라를 켜지 못했습니다. (" + (e && e.message || e) + ")";
+}
+async function startCam() {
+  const my = ++req;
+  if (!window.isSecureContext) return fail("카메라는 https 주소로 연 페이지에서만 쓸 수 있습니다.");
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) return fail("이 브라우저는 카메라 입력을 지원하지 않습니다. 크롬이나 사파리 최신판에서 열어 주세요.");
+  say("카메라 허용을 기다리는 중…");
+  let s;
+  try { s = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: "environment" }, width: { ideal: 640 }, height: { ideal: 480 } }, audio: false }); }
+  catch (e) { if (my === req) fail(camError(e)); return; }
+  // 기다리는 사이 껐다 켰으면 이 요청은 버린다 (카메라가 켜진 채 남지 않게)
+  if (my !== req || SIH.source !== "sensor") { s.getTracks().forEach(t => t.stop()); return; }
+  stream = s;
+  s.getVideoTracks().forEach(t => t.addEventListener("ended", () => { if (stream === s) fail("카메라 연결이 끊겼습니다. 다시 켜 주세요."); }));
+  video = document.createElement("video");
+  video.muted = true; video.playsInline = true; video.setAttribute("playsinline", "");
+  // iOS 사파리는 문서에 붙지 않은 video 의 화면을 캔버스로 넘기지 않을 때가 있어, 보이지 않게 붙여 둔다
+  video.style.cssText = "position:fixed;left:0;top:0;width:2px;height:2px;opacity:0;pointer-events:none";
+  document.body.appendChild(video);
+  video.srcObject = stream;
+  try { await video.play(); } catch (e) { if (my === req) { stopCam(); fail(camError(e)); } return; }
+  if (my !== req) return;
+  say("카메라가 켜졌습니다. 가운데 네모 안을 잴 색으로 채우세요.", true);
+  let last = 0;
+  const tick = ts => {
+    if (!stream) return;
+    raf = requestAnimationFrame(tick);
+    if (ts - last < 66 || !video.videoWidth) return;
+    last = ts;
+    const w = video.videoWidth, h = video.videoHeight, k = Math.max(VW / w, VH / h);
+    const sw = VW / k, sh = VH / k, sx = (w - sw) / 2, sy = (h - sh) / 2;
+    vctx.drawImage(video, sx, sy, sw, sh, 0, 0, VW, VH);
+    box(vctx);
+    // 네모 안 화소를 줄이지 않고 그대로 읽는다 (브라우저의 축소는 빛의 양이 아니라 화소값으로 평균하므로)
+    const bs = Math.min(160, Math.round(Math.min(sw, sh) * 0.22));
+    if (probe.width !== bs) probe.width = probe.height = bs;
+    pctx.drawImage(video, Math.round(w / 2 - bs / 2), Math.round(h / 2 - bs / 2), bs, bs, 0, 0, bs, bs);
+    showEst(analyzePixels(pctx.getImageData(0, 0, bs, bs).data));
+  };
+  raf = requestAnimationFrame(tick);
+}
+function stopCam() {
+  req++;
+  cancelAnimationFrame(raf);
+  if (stream) stream.getTracks().forEach(t => t.stop());
+  if (video) { video.srcObject = null; video.remove(); }
+  stream = video = null;
+}
+function syncMode() {
+  const live = SIH.source === "sensor";
+  $("camBtn").textContent = live ? "카메라 끄기" : "카메라 켜기";
+  $("camBtn").classList.toggle("on", live);
+  $("simBox").hidden = live;
+  $("cap").textContent = live
+    ? "카메라의 자동 색 보정 때문에 같은 색도 조명·기기에 따라 조금 다르게 잽니다. 두 대상을 비교할 때는 같은 폰, 같은 거리, 같은 조명에서 재세요."
+    : "빛의 삼원색 막대는 가운데 네모 안으로 들어오는 빨강·초록·파랑 빛의 양을 합이 100%가 되게 나눈 것입니다. 색상환에서 점이 가장자리에 가까울수록 선명한 색입니다.";
+}
+window.addEventListener("sih:source", e => {
+  syncMode();
+  if (e.detail.source === "sensor") {
+    vctx.fillStyle = "#0b1418"; vctx.fillRect(0, 0, VW, VH); box(vctx);
+    clearEst();
+    startCam();
+  } else {
+    stopCam(); if (!failed) say(""); failed = false;
+    drawSim(); simMeasure();
+  }
+});
+$("camBtn").onclick = () => SIH.setSource(SIH.source === "sensor" ? "sim" : "sensor");
+window.addEventListener("pagehide", stopCam);
+// 뒤로 가기로 돌아온 페이지는 카메라가 닫혀 있으므로 빛 섞기 상태로 맞춘다
+window.addEventListener("pageshow", e => { if (e.persisted && SIH.source === "sensor") SIH.setSource("sim"); });
+// 잠금 화면·다른 앱에 다녀오면 영상이 멈춰 있을 수 있어 다시 재생한다
+document.addEventListener("visibilitychange", () => { if (!document.hidden && video && video.paused) video.play().catch(() => {}); });
+
+// ---------- 예측·기록 ----------
+$("target").onchange = () => {
+  const v = $("target").value;
+  $("freeBox").hidden = v !== "free";
+  if (v !== "free" && SIH.source !== "sensor") { const [r, g, b] = v.split(",").map(Number); SIH.setRange("lR", r); SIH.setRange("lG", g); SIH.setRange("lB", b); }
+};
+$("measure").onclick = () => {
+  if (!est) return say("아직 측정한 색이 없습니다.");
+  const sel = $("target");
+  const target = sel.value === "free" ? ($("freeText").value.trim() || "직접 적은 대상") : sel.options[sel.selectedIndex].text;
+  const pred = $("pred").value;
+  logRows.push({ target, pred, est: { ...est, share: est.share.slice(), rgb: est.rgb.slice() }, src: SIH.source === "sensor" ? "카메라" : "시뮬레이션" });
+  renderLog();
+  if (!pred) say(`측정 결과: ${est.name}. 다음에는 측정 전에 색을 먼저 예측해 보세요.`);
+  else if (pred === est.name) say(`예측(${pred})과 측정 결과(${est.name})가 같습니다.`, true);
+  else say(`예측은 ${pred}, 측정 결과는 ${est.name}입니다. 빨강·초록·파랑 빛의 비율을 보고 왜 다른지 생각해 보세요.`);
+  drawWheel();
+};
+function renderLog() {
+  const tb = $("log");
+  tb.replaceChildren();
+  if (!logRows.length) { const tr = document.createElement("tr"); const td = document.createElement("td"); td.colSpan = 4; td.style.textAlign = "left"; td.style.color = "var(--muted)"; td.textContent = "아직 기록이 없습니다."; tr.appendChild(td); tb.appendChild(tr); }
+  logRows.forEach((r, i) => {
+    const tr = document.createElement("tr");
+    const cells = [String(i + 1), r.target, `${r.pred || "–"} → ${r.est.name}`, r.est.share.map(Math.round).join("·")];
+    cells.forEach((t, j) => { const td = document.createElement("td"); td.textContent = t; if (j === 2 && r.pred) td.className = r.pred === r.est.name ? "yes" : "no"; tr.appendChild(td); });
+    tb.appendChild(tr);
+  });
+  $("csv").disabled = $("clearLog").disabled = !logRows.length;
+}
+$("csv").onclick = () => {
+  // 이름이 = + - @ 로 시작하면 엑셀이 수식으로 실행하므로 앞에 ' 를 붙인다
+  const q = v => { let t = String(v); if (typeof v === "string" && /^[=+\-@\t\r]/.test(t)) t = "'" + t; return `"${t.replace(/"/g, '""')}"`; };
+  const rows = [["순서", "대상", "입력", "예측", "측정한 색", "색상(°)", "채도(%)", "밝기(%)", "빨강 빛(%)", "초록 빛(%)", "파랑 빛(%)", "R", "G", "B"]]
+    .concat(logRows.map((r, i) => [i + 1, r.target, r.src, r.pred, r.est.name, Math.round(r.est.h), Math.round(r.est.s * 100), Math.round(r.est.v * 100), ...r.est.share.map(x => x.toFixed(1)), ...r.est.rgb]));
+  const a = document.createElement("a");
+  const url = URL.createObjectURL(new Blob(["﻿" + rows.map(r => r.map(q).join(",")).join("\r\n")], { type: "text/csv;charset=utf-8" }));
+  a.href = url; a.download = "빛의색-측정기록.csv"; document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+};
+$("clearLog").onclick = () => { logRows.length = 0; renderLog(); drawWheel(); };
+
+// ---------- 색 화면 ----------
+const scr = $("screen"), bar2 = $("bar2");
+let barT = 0, wake = null;
+function pickScreen(btn) {
+  scr.style.background = btn.dataset.c;
+  bar2.querySelectorAll("[data-c]").forEach(b => b.setAttribute("aria-pressed", b === btn ? "true" : "false"));
+  hideBarSoon();
+}
+function hideBarSoon() { bar2.classList.remove("off"); clearTimeout(barT); barT = setTimeout(() => bar2.classList.add("off"), 2500); }
+$("screenBtn").onclick = () => {
+  scr.hidden = false;
+  pickScreen(bar2.querySelector("[data-c]"));
+  if (scr.requestFullscreen) scr.requestFullscreen().catch(() => {});
+  // 재는 동안 화면이 어두워지거나 꺼지면 밝기가 바뀌므로 켜 둔다 (지원하는 브라우저만)
+  if (navigator.wakeLock) navigator.wakeLock.request("screen").then(l => (wake = l), () => {});
+  bar2.querySelector("[data-c]").focus();
+};
+function closeScreen() {
+  clearTimeout(barT);
+  scr.hidden = true;
+  if (wake) { wake.release().catch(() => {}); wake = null; }
+  // 전체 화면이 풀리는 동안 브라우저가 포커스를 옮기므로, 풀린 뒤에 버튼으로 돌려준다
+  const back = () => $("screenBtn").focus();
+  if (document.fullscreenElement && document.exitFullscreen) document.exitFullscreen().then(back, back);
+  else back();
+}
+bar2.querySelectorAll("[data-c]").forEach(b => b.onclick = e => { e.stopPropagation(); pickScreen(b); });
+$("screenClose").onclick = e => { e.stopPropagation(); closeScreen(); };
+scr.addEventListener("click", hideBarSoon);
+scr.addEventListener("keydown", e => {
+  if (e.key === "Escape") return closeScreen();
+  hideBarSoon();
+  if (e.key === "Tab") {   // 색 화면이 열려 있는 동안 포커스를 버튼 줄 안에 가둔다
+    const btns = [...bar2.querySelectorAll("button")], i = btns.indexOf(document.activeElement);
+    e.preventDefault();
+    btns[(i + (e.shiftKey ? -1 : 1) + btns.length) % btns.length].focus();
+  }
+});
+document.addEventListener("fullscreenchange", () => { if (!document.fullscreenElement && !scr.hidden) closeScreen(); });
+
+syncMode();
+drawSim(); simMeasure();
+</script>
+</body>
+</html>
