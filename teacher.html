@@ -74,6 +74,21 @@
   <div class="ft"><button class="btn" id="sh-cancel">취소</button><button class="btn primary" id="sh-save">저장</button></div>
 </dialog>
 
+<!-- 지우기 전 확인: 지울 것을 보여 주고, 필요하면 이름이나 "삭제"를 직접 적어야 단추가 켜진다 -->
+<dialog class="sheet" id="dangerDlg" aria-labelledby="dg-title">
+  <form class="bd" id="dg-form">
+    <h2 id="dg-title"></h2>
+    <p class="danger-what" id="dg-what"></p>
+    <p class="upload-note" id="dg-note" style="margin:0 0 14px"></p>
+    <div class="field" id="dg-typebox" style="margin-bottom:0">
+      <label for="dg-type" id="dg-typelabel"></label>
+      <input type="text" id="dg-type" autocomplete="off" spellcheck="false">
+    </div>
+    <label class="consent" id="dg-backupbox" style="margin:16px 0 0"><input type="checkbox" id="dg-backup" checked><span>지우기 전에 이 책장의 책 목록을 CSV로 내려받아 둡니다</span></label>
+  </form>
+  <div class="ft"><button class="btn" id="dg-cancel">취소</button><button class="btn danger" id="dg-ok" disabled></button></div>
+</dialog>
+
 <dialog class="sheet" id="editDlg">
   <form method="dialog" class="bd" id="editForm">
     <h2>책 수정</h2>
@@ -134,6 +149,77 @@ async function copy(text, what) {
   catch (e) { window.prompt(what + "를 복사하세요", text); }
 }
 
+/* ---------- 지우기 안전장치 ----------
+ * 1) 확인창: 무엇이 지워지는지 보여 주고, 책장은 책장 이름을, 책은 "삭제"를 직접 적어야 단추가 켜진다.
+ * 2) 되돌리기: 확인해도 바로 지우지 않는다. 화면에서만 먼저 빼고 UNDO_SEC 초 동안 "되돌리기"를 띄운 뒤 지운다.
+ *    그 사이 창을 닫으면 지우지 않는다(안전한 쪽). 로그아웃할 때는 기다리던 것을 마저 지운다. */
+const UNDO_SEC = 10;
+const pendingDel = new Map();                 // "shelf:id" · "book:id" · "allowed:email" → { run, timer }
+const gone = (key) => pendingDel.has(key);
+const liveShelves = () => shelves.filter((s) => !gone("shelf:" + s.id));
+const liveBooks = (s) => (data[s.id]?.books || []).filter((b) => !gone("book:" + b.id));
+
+function askDanger({ title, what, note = "", word = "", wordLabel = "", ok, backup = false }) {
+  const dlg = $("dangerDlg"), input = $("dg-type"), okBtn = $("dg-ok");
+  $("dg-title").textContent = title;
+  $("dg-what").textContent = what;
+  $("dg-note").textContent = note; $("dg-note").hidden = !note;
+  $("dg-typebox").hidden = !word;
+  $("dg-typelabel").textContent = wordLabel;
+  $("dg-backupbox").hidden = !backup; $("dg-backup").checked = true;
+  input.value = "";
+  okBtn.textContent = ok;
+  const norm = (v) => v.replace(/\s+/g, " ").trim();
+  const check = () => { okBtn.disabled = !!word && norm(input.value) !== norm(word); };
+  check();
+  input.oninput = check; input.oncompositionend = check;   // 한글 입력이 끝났을 때도 다시 본다
+  return new Promise((resolve) => {
+    let answered = false;
+    const finish = (yes) => {
+      if (answered) return; answered = true;
+      if (dlg.open) dlg.close();
+      resolve(yes ? { backup: backup && $("dg-backup").checked } : null);
+    };
+    okBtn.onclick = () => { if (!okBtn.disabled) finish(true); };
+    $("dg-cancel").onclick = () => finish(false);
+    $("dg-form").onsubmit = (ev) => { ev.preventDefault(); if (!okBtn.disabled) finish(true); };
+    dlg.onclose = () => finish(false);         // Esc 로 닫아도 취소
+    dlg.showModal();
+    (word ? input : $("dg-cancel")).focus();   // 적을 것이 없으면 "취소"에 먼저 초점
+  });
+}
+
+function deleteLater(key, label, run, restore) {
+  let stack = $("undoStack");
+  if (!stack) { stack = document.createElement("div"); stack.id = "undoStack"; stack.className = "undo-stack"; document.body.appendChild(stack); }
+  const el = document.createElement("div");
+  el.className = "undo-toast"; el.setAttribute("role", "status"); el.dataset.key = key;
+  el.innerHTML = `<span>${esc(label)} <small>${UNDO_SEC}초 뒤 지워집니다</small></span><button class="btn small" type="button">되돌리기</button>`;
+  stack.appendChild(el);
+  let left = UNDO_SEC;
+  const tick = setInterval(() => { left -= 1; el.querySelector("small").textContent = `${Math.max(left, 0)}초 뒤 지워집니다`; }, 1000);
+  const entry = {};
+  const done = () => { clearInterval(tick); clearTimeout(entry.timer); el.remove(); pendingDel.delete(key); };
+  entry.cancel = () => { done(); restore(); };
+  entry.run = async () => {
+    done();
+    try { await run(); }
+    catch (e) { toast("지우지 못했어요: " + (e.code || e.message)); restore(); }
+  };
+  entry.timer = setTimeout(entry.run, UNDO_SEC * 1000);
+  el.querySelector("button").onclick = () => { entry.cancel(); toast("되돌렸습니다"); };
+  pendingDel.set(key, entry);
+  return entry;
+}
+// 로그아웃 전에: 기다리던 삭제를 마저 한다
+async function flushDeletes() { await Promise.all([...pendingDel.values()].map((e) => e.run())); }
+// 기다리는 삭제가 있을 때 창을 닫으려 하면 한 번 묻는다 (닫으면 지우지 않는다)
+window.addEventListener("beforeunload", (ev) => {
+  if (!pendingDel.size) return;
+  ev.preventDefault(); ev.returnValue = "";
+});
+function redraw() { if (user && access.approved) render(); }
+
 /* ---------- 로그인 ----------
  * 승인 여부는 한 번 읽고 끝내지 않고 계속 지켜본다(watchAccess).
  *  - 로그인 직후 연결이 잠시 흔들려도 서버가 확인해 준 값이 올 때까지 기다리므로, 승인된 선생님이
@@ -157,7 +243,7 @@ onUser((u) => {
     await reload();
   });
 });
-$("logout").onclick = async () => { await logout(); location.reload(); };
+$("logout").onclick = async () => { await flushDeletes(); await logout(); location.reload(); };
 
 function renderChecking() {
   $("main").innerHTML = `
@@ -226,6 +312,7 @@ function renderPending(u) {
 }
 
 /* ---------- 관리자: 선생님 승인 ---------- */
+const liveAllowed = () => allowed.filter((a) => !gone("allowed:" + a.id));
 function adminCard() {
   return `
   <section class="card shelf-card" id="adminCard">
@@ -238,7 +325,7 @@ function adminCard() {
     <button class="btn primary" id="ad-add">승인 명단에 추가</button>
     <table class="books" style="margin-top:18px">
       <thead><tr><th>이메일</th><th>학교</th><th>추가한 날</th><th></th></tr></thead>
-      <tbody>${!adminLoaded ? `<tr><td colspan="4" class="upload-note">명단을 불러오는 중…</td></tr>` : allowed.length ? allowed.map((a) => `
+      <tbody>${!adminLoaded ? `<tr><td colspan="4" class="upload-note">명단을 불러오는 중…</td></tr>` : liveAllowed().length ? liveAllowed().map((a) => `
         <tr><td data-l="이메일">${esc(a.email || a.id)}</td>
             <td data-l="학교">${esc(a.school || "-")}</td>
             <td data-l="추가">${a.addedAt ? new Date(a.addedAt).toLocaleDateString("ko-KR") : "-"}</td>
@@ -265,6 +352,8 @@ function wireAdmin() {
     add.disabled = true;
     try {
       const school = $("ad-school").value.trim();
+      const waiting = pendingDel.get("allowed:" + mail.toLowerCase());
+      if (waiting) waiting.cancel();
       const key = await addAllowed({ email: mail, school, by: user.email || "" });
       $("ad-mail").value = ""; $("ad-school").value = "";
       toast("승인했습니다");
@@ -276,12 +365,22 @@ function wireAdmin() {
     add.disabled = false;
   };
   document.querySelectorAll("[data-ad]").forEach((b) => (b.onclick = async () => {
-    if (!confirm(`${b.dataset.ad} 의 사용 승인을 취소할까요? 이미 만든 책장은 그대로 남습니다.`)) return;
-    try {
-      await removeAllowed(b.dataset.ad); toast("승인을 취소했습니다");
-      allowed = allowed.filter((a) => a.id !== b.dataset.ad); renderAdminCard();
-    }
-    catch (e) { toast("취소하지 못했어요: " + (e.code || e.message)); }
+    const mail = b.dataset.ad, row = allowed.find((a) => a.id === mail);
+    const yes = await askDanger({
+      title: "사용 승인 취소",
+      what: `${mail}${row && row.school ? ` (${row.school})` : ""}`,
+      note: "이 계정은 더 이상 책장을 만들거나 관리할 수 없습니다. 이미 만든 책장과 책은 그대로 남습니다.",
+      ok: "승인 취소",
+    });
+    if (!yes) return;
+    deleteLater("allowed:" + mail, `${mail} 승인 취소`,
+      async () => {
+        await removeAllowed(mail);
+        allowed = allowed.filter((a) => a.id !== mail); renderAdminCard();
+        toast("승인을 취소했습니다");
+      },
+      () => renderAdminCard());
+    renderAdminCard();
   }));
 }
 /* 승인 명단·전체 책장은 구독으로 받는다. 방금 추가·취소한 것은 서버 응답을 기다리지 않고 바로 표에 뜬다. */
@@ -366,9 +465,10 @@ function liveRender() {
   }
 }
 function render() {
-  if (!shelves.length) { renderFirstRun(); return; }
-  const pending = shelves.reduce((n, s) => n + data[s.id].books.filter((b) => b.status === "pending").length, 0);
-  const first = shelves[0];
+  const shown = liveShelves();
+  if (!shown.length) { renderFirstRun(); return; }
+  const pending = shown.reduce((n, s) => n + liveBooks(s).filter((b) => b.status === "pending").length, 0);
+  const first = shown[0];
   $("main").innerHTML = `
     <div class="steps3">
       <div class="step done"><span class="n">1</span><div><b>로그인했어요</b><small>완료</small></div></div>
@@ -376,7 +476,7 @@ function render() {
       <div class="step"><span class="n">3</span><div><b>제출된 책을 승인하면 책장에 꽂혀요</b><small>${pending ? `대기 ${pending}권` : "대기 없음"}</small></div></div>
     </div>
     ${mergeBar()}
-    ${shelves.map(shelfCard).join("")}
+    ${shown.map(shelfCard).join("")}
     <button class="add-shelf" id="addShelf">+ 책장 하나 더 만들기 (예: 3학년 책장)</button>
     ${access.admin ? adminCard() : ""}`;
   wire();
@@ -384,25 +484,26 @@ function render() {
 }
 // 책장이 둘 이상일 때만: 고른 책장들을 미리보기 창에 이어서 본다
 function mergeBar() {
-  if (shelves.length < 2) return "";
-  shelves.forEach((s) => { if (!mergeKnown.has(s.id)) { mergeKnown.add(s.id); mergeSel.add(s.id); } });
+  const shown = liveShelves();
+  if (shown.length < 2) return "";
+  shown.forEach((s) => { if (!mergeKnown.has(s.id)) { mergeKnown.add(s.id); mergeSel.add(s.id); } });
   return `
   <section class="card merge-bar" id="mergeBar">
     <div class="merge-hd"><b>책장 함께 보기</b><small>고른 책장의 서가를 한 화면에 이어서 봅니다. 선생님 화면에서만 쓰는 기능입니다.</small></div>
     <div class="merge-picks">
-      ${shelves.map((s) => `<label class="merge-pick"><input type="checkbox" data-m="${s.id}"${mergeSel.has(s.id) ? " checked" : ""}> ${esc(s.title)} <small>${esc(s.code)}</small></label>`).join("")}
+      ${shown.map((s) => `<label class="merge-pick"><input type="checkbox" data-m="${s.id}"${mergeSel.has(s.id) ? " checked" : ""}> ${esc(s.title)} <small>${esc(s.code)}</small></label>`).join("")}
     </div>
     <button class="btn small go" id="mergeGo">고른 책장 함께 보기</button>
   </section>`;
 }
 function shelfCard(s) {
-  const d = data[s.id], t = tab[s.id];
+  const d = data[s.id], t = tab[s.id], books = liveBooks(s);
   const counts = {
-    pending: d.books.filter((b) => b.status === "pending").length,
-    approved: d.books.filter((b) => b.status === "approved").length,
-    hidden: d.books.filter((b) => b.status === "hidden").length,
+    pending: books.filter((b) => b.status === "pending").length,
+    approved: books.filter((b) => b.status === "approved").length,
+    hidden: books.filter((b) => b.status === "hidden").length,
   };
-  const rows = d.books.filter((b) => b.status === t);
+  const rows = books.filter((b) => b.status === t);
   return `
   <section class="card shelf-card" data-s="${s.id}">
     <div class="hd">
@@ -497,13 +598,13 @@ function wire() {
       if (cb.checked) mergeSel.add(cb.dataset.m); else mergeSel.delete(cb.dataset.m);
     }));
     $("mergeGo").onclick = () => {
-      const picked = shelves.filter((s) => mergeSel.has(s.id));
+      const picked = liveShelves().filter((s) => mergeSel.has(s.id));
       if (picked.length < 2) { toast("책장을 두 개 이상 골라 주세요"); return; }
       openPeek(picked, $("mergeGo"));
     };
   }
   $("addShelf").onclick = () => {
-    const s = shelves[0];
+    const s = liveShelves()[0];
     renderFirstRun({ school: s.school, teacherName: s.teacherName });
     window.scrollTo({ top: document.body.scrollHeight, behavior: "smooth" });
   };
@@ -523,7 +624,7 @@ function wire() {
       if (a === "csv") return exportCsv(s);
       if (a === "settings") return openSettings(s);
       if (a === "approveAll") {
-        const ids = data[s.id].books.filter((b) => b.status === "pending").map((b) => b.id);
+        const ids = liveBooks(s).filter((b) => b.status === "pending").map((b) => b.id);
         await setStatus(s, ids, "approved");
         clearShelfCache(s.code); await reload(); toast(`${ids.length}권을 승인했어요`);
         return;
@@ -578,7 +679,7 @@ function closePeek() {
 }
 function refreshPeek() {
   if ($("peek").hidden || !peekShelves.length) return;
-  const live = peekShelves.map((p) => shelves.find((x) => x.id === p.id)).filter(Boolean);
+  const live = peekShelves.map((p) => liveShelves().find((x) => x.id === p.id)).filter(Boolean);
   if (!live.length) { closePeek(); return; }          // 책장을 지웠으면 닫는다
   // 화면을 다시 그리면 단추도 새로 만들어지므로, 닫을 때 돌아갈 단추를 다시 찾아 둔다
   peekFrom = (live.length > 1 ? $("mergeGo") : document.querySelector(`.shelf-card[data-s="${live[0].id}"] [data-a="peek"]`)) || peekFrom;
@@ -649,8 +750,8 @@ function openSettings(s) {
   $("sh-code").textContent = s.code;
   const n = (data[s.id]?.books || []).length;
   $("sh-delnote").textContent = n
-    ? `이 책장과 안에 든 책 ${n}권, 모둠원 이름까지 모두 지워집니다. 되돌릴 수 없습니다.`
-    : "이 책장을 지웁니다. 되돌릴 수 없습니다.";
+    ? `이 책장과 안에 든 책 ${n}권, 모둠원 이름까지 모두 지워집니다. 누르면 책장 이름을 한 번 더 적어 확인하고, 지운 뒤 ${UNDO_SEC}초 안에는 되돌릴 수 있습니다.`
+    : `이 책장을 지웁니다. 누르면 책장 이름을 한 번 더 적어 확인합니다.`;
   $("shelfDlg").showModal();
 }
 $("sh-cancel").onclick = () => $("shelfDlg").close();
@@ -680,14 +781,32 @@ $("sh-recode").onclick = async () => {
 $("sh-del").onclick = async () => {
   if (!editingShelf) return;
   const s = editingShelf;
-  if (!confirm(`"${s.title}" 책장을 지울까요? ${$("sh-delnote").textContent}`)) return;
+  const books = data[s.id]?.books || [];
+  const approved = books.filter((b) => b.status === "approved").length;
+  const yes = await askDanger({
+    title: "책장 지우기",
+    what: `"${s.title}" (코드 ${s.code}) · 책 ${books.length}권${approved ? `, 그중 공개 중 ${approved}권` : ""}`,
+    note: books.length
+      ? "책장과 안에 든 책, 모둠원 이름까지 모두 지워집니다. 학생들이 보던 공개 책장도 사라지고, 지운 뒤에는 되살릴 수 없습니다."
+      : "빈 책장입니다. 지우면 이 코드로는 더 이상 제출할 수 없습니다.",
+    word: s.title,
+    wordLabel: `확인을 위해 책장 이름 "${s.title}"을(를) 그대로 적어 주세요`,
+    ok: "이 책장 지우기",
+    backup: books.length > 0,
+  });
+  if (!yes) return;
   $("shelfDlg").close();
-  try {
-    await deleteShelf(s);
-    clearShelfCache(s.code);
-    delete data[s.id];
-    await reload(); toast("책장을 지웠습니다");
-  } catch (e) { toast("지우지 못했어요: " + (e.code || e.message)); }
+  if (yes.backup) exportCsv(s);
+  deleteLater("shelf:" + s.id, `"${s.title}" 책장 지우기`,
+    async () => {
+      await deleteShelf(s);
+      clearShelfCache(s.code);
+      delete data[s.id];
+      await reload(); toast("책장을 지웠습니다");
+    },
+    () => redraw());
+  redraw();
+  refreshPeek();
 };
 
 /* ---------- 수정 ---------- */
@@ -723,11 +842,21 @@ $("ed-save").onclick = async () => {
 };
 $("ed-delete").onclick = async () => {
   if (!editing) return;
-  if (!confirm("이 책을 삭제할까요? 되돌릴 수 없습니다.")) return;
   const { s, b } = editing;
+  const yes = await askDanger({
+    title: "책 삭제",
+    what: `"${b.title}" · ${b.grade}학년 ${b.classNo}반 ${b.team || ""}`.trim(),
+    note: "학생이 제출한 내용과 모둠원 이름이 지워지고 되살릴 수 없습니다. 학생에게 안 보이게만 하려면 삭제 대신 목록의 \"숨김\"을 쓰세요.",
+    word: "삭제",
+    wordLabel: "확인을 위해 \"삭제\"라고 적어 주세요",
+    ok: "이 책 삭제",
+  });
+  if (!yes) return;
   $("editDlg").close();
-  await deleteBook(s.id, b.id);
-  clearShelfCache(s.code); await reload(); toast("삭제했어요");
+  deleteLater("book:" + b.id, `"${b.title}" 삭제`,
+    async () => { await deleteBook(s.id, b.id); clearShelfCache(s.code); await reload(); toast("삭제했어요"); },
+    () => redraw());
+  redraw();
 };
 </script>
 </body>

@@ -209,20 +209,122 @@ for (const [vn, vp] of Object.entries(VIEWS)) {
   await ctx.close();
 }
 
-// 6-1) 책장 설정에서 삭제
+// 6-1) 지우기 안전장치: 확인창에 이름·"삭제"를 적어야 하고, 지운 뒤에도 잠깐 되돌릴 수 있다
 {
-  const ctx = await browser.newContext({ viewport: VIEWS.laptop });
+  const ctx = await browser.newContext({ viewport: VIEWS.laptop, acceptDownloads: true });
   const { page, errors } = await open(ctx, "/teacher.html?demo=1");
   await page.waitForSelector(".shelf-card");
-  page.on("dialog", (d) => d.accept());
+  let nativeDialogs = 0;
+  page.on("dialog", (d) => { if (d.type() !== "beforeunload") nativeDialogs++; d.accept(); });
+  const bookCount = () => page.evaluate(() => document.querySelectorAll(".shelf-card[data-s] tr[data-b]").length);
+  const undoCount = () => page.evaluate(() => document.querySelectorAll(".undo-toast").length);
+  const stored = () => page.evaluate(() => JSON.parse(localStorage.getItem("sih-demo-shelf-v1")));
+  // 데모 저장소는 처음 쓰기 전까지 비어 있으므로, 같은 이름으로 한 번 저장해 실제 데이터를 채워 둔다
+  await page.evaluate(async () => {
+    const m = await import("/assets/shelf-data.js");
+    const [s] = await m.myShelves("demo-uid");
+    await m.renameShelf(s, { school: s.school, teacherName: s.teacherName, title: s.title });
+  });
+
+  // --- 책 삭제 ---
+  await page.click('[role=tab][data-t="approved"]');
+  await page.waitForTimeout(200);
+  const before = await bookCount();
+  const target = await page.$eval(".shelf-card[data-s] tr[data-b]", (tr) => tr.dataset.b);
+  await page.click(`tr[data-b="${target}"] [data-a="edit"]`);
+  await page.click("#ed-delete");
+  await page.waitForSelector("#dangerDlg[open]");
+  check("책 삭제: 확인창이 뜸 (브라우저 기본 확인창 아님)", nativeDialogs === 0);
+  check("책 삭제: 적기 전에는 삭제 단추가 꺼져 있음", await page.isDisabled("#dg-ok"));
+  await page.fill("#dg-type", "삭 제하");
+  check("책 삭제: 틀리게 적으면 여전히 꺼져 있음", await page.isDisabled("#dg-ok"));
+  await page.click("#dg-cancel");
+  check("책 삭제: 취소하면 아무것도 지워지지 않음", (await bookCount()) === before && (await undoCount()) === 0);
+  await page.click("#ed-delete");
+  await page.waitForSelector("#dangerDlg[open]");
+  check("책 삭제: 다시 열면 적은 글자가 비워져 있음", (await page.inputValue("#dg-type")) === "" && await page.isDisabled("#dg-ok"));
+  await page.fill("#dg-type", "삭제");
+  check("책 삭제: \"삭제\"라고 적으면 단추가 켜짐", !(await page.isDisabled("#dg-ok")));
+  await page.screenshot({ path: `${OUT}/laptop-teacher-delete-book-confirm.png` });
+  await page.click("#dg-ok");
+  await page.waitForTimeout(300);
+  check("책 삭제: 목록에서 바로 빠짐", (await bookCount()) === before - 1);
+  check("책 삭제: 되돌리기 알림이 뜸", (await undoCount()) === 1);
+  check("책 삭제: 아직 저장소에서는 지워지지 않음", (await stored()).books.demo.some((b) => b.id === target));
+  await page.screenshot({ path: `${OUT}/laptop-teacher-delete-book-undo.png` });
+  await page.click(".undo-toast button");
+  await page.waitForTimeout(300);
+  check("책 삭제: 되돌리기를 누르면 목록에 돌아옴", (await bookCount()) === before && (await undoCount()) === 0);
+  await page.waitForTimeout(10500);
+  check("책 삭제: 되돌린 책은 시간이 지나도 남아 있음", (await stored()).books.demo.some((b) => b.id === target));
+  // 이번에는 기다려서 실제로 지운다
+  await page.click(`tr[data-b="${target}"] [data-a="edit"]`);
+  await page.click("#ed-delete");
+  await page.fill("#dg-type", "삭제");
+  await page.click("#dg-ok");
+  await page.waitForTimeout(10800);
+  check("책 삭제: 10초 뒤 저장소에서 지워짐", !(await stored()).books.demo.some((b) => b.id === target));
+  check("책 삭제: 지운 뒤 알림이 사라지고 목록도 그대로 줄어 있음", (await undoCount()) === 0 && (await bookCount()) === before - 1);
+
+  // --- 책장 삭제 ---
   await page.click('[data-a="settings"]');
-  await page.waitForTimeout(500);
+  await page.waitForTimeout(300);
   check("삭제 안내에 책 권수 표시", /권/.test(await page.textContent("#sh-delnote")));
   await page.click("#sh-del");
-  await page.waitForTimeout(1500);
+  await page.waitForSelector("#dangerDlg[open]");
+  check("책장 삭제: 확인창에 책장 이름과 권수가 보임", /2학년 책장/.test(await page.textContent("#dg-what")) && /권/.test(await page.textContent("#dg-what")));
+  check("책장 삭제: 백업 내려받기가 기본으로 켜져 있음", await page.isChecked("#dg-backup"));
+  await page.fill("#dg-type", "삭제");
+  check("책장 삭제: \"삭제\"만 적어서는 안 켜짐 (책장 이름을 적어야 함)", await page.isDisabled("#dg-ok"));
+  await page.fill("#dg-type", "2학년 책장");
+  check("책장 삭제: 책장 이름을 적으면 켜짐", !(await page.isDisabled("#dg-ok")));
+  await page.screenshot({ path: `${OUT}/laptop-teacher-delete-shelf-confirm.png` });
+  const [dl] = await Promise.all([page.waitForEvent("download", { timeout: 5000 }).catch(() => null), page.click("#dg-ok")]);
+  check("책장 삭제: 지우기 전에 CSV 백업을 내려받음", dl && /\.csv$/.test(dl.suggestedFilename()), dl && dl.suggestedFilename());
+  await page.waitForTimeout(300);
+  check("책장 삭제: 화면에서 바로 빠짐", (await page.textContent("#main")).includes("학교 책장 만들기"));
+  check("책장 삭제: 아직 저장소에는 남아 있음", (await stored()).shelves.some((x) => x.id === "demo"));
+  await page.click(".undo-toast button");
+  await page.waitForTimeout(300);
+  check("책장 삭제: 되돌리면 책장 화면으로 돌아옴", !!(await page.$(".shelf-card[data-s]")));
+  await page.click('[data-a="settings"]');
+  await page.click("#sh-del");
+  await page.fill("#dg-type", "2학년 책장");
+  await page.uncheck("#dg-backup");
+  await page.click("#dg-ok");
+  await page.waitForTimeout(10800);
   check("책장 삭제 후 첫 화면으로", (await page.textContent("#main")).includes("학교 책장 만들기"));
+  check("책장 삭제: 10초 뒤 저장소에서 지워짐", !(await stored()).shelves.some((x) => x.id === "demo"));
+  check("지우는 동안 브라우저 기본 확인창이 한 번도 뜨지 않음", nativeDialogs === 0, String(nativeDialogs));
   check("책장 삭제 중 콘솔 오류 없음", errors.length === 0, errors.join(" | "));
   await page.close(); await ctx.close();
+}
+
+// 6-2) 휴대전화 폭에서 확인창과 되돌리기 알림이 넘치지 않음
+{
+  const ctx = await browser.newContext({ viewport: VIEWS.mobile });
+  const { page, errors } = await open(ctx, "/teacher.html?demo=1");
+  await page.evaluate(() => localStorage.removeItem("sih-demo-shelf-v1"));
+  await page.reload({ waitUntil: "networkidle" });
+  await page.waitForSelector(".shelf-card[data-s]");
+  await page.click('[data-a="settings"]');
+  await page.click("#sh-del");
+  await page.waitForSelector("#dangerDlg[open]");
+  const dlgBox = await page.$eval("#dangerDlg", (el) => { const r = el.getBoundingClientRect(); return { l: r.left, r: r.right, W: innerWidth }; });
+  check("mobile: 확인창이 화면 폭 안에 들어옴", dlgBox.l >= 0 && dlgBox.r <= dlgBox.W, JSON.stringify(dlgBox));
+  await page.screenshot({ path: `${OUT}/mobile-teacher-delete-shelf-confirm.png` });
+  await page.fill("#dg-type", "2학년 책장");
+  await page.uncheck("#dg-backup");
+  await page.click("#dg-ok");
+  await page.waitForTimeout(300);
+  const t = await page.$eval(".undo-toast", (el) => { const r = el.getBoundingClientRect(); return { l: r.left, r: r.right, W: innerWidth }; });
+  check("mobile: 되돌리기 알림이 화면 폭 안에 들어옴", t.l >= 0 && t.r <= t.W, JSON.stringify(t));
+  await page.screenshot({ path: `${OUT}/mobile-teacher-delete-shelf-undo.png` });
+  await page.click(".undo-toast button");
+  await page.waitForTimeout(200);
+  check("mobile: 되돌린 뒤 책장이 다시 보임", !!(await page.$(".shelf-card[data-s]")));
+  check("mobile 지우기 안전장치 콘솔 오류 없음", errors.length === 0, errors.join(" | "));
+  await ctx.close();
 }
 
 // 7) 동작 줄이기

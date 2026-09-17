@@ -167,11 +167,27 @@ let adminCtx, adminPage;
 /* 4) 관리자: 승인 취소도 바로 명단에서 빠져야 한다 */
 {
   const page = adminPage;
-  page.on("dialog", (d) => d.accept());
   const btn = await page.$(`[data-ad="${NEWBIE}"]`);
   check("관리자: 새 선생님의 승인 취소 단추가 있음", !!btn);
   if (btn) {
     await btn.click();
+    await page.waitForSelector("#dangerDlg[open]");
+    check("관리자: 승인 취소 확인창에 이메일이 보임", (await page.textContent("#dg-what")).includes(NEWBIE));
+    await page.click("#dg-ok");
+    await sleep(300);
+    const hidden = await page.evaluate(() => [...document.querySelectorAll("#adminCard tbody tr td:first-child")].map((td) => td.textContent.trim()));
+    check("관리자: 확인하면 명단에서 바로 빠지고 되돌리기 알림이 뜸", !hidden.includes(NEWBIE) && !!(await page.$(".undo-toast")));
+    // 되돌리기 → 명단에 돌아오고 저장소에서도 지워지지 않는다
+    await page.click(".undo-toast button");
+    await sleep(11000);
+    const back = await page.evaluate(() => [...document.querySelectorAll("#adminCard tbody tr td:first-child")].map((td) => td.textContent.trim()));
+    const still = await fetch(`${FS}/allowed/${NEWBIE}`, { headers: { authorization: "Bearer owner" } });
+    check("관리자: 되돌리면 명단에 남고 저장소에서도 지워지지 않음", back.includes(NEWBIE) && still.ok, JSON.stringify(back));
+    // 이번에는 기다려서 실제로 취소한다
+    await page.click(`[data-ad="${NEWBIE}"]`);
+    await page.waitForSelector("#dangerDlg[open]");
+    await page.click("#dg-ok");
+    await sleep(11000);
     const t0 = Date.now();
     let rows = [];
     while (Date.now() - t0 < 8000) {
@@ -179,7 +195,8 @@ let adminCtx, adminPage;
       if (!rows.includes(NEWBIE)) break;
       await sleep(150);
     }
-    check("관리자: 승인 취소 직후 명단에서 빠짐", !rows.includes(NEWBIE), JSON.stringify(rows));
+    const gone = await fetch(`${FS}/allowed/${NEWBIE}`, { headers: { authorization: "Bearer owner" } });
+    check("관리자: 10초 뒤 명단과 저장소에서 모두 빠짐", !rows.includes(NEWBIE) && gone.status === 404, `${JSON.stringify(rows)} http=${gone.status}`);
   }
   await adminCtx.close();
 }
