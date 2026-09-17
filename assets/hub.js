@@ -3,7 +3,7 @@
    SIH.shell() 을 호출한다. 앱 본문(.lab)은 HTML에 직접 둔다.
 
    실시간 센서: APP.sensorIn = { want:["temperature"], max:2, virtual:["cooling-a","cooling-b"] } 가 있는 앱만
-   상단 "데이터" 칸에서 센서를 고를 수 있다. 고르면 assets/sensor*.js 를 그때 불러오고 "sih:source" 이벤트를 보낸다.
+   상단에 "데이터" 칸이 생기고 센서를 고를 수 있다 (없는 앱은 칸 자체를 그리지 않는다). 고르면 assets/sensor*.js 를 그때 불러오고 "sih:source" 이벤트를 보낸다.
      window.addEventListener("sih:source", e => e.detail.source)   // "sim" | "sensor"
      SIH.source                                                     // 지금 데이터 소스
    앱은 SIHSensor.on(sample => …) 으로 표준 스트림 {quantity, unit, value, t} 만 받는다 (assets/sensor.js).
@@ -53,14 +53,14 @@
         <span class="grade">중${A.grade}</span>
         <span class="unit">${esc(A.unit)}</span>
         <span class="grow"></span>
-        <div class="source">
+        ${A.sensorIn || A.mediaIn ? `<div class="source">
           <span class="dot" id="srcDot" aria-hidden="true"></span>
           <label for="srcSel">데이터</label>
           <select id="srcSel">
             <option value="sim">시뮬레이션</option>
-            <option value="sensor"${A.sensorIn || A.mediaIn ? "" : " disabled"}>실시간 센서 (${esc(A.sensor || "준비 중")})${A.sensorIn || A.mediaIn ? "" : " · 준비 중"}</option>
+            <option value="sensor">실시간 센서 (${esc(A.sensor)})</option>
           </select>
-        </div>
+        </div>` : ""}
       </header>
       <section class="sensorbar" id="sensorBar" aria-label="실시간 센서" hidden></section>
       <section class="ask">

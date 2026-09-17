@@ -124,7 +124,8 @@ import { SITE } from "./assets/site-config.js";
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 const suffix = DEMO ? "&demo=1" : "";
-const here = `${location.origin}${location.pathname.replace(/teacher\.html$/, "")}`;
+// /teacher 같은 짧은 주소로 열려도 맞도록, 파일 이름을 떼지 않고 현재 주소의 폴더를 구한다
+const here = new URL(".", location.href).href;
 // 학생에게 알려 줄 주소. 학생용 사이트를 따로 두었으면(assets/site-config.js) 그 주소로 만든다.
 const shelfUrl = (code) => (!DEMO && SITE.studentLink && SITE.studentLink.includes("{code}"))
   ? SITE.studentLink.replace("{code}", encodeURIComponent(code))

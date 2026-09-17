@@ -143,7 +143,7 @@ const wantChannel = (page, n = 1) => page.waitForFunction((n) => window.SIHSenso
   served.length = 0;
   const { page, errors, close } = await open("g1-insulation");
   check("시뮬레이션 모드: 센서 스크립트를 불러오지 않음", !served.some((p) => p.includes("sensor")), served.filter((p) => p.includes("sensor")).join(","));
-  check("센서가 없는 앱(g2-gas 등)은 센서 선택이 비활성", await (async () => { const g = await open("g2-gas"); const d = await g.page.$eval('#srcSel option[value="sensor"]', (o) => o.disabled); await g.close(); return d; })());
+  check("센서가 없는 앱(g2-gas 등)은 데이터 칸과 '준비 중' 문구가 없음", await (async () => { const g = await open("g2-gas"); const d = (await g.page.$("#srcSel")) === null && !(await g.page.textContent("body")).includes("준비 중") && g.errors.length === 0; await g.close(); return d; })());
   check("센서를 쓰는 앱은 센서 선택이 활성", !(await page.$eval('#srcSel option[value="sensor"]', (o) => o.disabled)) && errors.length === 0, errors.join(" | "));
   await close();
 }

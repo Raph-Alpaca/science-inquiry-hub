@@ -25,7 +25,7 @@ index.html                  허브(메인) — 학년별 카드 11개 + 산출�
 shelf.html                  공개 책장 (?code=책장코드)
 submit.html                 학생 제출 폼 (?code=책장코드)
 teacher.html                선생님 화면 (구글 로그인, 승인, QR, CSV, 학생 화면 보기)
-shelf/teacher.json          모든 학교에 공통으로 보이는 "선생님 예시" 9권
+shelf/teacher.json          모든 학교에 공통으로 보이는 "선생님 예시" 11권
 assets/hub.css, hub.js      탐구 앱 11개의 공통 틀
 assets/sensor.js            실시간 센서 공통 계층 (표준 스트림·연결 버튼·진단·CSV)
 assets/sensor-*.js          업체별 어댑터 (PASCO·사이언스큐브·EZMaker·Vernier) + 가상 센서

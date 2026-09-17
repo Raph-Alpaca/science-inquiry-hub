@@ -51,7 +51,7 @@ for (const [vn, vp] of Object.entries(VIEWS)) {
       scrollW: document.documentElement.scrollWidth, W: document.documentElement.clientWidth,
     }));
     check(`${vn}: 책장에 서가가 그려짐`, info.rows >= 3, info.labels.join(" | "));
-    check(`${vn}: 선생님 예시 9권 + 학생 책 4권`, info.books === 13 || vn === "mobile", `${info.books}권`);
+    check(`${vn}: 선생님 예시 11권 + 학생 책 4권`, info.books === 15 || vn === "mobile", `${info.books}권`);
     check(`${vn}: 가로 넘침 없음`, info.scrollW <= info.W + 1, `${info.scrollW} > ${info.W}`);
     check(`${vn}: 승인 대기 책은 공개 책장에 없음`, !info.html.includes("우리 학교 기온 기록"));
     check(`${vn}: 모둠원 이름이 공개 화면에 없음`, !/김하늘|이서준|최민준|정수아/.test(info.html));
@@ -59,7 +59,7 @@ for (const [vn, vp] of Object.entries(VIEWS)) {
 
     // 책 펼치기
     const first = vn === "mobile" ? ".book-row" : ".book";
-    await page.click(`${first}[data-i="9"]`);       // 학생 책 (산불 확산 시뮬레이션)
+    await page.click(`${first}[data-i="11"]`);      // 학생 책 (선생님 예시 11권 다음) (산불 확산 시뮬레이션)
     await page.waitForTimeout(1600);
     await page.screenshot({ path: `${OUT}/${vn}-reader.png` });
     const r = await page.evaluate(() => ({
