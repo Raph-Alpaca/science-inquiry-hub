@@ -35,7 +35,8 @@ const TONES = {
 const toneOf = (c) => TONES[String(c || "").toUpperCase()];
 export const coverTone = (c) => (toneOf(c) ? toneOf(c).tone : /^#[0-9a-f]{3,8}$/i.test(c || "") ? c : TONES["#23A087"].tone);
 export const coverColorName = (c) => (toneOf(c) ? toneOf(c).name : "색");
-export const coverSrc = (kind) => `assets/covers/${COVERS.some((c) => c.id === kind) ? kind : "heat"}.svg`;
+// 표지 그림은 검정 바탕에 흰 선으로 그린 흑백 그림이다. 화면에서 screen 합성으로 표지색 위에 입힌다
+export const coverSrc = (kind) => `assets/covers/${COVERS.some((c) => c.id === kind) ? kind : "heat"}.jpg`;
 
 /* ---------- 책장 코드 ---------- */
 const CHO = ["g", "kk", "n", "d", "tt", "r", "m", "b", "pp", "s", "ss", "", "j", "jj", "ch", "k", "t", "p", "h"];

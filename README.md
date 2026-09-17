@@ -37,7 +37,7 @@ assets/firebase-config.js   Firebase 웹 설정 (여기에 값을 채웁니다)
 assets/site-config.js       학생용 사이트 주소 (Netlify 로 두 사이트를 쓸 때만 채움)
 assets/code-entry.js        학생 화면의 책장 코드 입력 칸
 assets/qr.js                QR 코드 생성기 (외부 라이브러리 없음)
-assets/covers/*.svg         표지 일러스트 12종
+assets/covers/*.jpg         표지 그림 12종 (Gamma 로 만든 흑백 그림, 표지색 위에 screen 합성)
 apps/*.html                 탐구 앱 11개 (중1·중2·중3)
 firestore.rules             Firestore 보안 규칙
 storage.rules               Storage 보안 규칙

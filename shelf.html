@@ -278,25 +278,19 @@ function rowsOf(sec, fresh) {
       <div class="row-board"></div>
     </section>`).join("");
 }
-// 책마다 키가 조금씩 달라야 진짜 책장처럼 보인다 (id 로 정해서 늘 같은 높이)
-function heightOf(id) {
-  let h = 0;
-  for (const ch of String(id)) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
-  return h % 4 * 4;
-}
 function bookHtml(b, isNew) {
   const i = flat.indexOf(b);
   const art = b.coverPath || coverSrc(b.coverKind);
   const tone = coverTone(b.coverColor);
   const cls = isNew && !reduced ? " arrive" : "";
   return `
-    <button class="book bk${cls}" data-i="${i}" style="--tone:${esc(tone)};--dh:${heightOf(b.id)}px" aria-label="${esc(b.title)} 펼쳐 보기">
+    <button class="book bk${cls}" data-i="${i}" style="--tone:${esc(tone)}" aria-label="${esc(b.title)} 펼쳐 보기">
       <span class="t"><span>${esc(b.title)}</span></span>
-      <img class="art" src="${esc(art)}" alt="" aria-hidden="true">
+      <img class="art${b.coverPath ? " photo" : ""}" src="${esc(art)}" alt="" aria-hidden="true">
       <span class="who">${esc(b.who)}</span>
     </button>
     <button class="book-row${cls}" data-i="${i}" style="--tone:${esc(tone)}" aria-label="${esc(b.title)} 펼쳐 보기">
-      <span class="cov"><img src="${esc(art)}" alt="" aria-hidden="true"></span>
+      <span class="cov"><img${b.coverPath ? ' class="photo"' : ""} src="${esc(art)}" alt="" aria-hidden="true"></span>
       <span class="tx"><b>${esc(b.title)}</b><small>${esc(b.who)}</small></span>
       <span class="chev" aria-hidden="true">›</span>
     </button>`;
@@ -350,6 +344,7 @@ function fill(b) {
   $("cfTitle").textContent = b.title;
   $("cfWho").textContent = b.who;
   $("cfArt").src = b.coverPath || coverSrc(b.coverKind);
+  $("cfArt").classList.toggle("photo", !!b.coverPath);
   $("coverFace").style.setProperty("--tone", coverTone(b.coverColor));
   $("bkPreview").style.setProperty("--tone", coverTone(b.coverColor));
   $("bkPreview").innerHTML = "";
@@ -367,7 +362,7 @@ function mountApp(b) {
     return;
   }
   box.innerHTML = `<div style="text-align:center;padding:16px">
-      <div class="cover-big"><img src="${esc(b.coverPath || coverSrc(b.coverKind))}" alt=""></div>
+      <div class="cover-big"><img${b.coverPath ? ' class="photo"' : ""} src="${esc(b.coverPath || coverSrc(b.coverKind))}" alt=""></div>
       <p>바깥 사이트의 작품이라 여기서 바로 열리지 않을 수 있어요.<br>아래 버튼을 누르면 새 창에서 열립니다.</p>
       <button class="btn small" id="tryFrame">여기에서 열어 보기</button>
     </div>`;

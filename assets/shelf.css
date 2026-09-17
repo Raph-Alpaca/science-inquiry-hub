@@ -163,7 +163,7 @@ img { max-width: 100%; }
 }
 .book {
   flex: 0 0 auto; padding: 0;
-  width: var(--book-w); height: calc(var(--book-h) - var(--dh, 0px));
+  width: var(--book-w); height: var(--book-h);
   display: flex; flex-direction: column; overflow: visible;
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, .18), inset 0 -1px 0 rgba(0, 0, 0, .25), 2px 2px 3px rgba(0, 0, 0, .25), 6px 10px 18px -6px rgba(0, 0, 0, .55);
   transition: transform 160ms ease-out, box-shadow 160ms ease-out;
@@ -185,7 +185,11 @@ img { max-width: 100%; }
 }
 /* 두 줄까지만. 안쪽 칸에서 자르므로 세 번째 줄이 테두리 안 여백으로 비치지 않는다 */
 .book .t > span { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
-.book .art { display: block; width: 66px; height: 44px; margin: auto 0 auto 24px; opacity: .95; }
+/* 흑백 표지 그림: 검정은 표지색으로, 흰 선은 크림색 인쇄처럼 보이게 합성한다 */
+.book .art, .book-row .cov img, .cover-face .art, .covers button img { mix-blend-mode: screen; opacity: .92; }
+/* 학생이 올린 표지 사진은 합성하지 않고 그대로 보여 준다 */
+.book .art.photo, .book-row .cov img.photo, .cover-face .art.photo, .preview .cover-big img.photo { mix-blend-mode: normal; opacity: 1; border-radius: 2px; }
+.book .art { display: block; flex: 1 1 auto; min-height: 0; width: calc(100% - 20px); margin: 4px 6px 2px 14px; object-fit: contain; }
 .book .who {
   margin: 0 8px 9px 15px; font-size: 10.5px; font-weight: 500; letter-spacing: .01em; color: rgba(251, 247, 238, .88);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
@@ -205,7 +209,7 @@ img { max-width: 100%; }
   flex: 0 0 auto; width: 40px; height: 56px; border-radius: 2px 4px 4px 2px; position: relative; overflow: hidden;
   background: linear-gradient(90deg, rgba(0, 0, 0, .34) 0, rgba(0, 0, 0, .12) 4px, rgba(255, 255, 255, .1) 6px, transparent 10px), var(--tone, #2B8A7B);
 }
-.book-row .cov img { position: absolute; inset: 6px 4px 6px 8px; width: auto; height: auto; max-width: calc(100% - 12px); max-height: calc(100% - 12px); margin: auto; }
+.book-row .cov img { position: absolute; inset: 2px 1px 2px 5px; width: calc(100% - 6px); height: calc(100% - 4px); object-fit: cover; }
 .book-row .tx { flex: 1; min-width: 0; }
 .book-row .tx b { display: block; font-family: var(--serif); font-size: 15px; line-height: 1.3; }
 .book-row .tx small { color: var(--ink-2); font-size: 13px; }
@@ -317,7 +321,7 @@ body.reading { overflow: hidden; }
 .preview iframe { width: 100%; height: 100%; border: 0; display: block; background: var(--white); }
 .preview .cover-big { width: 46%; max-width: 160px; aspect-ratio: 104 / 156; border-radius: 2px 6px 6px 2px; margin: 0 auto 14px;
   background: linear-gradient(90deg, rgba(0, 0, 0, .3) 0, rgba(0, 0, 0, .12) 6px, rgba(255, 255, 255, .1) 9px, transparent 14px), var(--tone); display: grid; place-items: center; box-shadow: 4px 8px 16px -6px rgba(0, 0, 0, .5); }
-.preview .cover-big img { width: 66%; }
+.preview .cover-big img { width: 84%; mix-blend-mode: screen; opacity: .92; }
 .page.right .open-row { margin: 16px 0 6px; }
 .page.right .link { font-size: 12.5px; color: var(--ink-2); word-break: break-all; text-align: center; max-width: 92%; margin: 0; }
 
@@ -338,7 +342,7 @@ body.reading { overflow: hidden; }
   border: 1.5px solid rgba(251, 247, 238, .62); outline: 1px solid rgba(251, 247, 238, .3); outline-offset: 4px;
   text-shadow: 0 1px 2px rgba(0, 0, 0, .3);
 }
-.cover-face .art { width: 46%; max-width: 190px; }
+.cover-face .art { width: 66%; max-width: 280px; }
 .cover-face .who { font-size: 14px; font-weight: 500; color: rgba(251, 247, 238, .9); }
 .cover-face .shade { position: absolute; inset: 0; border-radius: inherit; background: linear-gradient(90deg, rgba(0, 0, 0, .0), rgba(0, 0, 0, .25)); opacity: 0; transition: opacity 900ms var(--ease-turn); }
 .reader.open .cover-face .shade { opacity: 1; }
@@ -399,7 +403,7 @@ body.reading { overflow: hidden; }
   transition: transform 140ms ease-out;
 }
 .covers button:hover { transform: translateY(-3px); }
-.covers button img { width: 64%; margin-left: 8%; }
+.covers button img { width: 88%; margin-left: 8%; }
 .covers button::after {
   content: "✓"; position: absolute; right: -6px; top: -6px; width: 22px; height: 22px; border-radius: 50%;
   background: var(--ink); color: var(--paper); font-size: 13px; font-weight: 700; display: grid; place-items: center;
