@@ -101,7 +101,7 @@
 import {
   DEMO, CONFIGURED, onUser, login, logout, myShelves, createShelf, regenerateCode,
   listBooks, loadMembers, setStatus, updateBook, deleteBook, clearShelfCache,
-  checkAccess, listAllowed, addAllowed, removeAllowed, listAllShelves, renameShelf, deleteShelf,
+  checkAccess, watchAccess, addAllowed, removeAllowed, watchAllowed, watchAllShelves, renameShelf, deleteShelf,
   watchShelfBooks,
 } from "./assets/shelf-data.js";
 import { SITE } from "./assets/site-config.js";
@@ -119,7 +119,7 @@ const shelfUrl = (code) => (!DEMO && SITE.studentLink && SITE.studentLink.includ
 const peekUrl = (codes) => `${here}shelf.html?code=${encodeURIComponent([].concat(codes).join(","))}${suffix}`;
 let user = null, shelves = [], data = {}, tab = {};
 const mergeSel = new Set(), mergeKnown = new Set();   // 함께 볼 책장 (새 책장은 처음엔 골라 둔다)
-let access = { admin: false, approved: false }, allowed = [], allShelves = [];
+let access = { admin: false, approved: false }, allowed = [], allShelves = [], adminLoaded = false;
 
 if (DEMO) $("demoBar").hidden = false;
 
@@ -134,17 +134,43 @@ async function copy(text, what) {
   catch (e) { window.prompt(what + "를 복사하세요", text); }
 }
 
-/* ---------- 로그인 ---------- */
-onUser(async (u) => {
+/* ---------- 로그인 ----------
+ * 승인 여부는 한 번 읽고 끝내지 않고 계속 지켜본다(watchAccess).
+ *  - 로그인 직후 연결이 잠시 흔들려도 서버가 확인해 준 값이 올 때까지 기다리므로, 승인된 선생님이
+ *    대기 화면을 보거나 새로고침해야 하는 일이 없다.
+ *  - 관리자가 승인(취소)하면 그 순간 화면이 넘어간다. */
+let stopAccess = null;
+onUser((u) => {
   user = u;
   $("logout").hidden = !u;
+  if (stopAccess) { stopAccess(); stopAccess = null; }
   if (!u) { renderSignedOut(); return; }
   $("who").textContent = `${u.displayName || "선생님"}${u.email ? ` (${u.email})` : ""}`;
-  access = await checkAccess(u);
-  if (!access.approved) { renderPending(u); return; }
-  await reload();
+  access = { admin: false, approved: false };
+  renderChecking();
+  let approvedBefore = false;
+  stopAccess = watchAccess(u, async (next) => {
+    access = next;
+    if (!next.approved) { approvedBefore = false; stopAdmin(); renderPending(u); return; }
+    if (approvedBefore) return;            // 이미 책장 화면이면 그대로 둔다
+    approvedBefore = true;
+    await reload();
+  });
 });
 $("logout").onclick = async () => { await logout(); location.reload(); };
+
+function renderChecking() {
+  $("main").innerHTML = `
+    <div class="notice" id="checking">
+      <h2>사용 승인을 확인하는 중입니다…</h2>
+      <p class="upload-note">잠시만 기다려 주세요.</p>
+    </div>`;
+  // 연결이 느리면 그 사실을 알려 준다 (기다리면 저절로 넘어간다)
+  setTimeout(() => {
+    const el = $("checking");
+    if (el) el.insertAdjacentHTML("beforeend", `<p class="upload-note" style="color:var(--amber-ink)">서버 연결이 평소보다 느립니다. 연결되면 저절로 넘어갑니다. 오래 걸리면 새로고침해 보세요.</p>`);
+  }, 8000);
+}
 
 function renderSignedOut() {
   $("who").textContent = "로그인하면 우리 학교 책장을 만들 수 있어요";
@@ -188,21 +214,16 @@ function renderPending(u) {
       <p class="link">npx firebase deploy --only firestore:rules</p>
     </div>` : ""}`;
   $("copyMail").onclick = () => copy(u.email || "", "주소를");
+  // 승인되면 watchAccess 가 저절로 넘겨 준다. 이 단추는 서버에서 한 번 더 읽어 확인해 주는 용도.
   $("recheck").onclick = async () => {
-    access = await checkAccess(u);
-    if (access.approved) { stopPendingCheck(); toast("승인됐습니다"); await reload(); }
+    const btn = $("recheck"); btn.disabled = true;
+    const next = await checkAccess(u).catch(() => ({ approved: false, offline: true }));
+    btn.disabled = false;
+    if (next.approved) { access = next; toast("승인됐습니다"); await reload(); }
+    else if (next.offline) toast("서버에 연결되지 않아요. 잠시 뒤 다시 눌러 보세요");
     else toast("아직 승인 전입니다");
   };
-  // 관리자가 승인하면 새로고침하지 않아도 넘어가도록 가끔 다시 확인한다
-  stopPendingCheck();
-  pendingTimer = setInterval(async () => {
-    if (!$("recheck") || user !== u) { stopPendingCheck(); return; }
-    const next = await checkAccess(u).catch(() => null);
-    if (next && next.approved) { access = next; stopPendingCheck(); toast("승인됐습니다"); await reload(); }
-  }, 30 * 1000);
 }
-let pendingTimer = null;
-function stopPendingCheck() { if (pendingTimer) { clearInterval(pendingTimer); pendingTimer = null; } }
 
 /* ---------- 관리자: 선생님 승인 ---------- */
 function adminCard() {
@@ -217,7 +238,7 @@ function adminCard() {
     <button class="btn primary" id="ad-add">승인 명단에 추가</button>
     <table class="books" style="margin-top:18px">
       <thead><tr><th>이메일</th><th>학교</th><th>추가한 날</th><th></th></tr></thead>
-      <tbody>${allowed.length ? allowed.map((a) => `
+      <tbody>${!adminLoaded ? `<tr><td colspan="4" class="upload-note">명단을 불러오는 중…</td></tr>` : allowed.length ? allowed.map((a) => `
         <tr><td data-l="이메일">${esc(a.email || a.id)}</td>
             <td data-l="학교">${esc(a.school || "-")}</td>
             <td data-l="추가">${a.addedAt ? new Date(a.addedAt).toLocaleDateString("ko-KR") : "-"}</td>
@@ -227,7 +248,7 @@ function adminCard() {
     <h3 style="margin-top:22px">전체 책장 ${allShelves.length}개</h3>
     <table class="books">
       <thead><tr><th>학교</th><th>책장</th><th>코드</th><th>만든 날</th></tr></thead>
-      <tbody>${allShelves.length ? allShelves.map((x) => `
+      <tbody>${!adminLoaded ? `<tr><td colspan="4" class="upload-note">불러오는 중…</td></tr>` : allShelves.length ? allShelves.map((x) => `
         <tr><td data-l="학교">${esc(x.school)}</td><td data-l="책장">${esc(x.title)}</td>
             <td data-l="코드">${esc(x.code)}</td>
             <td data-l="만든 날">${x.createdAt ? new Date(x.createdAt).toLocaleDateString("ko-KR") : "-"}</td></tr>`).join("")
@@ -243,17 +264,49 @@ function wireAdmin() {
     if (!mail) { toast("이메일을 적어 주세요"); return; }
     add.disabled = true;
     try {
-      await addAllowed({ email: mail, school: $("ad-school").value.trim(), by: user.email || "" });
+      const school = $("ad-school").value.trim();
+      const key = await addAllowed({ email: mail, school, by: user.email || "" });
       $("ad-mail").value = ""; $("ad-school").value = "";
-      await reload(); toast("승인했습니다");
+      toast("승인했습니다");
+      // 구독이 곧 같은 내용을 보내 주지만, 연결이 느릴 때도 바로 보이도록 먼저 표에 넣는다
+      allowed = allowed.filter((a) => a.id !== key).concat({ id: key, email: key, school, addedAt: Date.now() })
+        .sort((a, b) => (a.email || "").localeCompare(b.email || ""));
+      adminLoaded = true; renderAdminCard();
     } catch (e) { toast("추가하지 못했어요: " + (e.code || e.message)); }
     add.disabled = false;
   };
   document.querySelectorAll("[data-ad]").forEach((b) => (b.onclick = async () => {
     if (!confirm(`${b.dataset.ad} 의 사용 승인을 취소할까요? 이미 만든 책장은 그대로 남습니다.`)) return;
-    await removeAllowed(b.dataset.ad);
-    await reload(); toast("승인을 취소했습니다");
+    try {
+      await removeAllowed(b.dataset.ad); toast("승인을 취소했습니다");
+      allowed = allowed.filter((a) => a.id !== b.dataset.ad); renderAdminCard();
+    }
+    catch (e) { toast("취소하지 못했어요: " + (e.code || e.message)); }
   }));
+}
+/* 승인 명단·전체 책장은 구독으로 받는다. 방금 추가·취소한 것은 서버 응답을 기다리지 않고 바로 표에 뜬다. */
+let stopAdminWatch = null;
+function watchAdmin() {
+  if (stopAdminWatch) return;
+  const warn = (e) => console.warn("관리자 명단 실시간 반영 오류:", e.code || e.message);
+  const unA = watchAllowed((list) => { allowed = list; adminLoaded = true; renderAdminCard(); }, warn);
+  const unS = watchAllShelves((list) => { allShelves = list; renderAdminCard(); }, warn);
+  stopAdminWatch = () => { unA(); unS(); };
+}
+function stopAdmin() {
+  if (stopAdminWatch) { stopAdminWatch(); stopAdminWatch = null; }
+  allowed = []; allShelves = []; adminLoaded = false;
+}
+// 관리자 카드만 다시 그린다 (적던 글자와 커서는 그대로)
+function renderAdminCard() {
+  const el = $("adminCard");
+  if (!el || !access.admin) return;
+  const mail = $("ad-mail") ? $("ad-mail").value : "", school = $("ad-school") ? $("ad-school").value : "";
+  const focusId = document.activeElement && el.contains(document.activeElement) ? document.activeElement.id : "";
+  el.outerHTML = adminCard();
+  wireAdmin();
+  $("ad-mail").value = mail; $("ad-school").value = school;
+  if (focusId && $(focusId)) $(focusId).focus({ preventScroll: true });
 }
 
 /* ---------- 책장 목록 ---------- */
@@ -273,10 +326,7 @@ async function reload() {
     data[s.id] = { books, members };
     tab[s.id] = tab[s.id] || "pending";
   }));
-  if (access.admin) {
-    allowed = await listAllowed().catch(() => []);
-    allShelves = await listAllShelves().catch(() => []);
-  }
+  if (access.admin) watchAdmin();
   render();
   refreshPeek();
   watchAll();

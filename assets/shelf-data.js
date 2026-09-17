@@ -13,6 +13,8 @@ const params = new URLSearchParams(location.search);
 export const CONFIGURED = !!(firebaseConfig.apiKey && firebaseConfig.projectId);
 export const CAN_UPLOAD = !!(FEATURES && FEATURES.coverUpload);
 export const DEMO = params.get("demo") === "1" || !CONFIGURED;
+// 검사용: 주소가 로컬(127.0.0.1·localhost)이고 ?emu=1 이 붙으면 Firebase 에뮬레이터에 붙는다.
+const EMU = params.get("emu") === "1" && /^(127\.0\.0\.1|localhost)$/.test(location.hostname);
 
 export const COVERS = [
   { id: "heat", label: "열" }, { id: "state", label: "상태 변화" }, { id: "wave", label: "빛과 파동" },
@@ -62,8 +64,13 @@ async function fb() {
     import(`${SDK}/firebase-firestore.js`),
     import(`${SDK}/firebase-auth.js`),
   ]);
-  const app = A.initializeApp(firebaseConfig);
+  const app = A.initializeApp(EMU ? { ...firebaseConfig, projectId: "demo-sih" } : firebaseConfig);
   _fb = { F, U, db: F.getFirestore(app), auth: U.getAuth(app), app };
+  if (EMU) {
+    // 검사용: 로컬 에뮬레이터에 붙는다 (tests/ 의 검사 스크립트가 쓴다). 실제 데이터에는 손대지 않는다.
+    F.connectFirestoreEmulator(_fb.db, "127.0.0.1", 8080);
+    U.connectAuthEmulator(_fb.auth, "http://127.0.0.1:9099", { disableWarnings: true });
+  }
   // Storage 는 표지 업로드를 켠 경우에만 불러온다 (안 쓰면 45 KB를 내려받지 않는다)
   if (CAN_UPLOAD) {
     const S = await import(`${SDK}/firebase-storage.js`);
@@ -388,27 +395,70 @@ export async function logout() {
  * admins/{이메일}  : 관리자 (Firebase 콘솔에서 직접 만든다)
  * allowed/{이메일} : 관리자가 승인한 선생님
  * 규칙상 본인 문서와 관리자만 읽을 수 있으므로, 못 읽으면 "승인 안 됨"으로 본다.
+ *
+ * 로그인 직후나 저장 직후에는 SDK 가 연결을 다시 맺는 동안 스스로를 "오프라인"으로 보고
+ * 캐시(빈 값·옛 값)를 돌려줄 수 있다. 그러면 승인된 선생님이 대기 화면을 보거나 방금 승인한
+ * 명단이 안 보이므로, 여기서는 서버가 확인해 준 값만 쓴다.
  */
 const mailKey = (u) => String(u.email || "").trim().toLowerCase();
+const isOffline = (e) => e && (e.code === "unavailable" || /offline/i.test(e.message || ""));
+const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 
+// 꼭 서버에서 읽어야 하는 것: 연결이 잠시 끊긴 사이에는 캐시를 돌려주지 않고 잠깐 뒤 다시 읽는다
+async function fromServer(run, tries = 6) {
+  for (let i = 0; ; i++) {
+    try { return await run(); }
+    catch (e) { if (!isOffline(e) || i >= tries - 1) throw e; await wait((i + 1) * 1000); }
+  }
+}
+
+// 한 번 확인 (승인 대기 화면의 "다시 확인" 단추). { admin, approved, denied, offline }
 export async function checkAccess(user) {
   if (DEMO) return { admin: true, approved: true };
   const { F, db } = await fb();
   const key = mailKey(user);
   if (!key) return { admin: false, approved: false };
   // 규칙이 옛 버전이면(admins 항목이 없는 규칙) 읽기 자체가 거부된다. 그 경우를 denied 로 알려 준다.
-  let denied = false;
-  const isDeny = (e) => e && (e.code === "permission-denied" || /insufficient permissions/i.test(e.message || ""));
-  const admin = await F.getDoc(F.doc(db, "admins", key)).then((d) => d.exists()).catch((e) => { if (isDeny(e)) denied = true; return false; });
-  if (admin) return { admin: true, approved: true, denied: false };
-  const approved = await F.getDoc(F.doc(db, "allowed", key)).then((d) => d.exists()).catch((e) => { if (isDeny(e)) denied = true; return false; });
-  return { admin: false, approved, denied };
+  let denied = false, offline = false;
+  const has = (col) => fromServer(() => F.getDocFromServer(F.doc(db, col, key))).then((d) => d.exists())
+    .catch((e) => { if (isDenied(e)) denied = true; else if (isOffline(e)) offline = true; return false; });
+  const admin = await has("admins");
+  if (admin) return { admin: true, approved: true, denied: false, offline: false };
+  const approved = await has("allowed");
+  return { admin: false, approved, denied, offline };
 }
+
+/* 승인 여부를 계속 지켜본다. cb({ admin, approved, denied })
+ * 서버가 확인해 준 값이 올 때까지는 부르지 않는다. 관리자가 승인(취소)하면 곧바로 다시 부른다.
+ * 돌려준 함수를 부르면 그만 지켜본다. */
+export function watchAccess(user, cb) {
+  if (DEMO) { cb({ admin: true, approved: true, denied: false }); return () => {}; }
+  const key = mailKey(user);
+  if (!key) { cb({ admin: false, approved: false, denied: false }); return () => {}; }
+  let stop = () => {}, cancelled = false;
+  fb().then(({ F, db }) => {
+    if (cancelled) return;
+    const st = { admin: null, allowed: null, denied: false };   // null = 서버 답이 아직 없다
+    const emit = () => {
+      if (st.admin === null || st.allowed === null) return;
+      cb({ admin: st.admin, approved: st.admin || st.allowed, denied: st.denied });
+    };
+    const sub = (col, field) => F.onSnapshot(F.doc(db, col, key), { includeMetadataChanges: true },
+      (snap) => { if (snap.metadata.fromCache) return; st[field] = snap.exists(); emit(); },   // 캐시 값은 믿지 않는다
+      (e) => { if (isDenied(e)) st.denied = true; st[field] = false; emit(); });
+    const unA = sub("admins", "admin"), unB = sub("allowed", "allowed");
+    stop = () => { unA(); unB(); };
+  }).catch((e) => cb({ admin: false, approved: false, denied: false, error: e }));
+  return () => { cancelled = true; stop(); };
+}
+
+const allowedOf = (d) => { const x = d.data({ serverTimestamps: "estimate" }); return { id: d.id, ...x, addedAt: ms(x.addedAt) }; };
+const sortAllowed = (list) => list.sort((a, b) => (a.email || "").localeCompare(b.email || ""));
 export async function listAllowed() {
   if (DEMO) return [{ id: "teacher@example.com", email: "teacher@example.com", school: "보기 학교", note: "", addedAt: Date.now() }];
   const { F, db } = await fb();
-  const snap = await F.getDocs(F.collection(db, "allowed"));
-  return snap.docs.map((d) => plain({ id: d.id, ...d.data() })).sort((a, b) => (a.email || "").localeCompare(b.email || ""));
+  const snap = await fromServer(() => F.getDocsFromServer(F.collection(db, "allowed")));
+  return sortAllowed(snap.docs.map(allowedOf));
 }
 export async function addAllowed({ email, school, note, by }) {
   const key = String(email).trim().toLowerCase();
@@ -425,11 +475,32 @@ export async function removeAllowed(key) {
   const { F, db } = await fb();
   await F.deleteDoc(F.doc(db, "allowed", key));
 }
+/* 관리자 화면: 승인 명단을 구독한다. cb(목록). 방금 추가·취소한 것은 서버 응답을 기다리지 않고 바로 반영된다. */
+export function watchAllowed(cb, onError) {
+  if (DEMO) { listAllowed().then(cb); return () => {}; }
+  return watchCollection("allowed", listAllowed, (docs) => sortAllowed(docs.map(allowedOf)), cb, onError);
+}
+/* 관리자 화면: 전체 책장을 구독한다. cb(목록) */
+export function watchAllShelves(cb, onError) {
+  if (DEMO) return demoWatch(() => demoRead().shelves, cb);
+  return watchCollection("shelves", listAllShelves, (docs) => docs.map(docOf).sort((a, b) => b.createdAt - a.createdAt), cb, onError);
+}
+function watchCollection(name, fetchOnce, map, cb, onError) {
+  let stop = () => {}, cancelled = false;
+  fb().then(({ F, db }) => {
+    if (cancelled) return;
+    stop = liveOrPoll({
+      cb, onError, fetchOnce,
+      listen: (next, fail) => F.onSnapshot(F.collection(db, name), (snap) => next(map(snap.docs)), fail),
+    });
+  }).catch((e) => { if (onError) onError(e); });
+  return () => { cancelled = true; stop(); };
+}
 export async function listAllShelves() {
   if (DEMO) return demoRead().shelves;
   const { F, db } = await fb();
-  const snap = await F.getDocs(F.collection(db, "shelves"));
-  return snap.docs.map((d) => plain({ id: d.id, ...d.data() })).sort((a, b) => b.createdAt - a.createdAt);
+  const snap = await fromServer(() => F.getDocsFromServer(F.collection(db, "shelves")));
+  return snap.docs.map(docOf).sort((a, b) => b.createdAt - a.createdAt);
 }
 
 /* ---------- 책장 이름 바꾸기·삭제 ---------- */
@@ -466,8 +537,9 @@ export async function deleteShelf(shelf) {
 export async function myShelves(uid) {
   if (DEMO) return demoRead().shelves;
   const { F, db } = await fb();
-  const snap = await F.getDocs(F.query(F.collection(db, "shelves"), F.where("teacherUid", "==", uid)));
-  return snap.docs.map((d) => plain({ id: d.id, ...d.data() })).sort((a, b) => a.createdAt - b.createdAt);
+  // 로그인 직후 캐시(빈 목록)를 받으면 책장이 있는 선생님에게 "책장 만들기" 화면이 뜨므로 서버에서 읽는다
+  const snap = await fromServer(() => F.getDocsFromServer(F.query(F.collection(db, "shelves"), F.where("teacherUid", "==", uid))));
+  return snap.docs.map(docOf).sort((a, b) => a.createdAt - b.createdAt);
 }
 export async function createShelf({ school, teacherName, title, uid }) {
   if (DEMO) {

@@ -6,7 +6,7 @@
 cd tests
 npm install
 npm run install-browser     # 처음 한 번, Playwright 용 Chromium
-npm test                    # 화면 검사 + 규칙 검사
+npm test                    # 화면 검사 + 규칙 검사 + 로그인·승인 검사
 ```
 
 | 명령 | 내용 |
@@ -16,5 +16,6 @@ npm test                    # 화면 검사 + 규칙 검사
 | `npm run peek` | 선생님 화면의 "학생 화면 보기" 옆 패널 (39항목) |
 | `npm run code` | 책장 코드 입력 칸 (22항목) |
 | `npm run rules` | Firestore·Storage 보안 규칙을 에뮬레이터에서 검증 (61항목). Java 17 이상 필요 |
+| `npm run login` | 선생님 화면의 로그인·승인 흐름을 에뮬레이터(auth + firestore)로 끝까지 돌려 봄 (21항목). 연결이 잠시 끊긴 상황도 재현한다. Java 17 이상 필요 |
 
 스크린샷은 `shots/` 에 남습니다. 모두 데모 모드와 에뮬레이터만 쓰므로 실제 데이터에는 손대지 않습니다.

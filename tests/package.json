@@ -12,7 +12,8 @@
     "code": "node code-entry-test.mjs .. shots/code",
     "ui": "npm run app && npm run shelf && npm run peek && npm run code",
     "rules": "firebase emulators:exec --config ../firebase.json --project demo-sih --only firestore,storage \"node rules-test.mjs ..\"",
-    "test": "npm run ui && npm run rules"
+    "test": "npm run ui && npm run rules && npm run login",
+    "login": "firebase emulators:exec --config ../firebase.json --project demo-sih --only auth,firestore \"node login-test.mjs .. shots/login\""
   },
   "devDependencies": {
     "@firebase/rules-unit-testing": "^4.0.1",
