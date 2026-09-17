@@ -1,6 +1,12 @@
 /* science-inquiry-hub — 공통 틀
-   각 앱은 window.APP = { id, grade, unit, title, question, how, notes, prompt, next, sensor } 를 정의한 뒤
+   각 앱은 window.APP = { id, grade, unit, title, question, how, notes, prompt, next, sensor, sensorIn } 를 정의한 뒤
    SIH.shell() 을 호출한다. 앱 본문(.lab)은 HTML에 직접 둔다.
+
+   실시간 센서: APP.sensorIn = { want:["temperature"], max:2, virtual:["cooling-a","cooling-b"] } 가 있는 앱만
+   상단 "데이터" 칸에서 센서를 고를 수 있다. 고르면 assets/sensor*.js 를 그때 불러오고 "sih:source" 이벤트를 보낸다.
+     window.addEventListener("sih:source", e => e.detail.source)   // "sim" | "sensor"
+     SIH.source                                                     // 지금 데이터 소스
+   앱은 SIHSensor.on(sample => …) 으로 표준 스트림 {quantity, unit, value, t} 만 받는다 (assets/sensor.js).
 
    도우미:
      SIH.reduced                    prefers-reduced-motion 여부
@@ -49,10 +55,11 @@
           <label for="srcSel">데이터</label>
           <select id="srcSel">
             <option value="sim">시뮬레이션</option>
-            <option value="sensor" disabled>실시간 센서 (${esc(A.sensor || "준비 중")})</option>
+            <option value="sensor"${A.sensorIn ? "" : " disabled"}>실시간 센서 (${esc(A.sensor || "준비 중")})${A.sensorIn ? "" : " · 준비 중"}</option>
           </select>
         </div>
       </header>
+      <section class="sensorbar" id="sensorBar" aria-label="실시간 센서" hidden></section>
       <section class="ask">
         <h1>${esc(A.title)}</h1>
         <p class="q">${esc(A.question)}</p>
@@ -89,8 +96,10 @@
 
     const foot = document.createElement("footer");
     foot.className = "app-foot";
-    foot.textContent = "시뮬레이션 값은 교과서 수준의 단순화된 모형으로 계산한 것이며, 실제 측정값과 다를 수 있습니다. 실시간 센서 모드는 무선 센서 실험실 코드와 연결해 추가할 예정입니다.";
+    foot.textContent = "시뮬레이션 값은 교과서 수준의 단순화된 모형으로 계산한 것이며, 실제 측정값과 다를 수 있습니다." + (A.sensorIn ? " 실시간 센서의 측정값은 이 기기 안에서만 처리하며 어디로도 전송하지 않습니다." : "");
     wrap.appendChild(foot);
+
+    if (A.sensorIn) sensorSetup(A);
 
     // 기록 저장
     const key = "sih-note-" + A.id;
@@ -124,6 +133,44 @@
       status.textContent = "기록을 지웠습니다";
     };
   };
+
+  // ---------- 실시간 센서 ----------
+  // 센서 코드는 센서를 고른 사람만 내려받는다. 시뮬레이션만 쓰는 학생의 페이지는 그대로 가볍다.
+  SIH.source = "sim";
+  const BASE = document.currentScript ? document.currentScript.src.replace(/[^/]*$/, "") : "../assets/";
+  let sensorLoading = null;
+  function loadSensor() {
+    if (sensorLoading) return sensorLoading;
+    const one = (f) => new Promise((res, rej) => { const s = document.createElement("script"); s.src = BASE + f; s.onload = res; s.onerror = () => rej(new Error(f + " 를 불러오지 못했습니다")); document.head.appendChild(s); });
+    sensorLoading = one("sensor.js").then(() => Promise.all(["sensor-pasco.js", "sensor-sciencecube.js", "sensor-ezmaker.js", "sensor-vernier.js", "sensor-virtual.js"].map(one)));
+    sensorLoading.catch(() => { sensorLoading = null; });
+    return sensorLoading;
+  }
+  function sensorSetup(A) {
+    const sel = document.getElementById("srcSel"), bar = document.getElementById("sensorBar"), dot = document.getElementById("srcDot");
+    let mounted = null;
+    SIH.setSource = async function (v, force) {
+      if (v === "sensor") {
+        try { await loadSensor(); }
+        catch (e) { sel.value = "sim"; bar.hidden = false; bar.textContent = "센서 모듈을 불러오지 못했습니다. 시뮬레이션으로 계속합니다. (" + e.message + ")"; return; }
+        if (!mounted) mounted = window.SIHSensor.mount(bar, { want: A.sensorIn.want, max: A.sensorIn.max, virtual: A.sensorIn.virtual, name: A.id, onVirtual: () => SIH.source !== "sensor" && SIH.setSource("sensor", true) });
+        // 블루투스를 못 쓰는 브라우저: 안내만 보이고 앱은 시뮬레이션 그대로 동작한다 (가상 센서를 켜면 그때 센서 모드로)
+        if (!window.SIHSensor.support().ok && !force) { bar.hidden = false; sel.value = "sim"; return; }
+      } else if (window.SIHSensor) { window.SIHSensor.record(false); await window.SIHSensor.disconnectAll(); }
+      bar.hidden = v !== "sensor"; sel.value = v; SIH.source = v;
+      dot.classList.toggle("live", v === "sensor");
+      window.dispatchEvent(new CustomEvent("sih:source", { detail: { source: v } }));
+    };
+    sel.addEventListener("change", () => SIH.setSource(sel.value));
+    // ?sensor=virtual → 가상 센서를 연결한 채로 연다 (시연·자동 검사). 앱 스크립트가 구독을 건 뒤에 실행된다
+    if (new URLSearchParams(location.search).get("sensor") === "virtual") {
+      setTimeout(async () => {
+        await SIH.setSource("sensor", true);
+        const list = A.sensorIn.virtual || [], n = Math.min(list.length, A.sensorIn.max || 1);
+        for (let i = 0; i < n; i++) await window.SIHSensor.connectVirtual(list[i], A.sensorIn.want);
+      }, 0);
+    }
+  }
 
   // ---------- 캔버스 도우미 ----------
   // 캔버스는 논리 크기(w×h)로 그리고, 실제 표시 크기에 맞춰 해상도를 정한다.

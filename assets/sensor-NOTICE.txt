@@ -1,0 +1,43 @@
+science-inquiry-hub — 센서 연결 코드의 출처와 고지
+
+이 저장소의 센서 어댑터(assets/sensor-*.js)는 교육 목적의 비상업 프로젝트이며,
+아래 제조사 어느 곳도 이 앱을 만들거나 보증·후원하지 않습니다. 제품 이름은 호환 기기를 설명하기 위해서만 씁니다.
+
+────────────────────────────────────────────────────────────────────────
+1. PASCO 무선 센서 (assets/sensor-pasco.js)
+
+프로토콜과 보정식은 PASCO scientific 이 공개한 파이썬 라이브러리 pasco 0.3.66 (PyPI) 의
+pasco_ble_device.py, datasheets.py 를 자바스크립트로 옮긴 것입니다. 데이터시트는 쓰는 센서의 정의만 추렸습니다.
+해당 라이브러리의 사용 조건(END USER LICENSE AGREEMENT FOR SOURCE CODE)에 따라 아래 문구를 포함합니다.
+
+Copyright (c) 2021 PASCO Scientific
+
+The Code is available for use solely by Licensee for personal, non-commercial and educational uses only.
+Redistribution and use in source and binary forms, with or without modification, are permitted provided
+that the following conditions are met:
+
+1. Neither the name of the Source Code provider nor the names of its contributors may be used to endorse
+   or promote products derived from this source code without specific prior written permission.
+2. Redistribution in any form must meet condition #1, and the following disclaimer in the documentation
+   and/or other materials provided with the distribution:
+
+   THIS SOURCE CODE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR
+   IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND
+   FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR
+   CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+   DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+   DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
+   IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT
+   OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+────────────────────────────────────────────────────────────────────────
+2. Vernier Go Direct (assets/vendor/godirect.min.umd.js)
+
+@vernier/godirect 1.8.3, BSD 3-Clause License, Copyright (c) 2019 Vernier Software & Technology.
+전문: assets/vendor/godirect.LICENSE.txt
+
+────────────────────────────────────────────────────────────────────────
+3. 사이언스큐브, EZMaker (assets/sensor-sciencecube.js, assets/sensor-ezmaker.js)
+
+무선 센서 실험실(github.com/Raph-Alpaca/sensor-lab)에서 실기기로 확인하며 작성한 코드를 옮긴 것입니다.
+실기기로 확인하지 못한 센서는 앱에서 "미확인"으로 표시합니다.

@@ -29,8 +29,10 @@
       <select id="selA"><option value="none">아무것도 안 감쌈</option><option value="paper">종이 한 겹</option><option value="foil">알루미늄 포일</option><option value="styro" selected>스티로폼</option><option value="wool">양털 천</option></select></div>
     <div class="field"><label for="selB">컵 B를 감싼 재료</label>
       <select id="selB"><option value="none" selected>아무것도 안 감쌈</option><option value="paper">종이 한 겹</option><option value="foil">알루미늄 포일</option><option value="styro">스티로폼</option><option value="wool">양털 천</option></select></div>
-    <div class="field"><label for="t0">처음 물 온도 <b></b></label><input type="range" id="t0" min="50" max="90" value="80"></div>
+    <div class="field sim-only"><label for="t0">처음 물 온도 <b></b></label><input type="range" id="t0" min="50" max="90" value="80"></div>
     <div class="field"><label for="env">교실 온도 <b></b></label><input type="range" id="env" min="10" max="30" value="20"></div>
+    <div class="field sensor-only" hidden><label for="kA">컵 A 이론 곡선의 냉각 상수 <b></b></label><input type="range" id="kA" min="0.005" max="0.12" step="0.001" value="0.02"></div>
+    <div class="field sensor-only" hidden><label for="kB">컵 B 이론 곡선의 냉각 상수 <b></b></label><input type="range" id="kB" min="0.005" max="0.12" step="0.001" value="0.055"></div>
     <p class="hint" id="condHint">조건을 바꾸면 실험이 처음부터 다시 시작됩니다.</p>
     <div class="row"><button class="btn primary" id="run">냉각 시작</button><button class="btn" id="reset">처음부터</button></div>
     <div class="readout"><div><small>경과 시간</small><b id="time">0분</b></div><div><small>두 컵 온도 차</small><b id="diff">0.0 ℃</b></div></div>
@@ -46,6 +48,7 @@
 <script>
 window.APP = {
   id: "g1-insulation", grade: 1, unit: "열", sensor: "온도 센서 2개",
+  sensorIn: { want: ["temperature"], max: 2, virtual: ["cooling-a", "cooling-b"] },
   title: "단열 재료 비교",
   question: "어떤 재료로 감싸야 뜨거운 물이 가장 천천히 식을까?",
   how: "두 컵을 다른 재료로 감싸고 냉각 그래프를 겹쳐 보세요. 차이가 벌어지는 순간에 메모를 남기면 그래프 위에 표시됩니다.",
@@ -64,23 +67,72 @@ const cv = $("c"), ctx = SIH.dpr(cv, 760, 360);
 const esc = s => s.replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 let t = 0, state = "idle", memos = [], T0 = 80, Tenv = 20, last = 0, memoAt = null;
 const temp = (k, tt) => Tenv + (T0 - Tenv) * Math.exp(-k * tt);
+
+// 실시간 센서: 연결 순서대로 첫 온도 센서가 컵 A, 둘째가 컵 B. 시간축은 실제 분이고,
+// 이론 곡선(점선)은 첫 측정값에서 출발한다. 냉각 상수를 움직여 실측 곡선에 맞춰 본다.
+let src = "sim", meas = { A: [], B: [] }, live = { A: null, B: null }, mt0 = null;
+const WORDS_S = { idle: "측정 시작", running: "측정 멈춤", paused: "계속 측정", done: "끝" };
+const words = () => (src === "sensor" ? WORDS_S : WORDS);
+const cupOf = (s) => { const i = SIHSensor.byQuantity("temperature").findIndex((c) => c.key === s.channel); return i === 0 ? "A" : i === 1 ? "B" : null; };
+const nearest = (arr, x) => arr.reduce((b, p) => (b === null || Math.abs(p[0] - x) < Math.abs(b[0] - x) ? p : b), null);
+window.addEventListener("sih:source", (e) => {
+  src = e.detail.source;
+  document.querySelectorAll(".sensor-only").forEach((el) => (el.hidden = src !== "sensor"));
+  document.querySelectorAll(".sim-only").forEach((el) => (el.hidden = src === "sensor"));
+  $("condHint").textContent = src === "sensor" ? "실선은 센서로 잰 온도, 점선은 뉴턴 냉각 이론 곡선입니다. 냉각 상수를 움직여 점선을 실선에 맞춰 보세요." : "조건을 바꾸면 실험이 처음부터 다시 시작됩니다.";
+  if (src === "sensor" && !window._insSub) window._insSub = SIHSensor.on((s) => {
+    if (src !== "sensor" || s.quantity !== "temperature") return;
+    const cup = cupOf(s); if (!cup) return;
+    live[cup] = s.value;
+    if (state === "running") {
+      if (mt0 === null) mt0 = s.t;
+      t = (s.t - mt0) / 60; meas[cup].push([t, s.value]);
+    }
+    draw();
+  });
+  if (src === "sensor" && !window._insChg) window._insChg = SIHSensor.onChange(() => { const n = SIHSensor.byQuantity("temperature").length; if (n < 1) live.A = null; if (n < 2) live.B = null; draw(); });
+  reset();
+});
 const selA = $("selA"), selB = $("selB");
 const WORDS = { idle: "냉각 시작", running: "일시정지", paused: "계속", done: "60분 끝" };
 
 function reset() {
-  state = "idle"; t = 0; memos = []; memoAt = null;
-  SIH.label($("run"), "idle", WORDS); renderMemos(); updMemoAt(); draw();
+  state = "idle"; t = 0; memos = []; memoAt = null; meas = { A: [], B: [] }; mt0 = null;
+  if (src === "sensor") { SIHSensor.record(false); SIHSensor.clearRecord(); }
+  SIH.label($("run"), "idle", words()); renderMemos(); updMemoAt(); draw();
 }
 // 조건이 바뀌면 이미 그린 곡선과 맞지 않으므로 처음부터
-const onCond = () => { if (t > 0) reset(); else draw(); };
+const onCond = () => { if (t > 0 && src !== "sensor") reset(); else draw(); };
 SIH.bind("t0", v => { T0 = v; onCond(); }, " ℃");
 SIH.bind("env", v => { Tenv = v; onCond(); }, " ℃");
-[selA, selB].forEach(s => s.addEventListener("change", onCond));
+SIH.bind("kA", () => draw(), " /분"); SIH.bind("kB", () => draw(), " /분");
+selA.addEventListener("change", () => { SIH.setRange("kA", K[selA.value]); onCond(); });
+selB.addEventListener("change", () => { SIH.setRange("kB", K[selB.value]); onCond(); });
 
+function drawSensor() {
+  const kA = +$("kA").value, kB = +$("kB").value, xMax = Math.max(10, Math.ceil(t / 10) * 10);
+  const th = (arr, k) => { if (!arr.length) return []; const pts = []; for (let s = 0; s <= xMax; s += xMax / 120) pts.push([s, Tenv + (arr[0][1] - Tenv) * Math.exp(-k * s)]); return pts; };
+  const top = Math.max(40, ...meas.A.map(p => p[1]), ...meas.B.map(p => p[1]), live.A ?? 0, live.B ?? 0);
+  const yMax = Math.ceil((top + 5) / 10) * 10;
+  const series = [
+    { pts: [[0, Tenv], [xMax, Tenv]], color: "#9db3ae", dash: [5, 5], width: 1.4 },
+    { pts: th(meas.A, kA), color: "#23a087", width: 1.8, dash: [7, 5] }, { pts: th(meas.B, kB), color: "#ee6b57", width: 1.8, dash: [7, 5] },
+    { pts: meas.A, color: "#23a087", width: 3 }, { pts: meas.B, color: "#ee6b57", width: 3 }
+  ];
+  if (memoAt != null) series.push({ pts: [[memoAt, 0], [memoAt, yMax]], color: "#e29a2a", width: 1.5, dash: [3, 4] });
+  cv._map = SIH.drawChart(ctx, { x: 0, y: 0, w: 760, h: 360, xMin: 0, xMax, yMin: 0, yMax, xTicks: 5, yTicks: yMax / 10, xLabel: "시간(분)", yLabel: "온도(℃)",
+    legend: [{ label: "컵 A 실측", color: "#23a087" }, { label: "컵 B 실측", color: "#ee6b57" }, { label: "이론", color: "#567370", dash: [7, 5] }],
+    series, marks: memos.map(m => { const a = nearest(meas.A, m.t), b = nearest(meas.B, m.t); return { x: m.t, y: Math.max(a ? a[1] : 0, b ? b[1] : 0), label: m.text.length > 10 ? m.text.slice(0, 10) + "…" : m.text }; }) });
+  $("tA").textContent = live.A == null ? "센서 없음" : live.A.toFixed(1) + " ℃";
+  $("tB").textContent = live.B == null ? "센서 없음" : live.B.toFixed(1) + " ℃";
+  $("time").textContent = t < 1 ? Math.round(t * 60) + "초" : t.toFixed(1) + "분";
+  $("diff").textContent = live.A == null || live.B == null ? "–" : Math.abs(live.A - live.B).toFixed(1) + " ℃";
+}
 function draw() {
-  const kA = K[selA.value], kB = K[selB.value];
   $("matA").textContent = NAME[selA.value];
   $("matB").textContent = NAME[selB.value];
+  if (src === "sensor") return drawSensor();
+  const kA = K[selA.value], kB = K[selB.value];
   const pa = [], pb = [];
   for (let s = 0; s < t; s += 0.25) { pa.push([s, temp(kA, s)]); pb.push([s, temp(kB, s)]); }
   pa.push([t, temp(kA, t)]); pb.push([t, temp(kB, t)]);
@@ -99,7 +151,7 @@ function draw() {
   $("diff").textContent = Math.abs(temp(kA, t) - temp(kB, t)).toFixed(1) + " ℃";
 }
 function loop(now) {
-  if (state !== "running") return;
+  if (state !== "running" || src === "sensor") return;
   const dt = Math.min(0.1, (now - last) / 1000); last = now;
   t = Math.min(TMAX, t + dt * SPEED);
   if (t >= TMAX) { state = "done"; SIH.label($("run"), "done", WORDS); }
@@ -108,8 +160,9 @@ function loop(now) {
 }
 $("run").onclick = () => {
   if (state === "running") state = "paused";
-  else if (state !== "done") { state = "running"; last = performance.now(); requestAnimationFrame(loop); }
-  SIH.label($("run"), state, WORDS);
+  else if (state !== "done") { state = "running"; last = performance.now(); if (src !== "sensor") requestAnimationFrame(loop); }
+  if (src === "sensor") SIHSensor.record(state === "running");
+  SIH.label($("run"), state, words());
 };
 $("reset").onclick = reset;
 
@@ -128,7 +181,7 @@ $("memo").addEventListener("keydown", e => { if (e.key === "Enter") addMemo(); }
 cv.addEventListener("click", ev => {
   const [X] = SIH.canvasXY(cv, ev, 760, 360);
   const [x] = cv._map.inv(X, 0);
-  if (x < 0 || x > TMAX) return;
+  if (x < 0 || x > (src === "sensor" ? Math.max(10, t) : TMAX)) return;
   memoAt = Math.max(0, Math.min(t, x)); updMemoAt(); draw(); $("memo").focus();
 });
 function renderMemos() {

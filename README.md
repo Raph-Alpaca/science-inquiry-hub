@@ -27,6 +27,10 @@ submit.html                 학생 제출 폼 (?code=책장코드)
 teacher.html                선생님 화면 (구글 로그인, 승인, QR, CSV, 학생 화면 보기)
 shelf/teacher.json          모든 학교에 공통으로 보이는 "선생님 예시" 9권
 assets/hub.css, hub.js      탐구 앱 9개의 공통 틀
+assets/sensor.js            실시간 센서 공통 계층 (표준 스트림·연결 버튼·진단·CSV)
+assets/sensor-*.js          업체별 어댑터 (PASCO·사이언스큐브·EZMaker·Vernier) + 가상 센서
+assets/vendor/              Vernier godirect 라이브러리 (BSD-3-Clause)
+assets/sensor-NOTICE.txt    센서 코드의 출처·라이선스 고지
 assets/shelf.css            책장·제출·교사 화면 공통 스타일 (크림·나무 테마)
 assets/shelf-data.js        Firebase 데이터 계층 + 미리보기(데모) 모드
 assets/firebase-config.js   Firebase 웹 설정 (여기에 값을 채웁니다)
@@ -41,7 +45,7 @@ firebase.json               규칙 배포·에뮬레이터 설정
 netlify.toml, deploy/       Netlify 배포 설정 (사이트별 첫 화면과 짧은 주소)
 docs/teacher-guide.md       선생님께 나눠 줄 한 쪽짜리 안내
 docs/manual.html            운영 설명서 (수업 절차·문제 해결·고칠 파일 위치)
-reference/                  무선 센서 연결 참고 코드 (이번 작업에서 건드리지 않음)
+reference/                  무선 센서 연결 참고 코드 (저장소에 올리지 않음. 어댑터는 여기서 옮겨 온 것)
 ```
 
 ## 문서
@@ -119,6 +123,7 @@ cd tests && npm install && npm test
 ```
 
 - `app-test.mjs` 탐구 앱 10쪽 (1920·1280·380) 53항목
+- `sensor-test.mjs` 실시간 센서 모드 58항목 (가상 센서 시나리오, 가짜 블루투스로 어댑터 4종, 외부 전송 0건)
 - `shelf-test.mjs` 책장·제출·선생님 화면 (1920·1200·380) 107항목
 - `peek-test.mjs` 선생님 화면 옆 패널 39항목
 - `code-entry-test.mjs` 책장 코드 입력 칸 22항목
@@ -136,18 +141,50 @@ cd tests && npm install && npm test
 </section>
 <script src="../assets/hub.js"></script>
 <script>
-window.APP = { id, grade, unit, title, question, how, notes:[…], prompt, next, sensor };
+window.APP = { id, grade, unit, title, question, how, notes:[…], prompt, next, sensor, sensorIn };
 SIH.shell();          // 상단 바·탐구 기록·프롬프트 보기 생성
 // SIH.dpr / SIH.px / SIH.drawChart / SIH.bind / SIH.label / SIH.tabs / SIH.reduced
 // window "sih:resize" 이벤트 → 창 크기가 바뀌면 다시 그리기
 </script>
 ```
 
-## 실시간 센서 연결 (다음 단계)
+## 실시간 센서 연결
 
-각 탐구 앱의 데이터 소스 선택에 `sensor` 옵션이 비활성 상태로 들어 있습니다.
-`reference/` 의 무선 센서 실험실(Web Bluetooth / Web Serial) 코드를 공통 모듈로 옮긴 뒤,
-앱별로 시뮬레이션 계산 함수 대신 센서 값을 넣는 방식으로 연결할 계획입니다.
+앱 상단 **데이터 → 실시간 센서**를 고르면 무선 센서(Web Bluetooth)를 연결합니다.
+크롬북·안드로이드 태블릿·윈도우의 Chrome/Edge 에서 동작하고, HTTPS 가 필요합니다. iPad 는 대상이 아닙니다.
+지원하지 않는 브라우저에서는 안내만 보이고 시뮬레이션으로 그대로 동작합니다.
+
+| 앱 | 센서 | 입력으로 쓰기 | 겹쳐 비교 |
+|---|---|---|---|
+| g1-insulation 단열 | 온도 1~2개 (연결 순서대로 컵 A·B) | 첫 측정값이 이론 곡선의 처음 온도 | 실측 곡선 위에 뉴턴 냉각 곡선(점선). 냉각 상수를 움직여 맞춘다 |
+| g1-heating 가열 곡선 | 온도 | 실측 온도가 입자 모형·상태 표시를 움직임 | 실측 곡선 위에 이론 가열 곡선. 0 ℃·100 ℃ 에 머문 구간을 실측에서 찾음 |
+| g3-dewpoint 이슬점 | 온도(컵 표면) + 온습도(공기, 있으면) | 컵 온도·기온·습도 | 눈으로 본 이슬 맺힘 온도 ↔ 곡선의 이슬점 ↔ 예측 |
+| g3-energy 진자 탭 | 힘 (진자를 매단다) | 최대 장력 → 최하점 속력 → 운동 에너지 | 장력 실측 위에 이론 장력 곡선, 주기 비교 |
+
+구조
+
+- 앱은 업체를 모릅니다. `SIHSensor.on(s => …)` 으로 `{quantity, unit, value, t, axis, channel, device, source}` 만 받습니다.
+  앱이 쓸 물리량은 `APP.sensorIn = { want:["temperature"], max:2, virtual:[…] }` 로 선언합니다.
+- 업체별 차이는 어댑터에 있습니다. "센서 연결" 버튼 하나가 네 업체의 이름 필터·서비스 UUID 를 합쳐 기기 선택 창을 한 번 띄우고,
+  고른 기기의 이름(없으면 서비스)으로 어댑터를 정합니다. 단위는 어댑터가 표준 단위(℃, N, m/s², %, kPa, ppm…)로 바꿉니다.
+- 센서 코드는 센서를 고른 사람만 내려받습니다(시뮬레이션만 쓰면 요청 0건). Vernier 라이브러리는 Go Direct 기기를 골랐을 때만 불러옵니다.
+- 첫 연결에는 반드시 클릭과 기기 선택 창이 필요합니다(Web Bluetooth 의 제약). 한 번 허용한 기기의 자동 재연결은
+  `getDevices`/`watchAdvertisements` 를 지원하는 환경에서만 덤으로 동작합니다.
+- 측정값은 페이지 밖으로 보내지 않습니다. CSV 는 로컬 다운로드뿐입니다.
+- **진단 · 기록**을 펼치면 연결 상태, 마지막 패킷(16진수), 원시 값, 해석 값, 초당 표본 수, 로그가 보입니다. 실물 센서로 확인할 때 씁니다.
+- 가상 센서: 주소에 `?sensor=virtual` (빠르게 보려면 `&vspeed=60`) 을 붙이거나 "가상 센서로 체험" 버튼.
+
+어댑터별 메모
+
+- PASCO: 온도(PS-3201), 고속 온도(PS-3222), 힘·가속도(PS-3202)만 넣었습니다. 한 번 읽기 명령을 되풀이하는 방식이라 10 Hz 안팎이고,
+  그래서 앱이 원하는 채널만 두드립니다(진자에서는 힘만). 힘의 공장 보정은 데이터시트 기본값을 쓰므로 "영점"을 눌러 맞춥니다.
+- 사이언스큐브: 실기기로 확인된 것은 온도(WL100T)·힘가속도(WL105F)입니다. 나머지는 "미확인 센서"로 표시되고, 값이 예상 범위를 벗어나면 로그에 남깁니다.
+- EZMaker: 무선(BLE)만. 보드는 꽂힌 센서를 모르므로 앱이 원하는 물리량에 맞는 센서 번호를 지정합니다(온도→22, 온습도→23, 무게→16…).
+  보드에 이미 맞는 센서가 설정돼 있으면 그대로 씁니다. 무게센서는 5 Hz 라 진자에서는 주기 비교만 쓸 만합니다.
+- Vernier: 이름·단위로 물리량을 정합니다.
+- 어댑터를 늘리려면 `assets/sensor-*.js` 를 하나 더 만들고 `hub.js` 의 불러오기 목록에 넣습니다.
+
+`shelf.html` 의 미리보기 iframe 은 같은 출처(우리 앱)일 때만 `allow="bluetooth"` 를 줍니다.
 
 ## 배포
 

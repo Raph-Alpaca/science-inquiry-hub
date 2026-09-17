@@ -187,9 +187,37 @@ footer.app-foot { margin-top: 26px; font-size: .85em; color: var(--muted); borde
   .ask .q { font-size: 1.05em; }
   .top { gap: 8px 12px; }
   .source { width: 100%; }
-  .source select { flex: 1; }
+  .source select { flex: 1; min-width: 0; }
   .note { padding: 16px; }
 }
 @media (prefers-reduced-motion: reduce) {
   * { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
 }
+
+/* ---------- 실시간 센서 막대 (assets/sensor.js 가 채운다) ---------- */
+.source .dot.live { background: var(--mint); box-shadow: 0 0 0 3px var(--mint-soft); }
+.sensorbar { background: var(--card); border: 1px solid var(--line); border-left: 4px solid var(--g); border-radius: var(--radius); padding: 12px 16px; margin: -8px 0 22px; display: flex; flex-direction: column; gap: 10px; }
+.sensorbar[hidden] { display: none; }
+.sb-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.sb-status { color: var(--ink-2); font-size: .9em; }
+.sb-notice { margin: 0; padding: 8px 12px; border-radius: var(--radius-s); background: var(--amber-soft); color: var(--amber-ink); font-size: .92em; }
+.sb-chips { display: flex; gap: 8px; flex-wrap: wrap; }
+.sb-chips:empty { display: none; }
+.sb-dev { display: flex; align-items: center; gap: 6px 14px; flex-wrap: wrap; background: var(--paper); border-radius: var(--radius-s); padding: 6px 8px 6px 12px; min-width: 0; }
+.sb-dev.virtual { outline: 1px dashed var(--amber); }
+.sb-name { font-weight: 700; font-size: .9em; }
+.sb-name em { font-style: normal; font-weight: 600; font-size: .85em; color: var(--amber-ink); background: var(--amber-soft); border-radius: 999px; padding: 1px 8px; margin-left: 4px; }
+.sb-val { display: flex; align-items: baseline; gap: 6px; }
+.sb-val small { color: var(--muted); font-size: .8em; }
+.sb-val b { font-size: 1.15em; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.sb-val.stale b { opacity: .4; }
+.sb-dev .x { border: none; background: none; color: var(--muted); padding: 4px 8px; }
+.sb-dev .x:hover { color: var(--coral-ink); }
+.sb-diag summary { cursor: pointer; font-size: .88em; font-weight: 600; color: var(--ink-2); padding: 2px 0; }
+.sb-diag[open] summary { margin-bottom: 8px; }
+.sb-table { overflow-x: auto; margin-top: 8px; }
+.sb-table table { width: 100%; border-collapse: collapse; font-size: .85em; }
+.sb-table th, .sb-table td { padding: 4px 6px; border-bottom: 1px solid var(--line-2); text-align: left; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.sb-table code { font-size: .92em; white-space: normal; word-break: break-all; }
+.sb-log { margin: 8px 0; max-height: 180px; overflow: auto; background: var(--paper); border-radius: var(--radius-s); padding: 8px 10px; font-size: .78em; line-height: 1.5; white-space: pre-wrap; word-break: break-all; }
+.sensor-only[hidden], .sim-only[hidden], .field[hidden], .readout[hidden] { display: none !important; }

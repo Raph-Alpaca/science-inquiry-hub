@@ -26,7 +26,8 @@
     <p class="result" id="over" hidden></p>
     <h3>예측하고 확인하기</h3>
     <div class="field"><label for="pred">컵을 몇 ℃까지 식히면 이슬이 맺힐까? (예측)</label><input type="number" id="pred" step="0.5" min="0" max="35" placeholder="예: 14" inputmode="decimal"></div>
-    <div class="row"><button class="btn primary" id="cool">컵 식히기</button><button class="btn" id="reset">다시</button></div>
+    <div class="row"><button class="btn primary" id="cool">컵 식히기</button><button class="btn sensor-only" id="sawDew" hidden disabled>이슬이 보여요</button><button class="btn" id="reset">다시</button></div>
+    <p class="hint sensor-only" hidden id="sensorHint"></p>
     <div class="result" id="res" aria-live="polite">컵 온도: 기온과 같음</div>
     <div class="field"><label><input type="checkbox" id="showDew"> 그래프에 이슬점 표시하기</label></div>
     <p class="hint">예측을 먼저 적어야 하니 이슬점 표시는 꺼 두었습니다. 이슬이 맺히면 자동으로 켜집니다.</p>
@@ -36,6 +37,7 @@
 <script>
 window.APP = {
   id: "g3-dewpoint", grade: 3, unit: "날씨와 기후변화", sensor: "온도·습도 센서",
+  sensorIn: { want: ["temperature", "humidity"], max: 2, virtual: ["cup", "air"] },
   title: "이슬점·습도 예측기",
   question: "같은 양의 수증기를 품은 공기도 기온에 따라 습도가 달라지는 이유는 무엇일까?",
   how: "기온과 수증기량을 정해 그래프 위의 점을 움직여 보세요. 이슬점을 예측한 뒤 컵을 식혀 실제로 이슬이 맺히는 온도를 확인하세요.",
@@ -55,9 +57,51 @@ const cg = $("g"), cG = SIH.dpr(cg, 520, 340), ck = $("k"), cK = SIH.dpr(ck, 180
 let T = 25, w = 12, cupT = 25, state = "idle", last = 0, drops = [], dewAt = null;
 const WORDS = { idle: "컵 식히기", running: "멈춤", paused: "계속 식히기", done: "끝" };
 
+// 실시간 센서: 습도를 주는 센서는 "공기"(그 온도가 기온), 온도만 주는 센서는 "컵 표면"에 댄 것으로 본다.
+// 컵 센서가 있으면 컵 온도는 실측이고, 이슬이 보이는 순간은 학생이 눈으로 보고 버튼으로 알린다.
+let src = "sim", probe = false, airDev = null, airMeasured = false;
+const WORDS_S = { idle: "측정 시작", running: "측정 멈춤", paused: "계속 측정", done: "끝" };
+const words = () => (src === "sensor" && probe ? WORDS_S : WORDS);
+function roles() {
+  const h = SIHSensor.byQuantity("humidity")[0];
+  airDev = h ? h.deviceKey : null; airMeasured = !!h;
+  probe = SIHSensor.byQuantity("temperature").some((c) => c.deviceKey !== airDev);
+  $("T").disabled = $("w").disabled = airMeasured;
+  $("sensorHint").textContent = (probe ? "컵 표면 온도는 센서 값입니다. 얼음물을 넣고 측정을 시작한 뒤, 컵 겉면이 뿌옇게 되는 순간 「이슬이 보여요」를 누르세요." : "온도 센서를 컵 겉면에 붙이면 컵 온도를 실제로 잴 수 있어요.") +
+    (airMeasured ? " 기온과 수증기량은 온습도 센서 값으로 정해집니다." : " 습도 센서가 없으면 기온과 수증기량을 직접 정하세요.");
+  if (state === "idle") SIH.label($("cool"), "idle", words());
+}
+window.addEventListener("sih:source", (e) => {
+  src = e.detail.source;
+  document.querySelectorAll(".sensor-only").forEach((el) => (el.hidden = src !== "sensor"));
+  if (src !== "sensor") { probe = airMeasured = false; airDev = null; $("T").disabled = $("w").disabled = false; T = +$("T").value; w = +$("w").value; SIH.setRange("T", T); }
+  else if (!window._dewSub) {
+    window._dewSub = SIHSensor.on((s) => {
+      if (src !== "sensor") return;
+      if (s.quantity === "humidity") { w = Math.round(s.value / 100 * sat(T) * 10) / 10; document.querySelector('label[for="w"] b').textContent = `${w} g (습도 ${s.value.toFixed(0)} %)`; }
+      else if (s.quantity === "temperature" && s.device === airDev) { T = s.value; document.querySelector('label[for="T"] b').textContent = T.toFixed(1) + " ℃"; if (!probe && state === "idle") cupT = T; }
+      else if (s.quantity === "temperature") { cupT = s.value; if (state === "running") $("res").textContent = `컵 표면 ${cupT.toFixed(1)} ℃ … 이슬이 보이면 버튼을 누르세요`; }
+      else return;
+      draw();
+    });
+    SIHSensor.onChange(() => { if (src === "sensor") roles(); });
+  }
+  if (src === "sensor") roles();
+  resetCup();
+});
+$("sawDew").onclick = () => {
+  const dp = dewOf(Math.min(w, sat(T))), raw = $("pred").value.trim(), res = $("res");
+  dewAt = cupT; state = "done"; SIH.label($("cool"), "done", words()); $("sawDew").disabled = true; SIHSensor.record(false);
+  while (drops.length < 30) drops.push({ x: 52 + Math.random() * 76, y: 95 + Math.random() * 140, r: 2 + Math.random() * 3.5 });
+  res.classList.add("good");
+  res.innerHTML = `컵 표면이 <b>${cupT.toFixed(1)} ℃</b>일 때 이슬을 보았어요. 곡선으로 구한 이슬점 ${dp.toFixed(1)} ℃와 <b>${Math.abs(cupT - dp).toFixed(1)} ℃</b> 차이.` + (raw === "" || isNaN(+raw) ? "" : ` 예측 ${(+raw).toFixed(1)} ℃와는 ${Math.abs(+raw - cupT).toFixed(1)} ℃ 차이.`);
+  $("showDew").checked = true; draw();
+};
+
 function resetCup() {
-  state = "idle"; cupT = T; drops = []; dewAt = null;
-  SIH.label($("cool"), "idle", WORDS); $("res").textContent = "컵 온도: 기온과 같음"; $("res").classList.remove("good");
+  state = "idle"; if (!(src === "sensor" && probe)) cupT = T; drops = []; dewAt = null;
+  if (src === "sensor") { SIHSensor.record(false); SIHSensor.clearRecord(); $("sawDew").disabled = true; }
+  SIH.label($("cool"), "idle", words()); $("res").textContent = "컵 온도: 기온과 같음"; $("res").classList.remove("good");
   draw();
 }
 SIH.bind("T", v => { T = v; resetCup(); }, " ℃");
@@ -91,7 +135,8 @@ function draw() {
 }
 function loop(now) {
   const dt = Math.min(0.1, (now - last) / 1000); last = now;
-  if (state === "running") {
+  if (state === "running" && src === "sensor" && probe) draw();
+  else if (state === "running") {
     const dp = dewOf(Math.min(w, sat(T)));
     cupT = Math.max(ICE, cupT - dt * COOL_RATE);
     if (cupT <= dp) {
@@ -112,7 +157,11 @@ function loop(now) {
   }
   requestAnimationFrame(loop);
 }
-$("cool").onclick = () => { if (state === "running") state = "paused"; else if (state !== "done") state = "running"; SIH.label($("cool"), state, WORDS); };
+$("cool").onclick = () => {
+  if (state === "running") state = "paused"; else if (state !== "done") state = "running";
+  if (src === "sensor") { SIHSensor.record(state === "running"); $("sawDew").disabled = !(probe && state === "running"); }
+  SIH.label($("cool"), state, words());
+};
 $("reset").onclick = resetCup;
 window.addEventListener("sih:resize", draw);
 last = performance.now(); resetCup(); requestAnimationFrame(loop);

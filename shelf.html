@@ -362,7 +362,8 @@ function sameOrigin(url) {
 function mountApp(b) {
   const box = $("bkPreview");
   if (sameOrigin(b.url)) {
-    box.innerHTML = `<iframe src="${esc(b.url)}" title="${esc(b.title)} 미리보기" loading="lazy"></iframe>`;
+    // 우리 탐구 앱(같은 출처)에만 블루투스 센서 권한을 넘긴다. 바깥 사이트의 학생 작품에는 주지 않는다
+    box.innerHTML = `<iframe src="${esc(b.url)}" title="${esc(b.title)} 미리보기" loading="lazy" allow="bluetooth"></iframe>`;
     return;
   }
   box.innerHTML = `<div style="text-align:center;padding:16px">

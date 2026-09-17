@@ -18,6 +18,10 @@
       <canvas id="c" role="img" aria-label="트랙 또는 진자 위의 공"></canvas>
       <div class="side"><canvas id="bars" role="img" aria-label="에너지 막대 그래프"></canvas></div>
     </div>
+    <div class="sensor-only" id="forceBox" hidden>
+      <canvas id="fc" role="img" aria-label="시간에 따른 진자 줄의 장력 그래프: 실측과 이론"></canvas>
+      <p class="cap" id="fcap">힘 센서에 진자를 매달고, 추를 놓는 순간 「놓기」를 누르세요.</p>
+    </div>
     <p class="cap" id="cap">공을 놓으면 위치 에너지가 운동 에너지로 바뀝니다. 오른쪽 막대는 매 순간의 에너지입니다.</p>
   </div>
   <aside class="controls">
@@ -29,14 +33,17 @@
     </div>
     <div id="pCtl" hidden>
       <div class="field"><label for="ang">놓는 각도 <b></b></label><input type="range" id="ang" min="10" max="80" step="5" value="45"></div>
-      <div class="field"><label for="len">줄 길이 <b></b></label><input type="range" id="len" min="1" max="3" step="0.5" value="2"></div>
+      <div class="field sim-only"><label for="len">줄 길이 <b></b></label><input type="range" id="len" min="1" max="3" step="0.5" value="2"></div>
+      <div class="field sensor-only" hidden><label for="lenCm">실제 줄 길이 (고정점~추 중심, cm)</label><input type="number" id="lenCm" min="10" max="200" step="1" value="50" inputmode="decimal"></div>
+      <div class="field sensor-only" hidden><label for="massG">실제 추의 질량 (g)</label><input type="number" id="massG" min="10" max="2000" step="1" value="200" inputmode="decimal"></div>
       <div class="field"><label><input type="checkbox" id="fricP"> 공기 저항 켜기</label></div>
     </div>
-    <div class="field"><label for="mass">공의 질량 <b></b></label><input type="range" id="mass" min="0.5" max="3" step="0.5" value="1"></div>
-    <div class="field"><label for="spd">재생 속도</label>
+    <div class="field" id="massField"><label for="mass">공의 질량 <b></b></label><input type="range" id="mass" min="0.5" max="3" step="0.5" value="1"></div>
+    <div class="field" id="spdField"><label for="spd">재생 속도</label>
       <select id="spd"><option value="0.25">아주 느리게 (¼배)</option><option value="0.5" selected>느리게 (½배)</option><option value="1">실제 빠르기</option></select></div>
     <div class="row"><button class="btn primary" id="go">놓기</button><button class="btn" id="reset">처음으로</button></div>
     <div class="readout"><div><small>높이</small><b id="rh">– m</b></div><div><small>속력</small><b id="rv">– m/s</b></div><div><small>위치 에너지</small><b id="rpe">– J</b></div><div><small>운동 에너지</small><b id="rke">– J</b></div></div>
+    <div class="readout sensor-only" id="measOut" hidden><div><small>최대 장력 (실측 / 이론)</small><b id="mT">–</b></div><div><small>주기 (실측 / 이론)</small><b id="mP">–</b></div><div><small>최하점 속력 (실측)</small><b id="mV">–</b></div><div><small>운동 에너지 (실측)</small><b id="mKE">–</b></div></div>
     <p class="result" id="msg" aria-live="polite" hidden></p>
     <p class="hint">g = 9.8 m/s². 공은 구르지 않고 미끄러진다고 가정합니다. 언덕을 출발 높이보다 높게 하면 어떻게 될까요?</p>
   </aside>
@@ -44,7 +51,8 @@
 <script src="../assets/hub.js"></script>
 <script>
 window.APP = {
-  id: "g3-energy", grade: 3, unit: "운동과 에너지", sensor: "거리(운동) 센서, 힘 센서",
+  id: "g3-energy", grade: 3, unit: "운동과 에너지", sensor: "힘 센서 · 진자 탭",
+  sensorIn: { want: ["force"], max: 1, virtual: ["pendulum"] },
   title: "에너지 전환 시뮬레이터",
   question: "출발 높이가 낮은 공이 더 높은 언덕을 넘을 수 있을까? 에너지는 어디로 갈까?",
   how: "높이와 질량을 바꾸고 공을 놓아 보세요. 위치 에너지와 운동 에너지 막대의 합이 어떻게 되는지, 마찰을 켜면 무엇이 달라지는지 관찰하세요.",
@@ -59,6 +67,8 @@ const $ = id => document.getElementById(id);
 const cv = $("c"), ctx = SIH.dpr(cv, 600, 360), cb = $("bars"), ctb = SIH.dpr(cb, 210, 360);
 let mode = "track", h0 = 8, hh = 5, m = 1, state = "idle", x = 0, dir = 1, loss = 0, last = 0, ang = 45, L = 2, th = 0, om = 0, speed = 0.5, t = 0;
 const WORDS = { idle: "놓기", running: "멈춤", paused: "계속", done: "끝" };
+let src = "sim", fpts = [], ft0 = null, theory = null, meas = null;   // 실시간 센서(진자 탭) — 아래 설명 참고
+const fcv = $("fc"), fctx = SIH.dpr(fcv, 760, 240), sensorOn = () => src === "sensor" && mode === "pend";
 // 트랙 모양: 출발 언덕(코사인) + 중간 언덕(종 모양)
 const H = xx => (xx < 6 ? h0 * 0.5 * (1 + Math.cos(Math.PI * xx / 6)) : 0) + hh * Math.exp(-(((xx - 12) / 1.6) ** 2));
 const PX = xx => 30 + xx * 27.5, PY = h => 330 - h * 27;
@@ -68,14 +78,74 @@ SIH.bind("h0", v => { h0 = v; reset(); }, " m"); SIH.bind("hh", v => { hh = v; r
 SIH.bind("ang", v => { ang = v; reset(); }, "°"); SIH.bind("len", v => { L = v; reset(); }, " m");
 $("spd").onchange = e => speed = +e.target.value;
 $("fric").onchange = $("fricP").onchange = reset;
+// 실시간 센서(진자 탭): 힘 센서에 진자를 매달아 줄의 장력을 잰다.
+//  겹쳐 보기: 이론 장력 T = m(g·cosθ + L·ω²) 곡선을 실측 위에 그린다. 놓는 순간을 정확히 맞출 수 없으므로 첫 봉우리(최하점)끼리 맞춘다.
+//  입력으로 쓰기: 실측 최대 장력에서 최하점 속력 v² = (T최대/m − g)·L 을 구해 운동 에너지를 계산하고, 막대에 "실측" 눈금으로 표시한다.
+function peaks(pts) { // 앞뒤 3개보다 큰 점. 잡음으로 생긴 작은 봉우리는 전체 진폭의 70% 기준으로 거른다
+  const lo = Math.min(...pts.map(p => p[1])), hi = Math.max(...pts.map(p => p[1])), out = [];
+  for (let i = 3; i < pts.length - 3; i++) { const v = pts[i][1]; if (v > lo + (hi - lo) * 0.7 && [1, 2, 3].every(k => v >= pts[i - k][1] && v >= pts[i + k][1]) && (!out.length || pts[i][0] - out[out.length - 1][0] > 0.15)) out.push(pts[i]); }
+  return out;
+}
+function buildTheory() { // 마찰 없는 진자를 12초 적분해 장력 곡선과 주기를 구해 둔다
+  let a = ang * Math.PI / 180, o = 0; const pts = [], h = 0.001;
+  for (let i = 0; i <= 12000; i++) { if (i % 10 === 0) pts.push([i * h, m * (g * Math.cos(a) + L * o * o)]); o += -(g / L) * Math.sin(a) * h; a += o * h; }
+  const pk = peaks(pts);
+  theory = { pts, first: pk.length ? pk[0][0] : 0, period: pk.length > 2 ? pk[2][0] - pk[0][0] : NaN, Tmax: m * g * (3 - 2 * Math.cos(ang * Math.PI / 180)) };
+}
+function analyse() {
+  meas = null; if (fpts.length < 12) return;
+  const pk = peaks(fpts); if (!pk.length) return;
+  const Tmax = Math.max(...pk.map(p => p[1])), v2 = (Tmax / m - g) * L;
+  meas = { first: pk[0][0], Tmax, v: v2 > 0 ? Math.sqrt(v2) : 0, KE: v2 > 0 ? 0.5 * m * v2 : 0, period: pk.length > 2 ? 2 * (pk[pk.length - 1][0] - pk[0][0]) / (pk.length - 1) : NaN };
+}
+function applyReal() { if (!sensorOn()) return; L = Math.max(0.1, (+$("lenCm").value || 50) / 100); m = Math.max(0.01, (+$("massG").value || 200) / 1000); }
+function sensorUi() {
+  const on = sensorOn();
+  document.querySelectorAll(".sensor-only").forEach(el => (el.hidden = !on));
+  document.querySelectorAll(".sim-only").forEach(el => (el.hidden = on));
+  $("massField").hidden = $("spdField").hidden = on;
+  if (on) { applyReal(); speed = 1; SIH.refit(); } else { L = +$("len").value; m = +$("mass").value; speed = +$("spd").value; }
+}
+$("lenCm").oninput = $("massG").oninput = () => { applyReal(); reset(); };
+window.addEventListener("sih:source", e => {
+  src = e.detail.source;
+  if (src === "sensor" && !window._enSub) window._enSub = SIHSensor.on(s => {
+    if (!sensorOn() || s.quantity !== "force" || state !== "running") return;
+    if (ft0 === null) ft0 = s.t;
+    fpts.push([s.t - ft0, Math.abs(s.value)]); if (fpts.length > 3000) fpts.shift();
+  });
+  sensorUi(); reset();
+  if (src === "sensor" && mode !== "pend") say("힘 센서는 진자 탭에서 씁니다. 트랙은 시뮬레이션으로 동작해요.");
+});
+function drawForce() {
+  analyse();
+  const tEnd = fpts.length ? fpts[fpts.length - 1][0] : 0, xMax = Math.max(10, Math.ceil(tEnd / 5) * 5), xMin = xMax - 10;
+  const shift = meas && theory ? meas.first - theory.first : 0;   // 첫 봉우리끼리 맞춘다
+  const th = theory ? theory.pts.map(p => [p[0] + shift, p[1]]) : [];
+  const yMax = Math.max(1, Math.ceil(Math.max(theory ? theory.Tmax : 1, meas ? meas.Tmax : 0) * 1.2 * 2) / 2);
+  SIH.drawChart(fctx, { x: 0, y: 0, w: 760, h: 240, xMin, xMax, yMin: 0, yMax, xTicks: 5, yTicks: 4, xLabel: "시간(s)", yLabel: "줄의 장력(N)",
+    legend: [{ label: "실측", color: "#ee6b57" }, { label: "이론", color: "#567370", dash: [7, 5] }, { label: "추의 무게 mg", color: "#9db3ae", dash: [3, 4] }],
+    series: [{ pts: [[xMin, m * g], [xMax, m * g]], color: "#9db3ae", width: 1.4, dash: [3, 4] }, { pts: th, color: "#567370", width: 1.8, dash: [7, 5] }, { pts: fpts, color: "#ee6b57", width: 2.6 }] });
+  const f2 = v => v.toFixed(2);
+  $("mT").textContent = `${meas ? f2(meas.Tmax) : "–"} / ${theory ? f2(theory.Tmax) : "–"} N`;
+  $("mP").textContent = `${meas && isFinite(meas.period) ? f2(meas.period) : "–"} / ${theory && isFinite(theory.period) ? f2(theory.period) : "–"} s`;
+  $("mV").textContent = meas ? f2(meas.v) + " m/s" : "–"; $("mKE").textContent = meas ? meas.KE.toFixed(3) + " J" : "–";
+  $("fcap").textContent = meas ? `실측 최대 장력으로 구한 최하점 운동 에너지 ${meas.KE.toFixed(3)} J — 처음 위치 에너지 ${Etotal().toFixed(3)} J의 ${Math.round(meas.KE / Etotal() * 100)} %입니다. 막대 그래프의 "실측" 눈금과 비교해 보세요.` : "힘 센서에 진자를 매달고(매달기 전에 영점), 추를 놓는 순간 「놓기」를 누르세요. 가만히 매달려 있을 때 장력은 추의 무게 mg 와 같아야 합니다.";
+}
+
 SIH.tabs([{ btn: "tabT", panel: "tCtl", key: "track" }, { btn: "tabP", panel: "pCtl", key: "pend" }], k => {
   mode = k;
   $("cap").textContent = k === "track" ? "공을 놓으면 위치 에너지가 운동 에너지로 바뀝니다. 오른쪽 막대는 매 순간의 에너지입니다." : "진자가 흔들리는 동안 가장 낮은 점과 가장 높은 점에서 두 에너지 막대를 비교해 보세요.";
-  reset();
+  sensorUi(); reset();
+  if (src === "sensor" && k !== "pend") say("힘 센서는 진자 탭에서 씁니다. 트랙은 시뮬레이션으로 동작해요.");
 });
-function reset() { state = "idle"; x = 0; dir = 1; loss = 0; t = 0; th = ang * Math.PI / 180; om = 0; SIH.label($("go"), "idle", WORDS); say(""); draw(); }
+function reset() {
+  state = "idle"; x = 0; dir = 1; loss = 0; t = 0; th = ang * Math.PI / 180; om = 0; SIH.label($("go"), "idle", WORDS); say("");
+  fpts = []; ft0 = null; meas = null; if (sensorOn()) { buildTheory(); SIHSensor.record(false); SIHSensor.clearRecord(); }
+  draw();
+}
 $("reset").onclick = reset;
-$("go").onclick = () => { if (state === "running") state = "paused"; else if (state !== "done") state = "running"; SIH.label($("go"), state, WORDS); };
+$("go").onclick = () => { if (state === "running") state = "paused"; else if (state !== "done") state = "running"; if (sensorOn()) SIHSensor.record(state === "running"); SIH.label($("go"), state, WORDS); };
 
 function Etotal() { return m * g * (mode === "track" ? h0 : L * (1 - Math.cos(ang * Math.PI / 180))); }
 function stateTrack() { const h = H(x); const avail = Math.max(0, h0 - loss - h); return { h, v: Math.sqrt(2 * g * avail), heat: m * g * loss }; }
@@ -125,7 +195,7 @@ function draw() {
     st = stateTrack(); c.fillStyle = "#ee6b57"; c.beginPath(); c.arc(PX(x), PY(st.h) - 11, 10, 0, Math.PI * 2); c.fill();
     c.strokeStyle = "#b8402b"; c.lineWidth = 1.5; c.stroke();
   } else {
-    const ox = 300, oy = 34, s = 95, bx = ox + Math.sin(th) * L * s, by = oy + Math.cos(th) * L * s;
+    const ox = 300, oy = 34, s = sensorOn() ? 250 / L : 95, bx = ox + Math.sin(th) * L * s, by = oy + Math.cos(th) * L * s;
     c.fillStyle = "#4c6663"; c.fillRect(ox - 60, oy - 6, 120, 6);
     c.strokeStyle = "#d3e2dd"; c.setLineDash([4, 4]); c.lineWidth = 1; c.beginPath(); c.moveTo(ox, oy); c.lineTo(ox, oy + L * s + 22); c.stroke(); c.setLineDash([]);
     const lowY = oy + L * s;
@@ -143,12 +213,19 @@ function draw() {
     const hgt = E0 ? Math.min(1.05, E / E0) * span : 0, X = 8 + i * 50;
     b.fillStyle = "#eef3f1"; b.fillRect(X, top, 40, span); b.fillStyle = col; b.fillRect(X, base - hgt, 40, hgt);
     b.fillStyle = "#3f5956"; b.font = fe(12, 600); b.textAlign = "center"; b.fillText(n, X + 20, base + 20);
-    b.font = fe(11); b.fillText(E.toFixed(E0 < 20 ? 1 : 0), X + 20, base + 38);
+    b.font = fe(11); b.fillText(E.toFixed(E0 < 5 ? 2 : E0 < 20 ? 1 : 0), X + 20, base + 38);
   });
+  if (sensorOn() && meas) { // 실측 최대 장력에서 구한 운동 에너지
+    const y = base - Math.min(1.05, meas.KE / E0) * span;
+    b.strokeStyle = "#17302e"; b.lineWidth = 2.5; b.beginPath(); b.moveTo(54, y); b.lineTo(102, y); b.stroke();
+    b.fillStyle = "#17302e"; b.font = fe(11, 600); b.textAlign = "center"; b.fillText("실측", 78, y - 5);
+  }
   b.strokeStyle = "#17302e"; b.setLineDash([4, 3]); b.lineWidth = 1; b.beginPath(); b.moveTo(4, top); b.lineTo(206, top); b.stroke(); b.setLineDash([]);
-  b.fillStyle = "#3f5956"; b.font = fe(11); b.textAlign = "left"; b.fillText(`처음 에너지 ${E0.toFixed(E0 < 20 ? 1 : 0)} J`, 6, top - 10);
+  b.fillStyle = "#3f5956"; b.font = fe(11); b.textAlign = "left"; b.fillText(`처음 에너지 ${E0.toFixed(E0 < 5 ? 2 : E0 < 20 ? 1 : 0)} J`, 6, top - 10);
   $("rh").textContent = st.h.toFixed(2) + " m"; $("rv").textContent = st.v.toFixed(2) + " m/s";
-  $("rpe").textContent = PE.toFixed(1) + " J"; $("rke").textContent = KE.toFixed(1) + " J";
+  const d = E0 < 5 ? 3 : 1;
+  $("rpe").textContent = PE.toFixed(d) + " J"; $("rke").textContent = KE.toFixed(d) + " J";
+  if (sensorOn()) drawForce();
 }
 function loop(now) {
   const dt = Math.min(0.05, (now - last) / 1000); last = now;

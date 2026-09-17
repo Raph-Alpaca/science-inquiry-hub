@@ -28,7 +28,7 @@
   <aside class="controls">
     <h3>가열 장치</h3>
     <div class="field"><label for="pw">가열 세기 <b></b></label><input type="range" id="pw" min="50" max="300" step="10" value="150"></div>
-    <div class="field"><label for="spd">재생 속도</label>
+    <div class="field sim-only"><label for="spd">재생 속도</label>
       <select id="spd"><option value="10">10배 빠르게</option><option value="20" selected>20배 빠르게</option><option value="60">60배 빠르게</option></select></div>
     <div class="row"><button class="btn primary" id="heat">가열 시작</button><button class="btn" id="reset">얼음으로 되돌리기</button></div>
     <div class="readout">
@@ -37,7 +37,8 @@
       <div><small>녹은 비율</small><b id="melt">0 %</b></div>
       <div><small>기화한 비율</small><b id="boil">0 %</b></div>
     </div>
-    <p class="hint">얼음 100 g(−20 ℃)에서 시작하고, 넣어 준 열은 모두 물질이 흡수한다고 가정합니다. 온도가 오르지 않는 구간에서 열은 어디로 갔을까요?</p>
+    <p class="hint sensor-only" hidden>실선은 센서로 잰 온도, 점선은 얼음 100 g이 열을 모두 흡수할 때의 이론 곡선입니다. 가열 세기를 움직여 점선을 실선에 맞춰 보세요. 실제 실험에서는 열이 공기 중으로도 빠져나갑니다.</p>
+    <p class="hint sim-only">얼음 100 g(−20 ℃)에서 시작하고, 넣어 준 열은 모두 물질이 흡수한다고 가정합니다. 온도가 오르지 않는 구간에서 열은 어디로 갔을까요?</p>
     <h3>표시</h3>
     <div class="field"><label><input type="checkbox" id="showPlateau" checked> 평평한 구간 색칠하기</label></div>
   </aside>
@@ -46,6 +47,7 @@
 <script>
 window.APP = {
   id: "g1-heating", grade: 1, unit: "물질의 상태 변화", sensor: "온도 센서",
+  sensorIn: { want: ["temperature"], max: 1, virtual: ["heating"] },
   title: "가열 곡선 실험실",
   question: "얼음을 계속 가열하는데 온도가 오르지 않는 구간이 있는 이유는 무엇일까?",
   how: "가열 세기를 정하고 가열을 시작하세요. 왼쪽 그래프와 오른쪽 입자 배열이 동시에 바뀝니다.",
@@ -79,9 +81,55 @@ function stateOf(Q) {
   if (Q < Q_boil1) return { T: 100, s: "boiling", melt: 1, boil: (Q - Q_boil0) / (m * Lv) };
   return { T: Math.min(T_END, 100 + (Q - Q_boil1) / (m * cG)), s: "gas", melt: 1, boil: 1 };
 }
+// 실시간 센서: 실측 온도가 입자 모형과 상태 표시를 움직이고, 실측 곡선(실선)을 이론 곡선(점선) 위에 겹친다.
+let src = "sim", mpts = [], mt0 = null, liveT = null;
+const WORDS_S = { idle: "측정 시작", running: "측정 멈춤", paused: "계속 측정", done: "끝" };
+const words = () => (src === "sensor" ? WORDS_S : WORDS);
+const NEAR = 1.5; // 센서 오차를 생각해 0 ℃·100 ℃ 에서 이만큼 안쪽이면 상태 변화 중으로 본다
+function stateFromT(T) {
+  if (T == null) return { T: -20, s: "solid", melt: 0, boil: 0 };
+  if (T < -NEAR) return { T, s: "solid", melt: 0, boil: 0 };
+  if (T <= NEAR) return { T, s: "melting", melt: 0.5, boil: 0 };
+  if (T < 100 - NEAR) return { T, s: "liquid", melt: 1, boil: 0 };
+  if (T <= 100 + NEAR) return { T, s: "boiling", melt: 1, boil: 0.4 };
+  return { T, s: "gas", melt: 1, boil: 1 };
+}
+const Q0fromT = T => T < -NEAR ? Math.max(0, (T + 20) * m * cI) : T <= NEAR ? Q_melt0 : T < 100 - NEAR ? Q_melt1 + m * cW * T : Q_boil0;
+// 실측 곡선에서 0 ℃·100 ℃ 근처에 5초 넘게 머문 구간
+function plateaus() {
+  const out = []; let cur = null;
+  mpts.forEach(([x, T]) => {
+    const at = Math.abs(T) <= NEAR ? 0 : Math.abs(T - 100) <= NEAR ? 100 : null;
+    if (cur && cur.at === at) cur.x2 = x; else { if (cur && cur.at !== null && cur.x2 - cur.x1 >= 5) out.push(cur); cur = { at, x1: x, x2: x }; }
+  });
+  if (cur && cur.at !== null && cur.x2 - cur.x1 >= 5) out.push(cur);
+  return out;
+}
+window.addEventListener("sih:source", (e) => {
+  src = e.detail.source;
+  document.querySelectorAll(".sensor-only").forEach((el) => (el.hidden = src !== "sensor"));
+  document.querySelectorAll(".sim-only").forEach((el) => (el.hidden = src === "sensor"));
+  if (src === "sensor" && !window._heatSub) window._heatSub = SIHSensor.on((s) => {
+    if (src !== "sensor" || s.quantity !== "temperature") return;
+    liveT = s.value;
+    if (state === "running") { if (mt0 === null) mt0 = s.t; t = s.t - mt0; mpts.push([t, s.value]); }
+  });
+  $("reset").textContent = src === "sensor" ? "기록 지우기" : "얼음으로 되돌리기";
+  $("reset").click();
+});
+
 const LABEL = { solid: "고체(얼음)", melting: "녹는 중(융해)", liquid: "액체(물)", boiling: "끓는 중(기화)", gas: "기체(수증기)" };
 
+function drawGraphSensor() {
+  const tmax = Math.max(300, Math.ceil(t / 300) * 300), theory = [];
+  if (mpts.length) { const Q0 = Q0fromT(mpts[0][1]); for (let x = 0; x <= tmax; x += tmax / 240) theory.push([x, stateOf(Math.min(Q_END, Q0 + P * x)).T]); }
+  const bands = $("showPlateau").checked ? plateaus().map(b => ({ x1: b.x1, x2: b.x2, color: b.at === 0 ? "#d6efe7" : "#fbe0da" })) : [];
+  SIH.drawChart(ctxG, { x: 0, y: 0, w: 480, h: 340, xMin: 0, xMax: tmax, yMin: -20, yMax: 140, xTicks: 6, yTicks: 8, xLabel: "시간(s)", yLabel: "온도(℃)", bands,
+    legend: [{ label: "실측", color: "#23a087" }, { label: "이론", color: "#567370", dash: [7, 5] }],
+    series: [{ pts: [[0, 0], [tmax, 0]], color: "#c9d8d4", width: 1, dash: [4, 4] }, { pts: [[0, 100], [tmax, 100]], color: "#c9d8d4", width: 1, dash: [4, 4] }, { pts: theory, color: "#567370", width: 1.8, dash: [7, 5] }, { pts: mpts, color: "#23a087", width: 3 }] });
+}
 function drawGraph() {
+  if (src === "sensor") return drawGraphSensor();
   const tmax = Math.max(600, Math.ceil(t / 300) * 300);
   const bands = [];
   if ($("showPlateau").checked) {
@@ -122,10 +170,16 @@ function drawParts(st, dt) {
   });
 }
 function render(dt) {
-  const st = stateOf(Q);
+  const sensor = src === "sensor", st = sensor ? stateFromT(liveT) : stateOf(Q);
   drawGraph(); drawParts(st, dt);
-  $("state").textContent = LABEL[st.s];
-  $("tnow").textContent = st.T.toFixed(1) + " ℃";
+  $("state").textContent = sensor && liveT == null ? "센서를 연결하세요" : LABEL[st.s];
+  $("tnow").textContent = sensor && liveT == null ? "– ℃" : st.T.toFixed(1) + " ℃";
+  if (sensor) {
+    $("time").textContent = Math.round(t) + " s"; $("q").textContent = (P * t / 1000).toFixed(1) + " kJ"; $("melt").textContent = $("boil").textContent = "–";
+    const seg = plateaus().map(b => `${b.at} ℃ 근처 ${Math.round(b.x2 - b.x1)} s`);
+    $("plateau").textContent = seg.length ? "실측에서 온도가 머문 구간: " + seg.join(" · ") : "온도가 0 ℃나 100 ℃ 근처에 머문 구간의 길이가 여기에 기록됩니다.";
+    return;
+  }
   $("time").textContent = Math.round(t) + " s";
   $("q").textContent = (Q / 1000).toFixed(1) + " kJ";
   $("melt").textContent = Math.floor(st.melt * 100) + " %";
@@ -151,15 +205,19 @@ function heatStep(dt) {
 }
 function loop(now) {
   const dt = Math.min(0.1, (now - last) / 1000); last = now;
-  if (state === "running") heatStep(dt);
+  if (state === "running" && src !== "sensor") heatStep(dt);
   render(dt);
   requestAnimationFrame(loop);
 }
 $("heat").onclick = () => {
   if (state === "running") state = "paused"; else if (state !== "done") state = "running";
-  SIH.label($("heat"), state, WORDS);
+  if (src === "sensor") SIHSensor.record(state === "running");
+  SIH.label($("heat"), state, words());
 };
-$("reset").onclick = () => { state = "idle"; Q = 0; t = 0; pts = [[0, -20]]; marks = {}; initParts(); SIH.label($("heat"), "idle", WORDS); };
+$("reset").onclick = () => {
+  state = "idle"; Q = 0; t = 0; pts = [[0, -20]]; marks = {}; mpts = []; mt0 = null; initParts(); SIH.label($("heat"), "idle", words());
+  if (src === "sensor") { SIHSensor.record(false); SIHSensor.clearRecord(); }
+};
 initParts();
 last = performance.now(); requestAnimationFrame(loop);
 </script>
