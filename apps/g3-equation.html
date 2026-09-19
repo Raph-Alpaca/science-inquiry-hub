@@ -23,8 +23,8 @@
 <section class="lab">
   <div class="stage">
     <div class="eq" id="eq" aria-label="화학 반응식"></div>
-    <canvas id="m" role="img" aria-label="분자 모형"></canvas>
-    <canvas id="scale" role="img" aria-label="반응물과 생성물의 질량 저울"></canvas>
+    <canvas id="m" role="img" aria-label="반응물과 생성물의 물질 모형"></canvas>
+    <canvas id="tally" role="img" aria-label="원소별로 반응 전과 반응 후의 원자 개수 비교"></canvas>
   </div>
   <aside class="controls">
     <h3>반응 고르기</h3>
@@ -41,14 +41,14 @@ window.APP = {
   id: "g3-equation", grade: 3, unit: "화학 반응의 규칙성", sensor: "센서 없음 (시뮬레이션 전용)",
   title: "화학 반응식 조립기",
   question: "화학 반응 전후에 원자의 종류와 수는 어떻게 될까? 계수는 왜 필요할까?",
-  how: "반응을 고른 뒤 계수를 바꾸며 분자 모형과 원자 수 표를 보세요. 양쪽 원자 수가 모두 같아지면 저울이 수평이 됩니다.",
-  notes: ["수소와 산소가 물이 되는 반응에서 계수는 어떻게 될까요? 왜 H₂O의 아래 첨자를 바꾸면 안 될까요?", "맞춘 계수와 양쪽 원자 수, 저울의 질량을 적어 보세요.", "질량 보존 법칙을 원자의 재배열로 설명해 보세요."],
-  prompt: "중학교 3학년 '화학 반응의 규칙성' 단원용 웹앱을 만들어 줘. 수소+산소→물, 탄소+산소→이산화 탄소, 질소+수소→암모니아, 마그네슘+산소→산화 마그네슘, 메테인+산소→이산화 탄소+물 중에서 반응을 고르면, 각 물질의 계수를 ▲▼ 버튼으로 1~6까지 바꿀 수 있게 해 줘. 계수만큼 분자 모형(원소별 색 공)을 화살표 양쪽에 그려 주고, 원소별 원자 수를 반응물·생성물로 나눠 표로 세어 같은지 표시해 줘. 아래에는 양쪽 질량(원자량 합)을 올린 저울을 그려서 원자 수가 맞으면 수평이 되게 해 줘. 화학식의 아래 첨자는 바꿀 수 없게 해. 센서는 필요 없어.",
+  how: "반응을 고른 뒤 계수를 바꾸며 물질 모형과 원자 수를 보세요. 반응 전후 원자의 종류와 개수가 모두 같아지면 화학 반응식이 완성됩니다.",
+  notes: ["수소와 산소가 물이 되는 반응에서 계수는 어떻게 될까요? 왜 H₂O의 아래 첨자를 바꾸면 안 될까요?", "맞춘 계수와 양쪽 원자 수를 적어 보세요. 계수의 비는 무엇의 비일까요?", "질량 보존 법칙을 원자의 재배열로 설명해 보세요."],
+  prompt: "중학교 3학년 '화학 반응의 규칙성' 단원용 웹앱을 만들어 줘. 수소+산소→물, 탄소+산소→이산화 탄소, 질소+수소→암모니아, 마그네슘+산소→산화 마그네슘, 메테인+산소→이산화 탄소+물 중에서 반응을 고르면, 각 물질의 계수를 ▲▼ 버튼으로 1~6까지 바꿀 수 있게 해 줘. 계수만큼 물질 모형(원소별 색 공)을 화살표 양쪽에 그려 주고, 원소별 원자 수를 반응물·생성물로 나눠 표로 세어 같은지 표시해 줘. 아래에는 원소마다 반응 전·후 원자를 점으로 나란히 그려 개수를 눈으로 비교하게 하고, 원자 수가 모두 맞으면 계수의 비를 입자 수의 비로 보여 줘. 화학식의 아래 첨자는 바꿀 수 없게 해. 센서는 필요 없어.",
   next: "이 앱은 계수를 학생이 직접 맞추는데, 반대로 반응물의 양을 주면 생성물의 양을 계산해 주는 기능도 넣을 수 있을까? 어떤 조건을 프롬프트에 써야 할까?"
 };
 SIH.shell();
 
-// 분자 모형 배치: [원소, dx, dy] — H₂O는 굽은 모양, CO₂는 일직선, NH₃·CH₄는 중심 원자 둘레
+// 물질 모형 배치: [원소, dx, dy] — H₂O는 굽은 모양, CO₂는 일직선, NH₃·CH₄는 중심 원자 둘레
 const SHAPE = {
   H2: [["H", -7, 0], ["H", 7, 0]],
   O2: [["O", -9, 0], ["O", 9, 0]],
@@ -70,7 +70,6 @@ const RX = [
 ];
 const COL = { H: "#f2f0e6", O: "#ee6b57", C: "#4c5a58", N: "#2c7fd1", Mg: "#23a087" };
 const RAD = { H: 6.5, O: 10, C: 10, N: 10, Mg: 12 };
-const MASS = { H: 1, O: 16, C: 12, N: 14, Mg: 24 };          // 교과서 원자량(정수)
 const KNAME = { H: "수소", O: "산소", C: "탄소", N: "질소", Mg: "마그네슘" };
 const CMAX = 6;
 const $ = id => document.getElementById(id);
@@ -81,8 +80,8 @@ function resetC() { coef = [...RX[cur].L, ...RX[cur].R].map(() => 1); render(); 
 $("resetC").onclick = resetC;
 const sub = f => f.replace(/(\d+)/g, "<sub>$1</sub>");
 const plain = f => f.replace(/\d/g, d => "₀₁₂₃₄₅₆₇₈₉"[d]);
-const cm = $("m"), cM = SIH.dpr(cm, 760, 250), cs = $("scale"), cS = SIH.dpr(cs, 760, 160);
-let last = { mL: 0, mR: 0, ok: false };
+const cm = $("m"), cM = SIH.dpr(cm, 760, 250), ct = $("tally"), cT = SIH.dpr(ct, 760, 150);
+const names = r => r.name.split(/ \+ | → /);                  // "수소 + 산소 → 물" → 물질 이름들
 
 function render(focusKey) {
   const r = RX[cur], terms = [...r.L, ...r.R];
@@ -105,13 +104,13 @@ function render(focusKey) {
   const cl = count(r.L, 0), cr = count(r.R, r.L.length), els = Object.keys({ ...cl, ...cr });
   let ok = true;
   $("tb").innerHTML = els.map(e => { const s = (cl[e] || 0) === (cr[e] || 0); ok = ok && s; return `<tr><td>${e} <small>${KNAME[e]}</small></td><td>${cl[e] || 0}</td><td>${cr[e] || 0}</td><td class="${s ? "yes" : "no"}">${s ? "같음" : "다름"}</td></tr>`; }).join("");
-  const mass = o => els.reduce((s, e) => s + (o[e] || 0) * MASS[e], 0), mL = mass(cl), mR = mass(cr);
   const gcd = (x, y) => y ? gcd(y, x % y) : x, g = coef.reduce(gcd);
   $("vd").innerHTML = ok
-    ? (g === 1 ? `<span class="ok">균형이 맞았어요.</span> 반응 전 ${mL}, 반응 후 ${mR} (원자량의 합). 원자는 새로 생기거나 없어지지 않고 결합하는 짝만 바뀌었습니다.`
+    ? (g === 1 ? `<span class="ok">균형이 맞았어요.</span> 반응 전후 원자의 종류와 개수가 같아요. 원자는 새로 생기거나 없어지지 않고 결합하는 짝만 바뀌므로, 반응 전후 질량도 같습니다. `
+                 + `계수의 비 ${names(r).join(" : ")} = <b>${coef.join(" : ")}</b>는 반응하고 생성되는 입자 수의 비입니다.`
                : `<span class="ok">원자 수는 맞아요.</span> 하지만 계수를 모두 ${g}(으)로 나눌 수 있어요. 가장 간단한 정수비로 줄여 보세요.`)
     : `<span class="bad">아직 양쪽 원자 수가 달라요.</span> '다름'인 원자부터 계수를 조정해 보세요.`;
-  drawMol(r, terms); last = { mL, mR, ok }; animateScale();
+  drawMol(r, terms); drawTally(els, cl, cr, ok);
 }
 function drawAtom(c, x, y, e, rr) { c.beginPath(); c.arc(x, y, rr || RAD[e], 0, Math.PI * 2); c.fillStyle = COL[e]; c.fill(); c.strokeStyle = "#3f5956"; c.lineWidth = 1.2; c.stroke(); }
 function drawMol(r, terms) {
@@ -133,31 +132,24 @@ function drawMol(r, terms) {
   c.font = f(12); c.textAlign = "left"; let lx = 12;
   Object.keys(COL).forEach(e => { drawAtom(c, lx + 7, 232, e, 7); c.fillStyle = "#3f5956"; c.fillText(`${e} ${KNAME[e]}`, lx + 19, 236); lx += 30 + c.measureText(`${e} ${KNAME[e]}`).width; });
 }
-let tilt = 0, animating = false;
-function animateScale() {
-  if (animating) return; animating = true;
-  const tick = () => {
-    const { mL, mR, ok } = last;
-    const target = ok ? 0 : Math.max(-0.16, Math.min(0.16, (mR - mL) / 60));
-    tilt = SIH.reduced ? target : tilt + (target - tilt) * 0.25;
-    drawScale(mL, mR, ok);
-    if (Math.abs(tilt - target) > 0.001) requestAnimationFrame(tick); else { tilt = target; drawScale(mL, mR, ok); animating = false; }
-  };
-  tick();
-}
-function drawScale(mL, mR, ok) {
-  const c = cS, f = (s, w) => SIH.px(cS, s, w);
-  c.fillStyle = "#fff"; c.fillRect(0, 0, 760, 160);
-  const px = 380, py = 118;
-  c.fillStyle = "#4c6663"; c.beginPath(); c.moveTo(px - 20, py + 34); c.lineTo(px + 20, py + 34); c.lineTo(px, py); c.fill();
-  c.save(); c.translate(px, py); c.rotate(tilt); c.fillRect(-230, -4, 460, 8);
-  [[-205, mL, "반응물"], [205, mR, "생성물"]].forEach(([dx, mass, lab]) => {
-    c.fillStyle = "#e6eeeb"; c.fillRect(dx - 70, -44, 140, 38);
-    c.fillStyle = "#17302e"; c.font = f(15, "bold"); c.textAlign = "center"; c.fillText(`${lab} ${mass}`, dx, -19);
+// 원소마다 반응 전(왼쪽)·반응 후(오른쪽) 원자를 점으로 세워 개수를 눈으로 비교한다
+function drawTally(els, cl, cr, ok) {
+  const c = cT, f = (s, w) => SIH.px(cT, s, w);
+  c.fillStyle = "#fff"; c.fillRect(0, 0, 760, 150);
+  c.fillStyle = "#3f5956"; c.font = f(13, 700); c.textAlign = "center";
+  c.fillText("반응 전 원자", 225, 18); c.fillText("반응 후 원자", 575, 18);
+  c.strokeStyle = "#d3e2dd"; c.lineWidth = 1; c.beginPath(); c.moveTo(400, 8); c.lineTo(400, 142); c.stroke();
+  const rowH = Math.min(38, 118 / Math.max(1, els.length));
+  els.forEach((e, k) => {
+    const y = 42 + k * rowH, nL = cl[e] || 0, nR = cr[e] || 0, same = nL === nR;
+    const dots = (n, x0) => { const gap = Math.min(13, 300 / Math.max(1, n)); for (let i = 0; i < n; i++) drawAtom(c, x0 + i * gap, y, e, Math.min(5.5, gap / 2.2)); };
+    c.fillStyle = "#3f5956"; c.font = f(12, 600); c.textAlign = "left"; c.fillText(`${KNAME[e]} ${nL}`, 8, y + 4);
+    dots(nL, 82);
+    c.fillText(`${nR}`, 412, y + 4); dots(nR, 434);
+    c.fillStyle = same ? "#12705e" : "#b8402b"; c.textAlign = "right"; c.fillText(same ? "같음" : "다름", 754, y + 4);
   });
-  c.restore();
-  c.fillStyle = ok ? "#12705e" : "#567370"; c.font = f(14, 600); c.textAlign = "center";
-  c.fillText(ok ? "반응 전후 질량이 같습니다" : "원자 수가 맞지 않는 식은 질량 보존 법칙에 어긋나요", 380, 24);
+  c.fillStyle = ok ? "#12705e" : "#567370"; c.font = f(13, 600); c.textAlign = "center";
+  c.fillText(ok ? "원자의 종류와 개수가 같으므로 반응 전후 질량이 같습니다" : "원소마다 반응 전과 반응 후의 원자 개수를 맞춰 보세요", 380, 146);
 }
 window.addEventListener("sih:resize", () => render());
 resetC();

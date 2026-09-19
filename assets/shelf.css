@@ -190,8 +190,9 @@ img { max-width: 100%; }
 /* 학생이 올린 표지 사진은 합성하지 않고 그대로 보여 준다 */
 .book .art.photo, .book-row .cov img.photo, .cover-face .art.photo, .preview .cover-big img.photo { mix-blend-mode: normal; opacity: 1; border-radius: 2px; }
 .book .art { display: block; flex: 1 1 auto; min-height: 0; width: calc(100% - 20px); margin: 4px 6px 2px 14px; object-fit: contain; }
+/* flex: none — 표지 칸이 모자라면 그림만 줄어들고 이 줄은 줄어들지 않는다 (overflow: hidden 이라 줄어들면 글자 아래가 잘림) */
 .book .who {
-  margin: 0 8px 9px 15px; font-size: 10.5px; font-weight: 500; letter-spacing: .01em; color: rgba(251, 247, 238, .88);
+  flex: none; margin: 0 8px 9px 15px; font-size: 10.5px; font-weight: 500; letter-spacing: .01em; color: rgba(251, 247, 238, .88);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .book.lifted { visibility: hidden; }

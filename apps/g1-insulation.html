@@ -34,6 +34,7 @@
     <div class="field sensor-only" hidden><label for="kA">컵 A 이론 곡선의 냉각 상수 <b></b></label><input type="range" id="kA" min="0.005" max="0.12" step="0.001" value="0.02"></div>
     <div class="field sensor-only" hidden><label for="kB">컵 B 이론 곡선의 냉각 상수 <b></b></label><input type="range" id="kB" min="0.005" max="0.12" step="0.001" value="0.055"></div>
     <p class="hint" id="condHint">조건을 바꾸면 실험이 처음부터 다시 시작됩니다.</p>
+    <p class="hint sim-only">재료별로 식는 빠르기는 예시 값이에요. 실제 컵으로 재 보면 감는 방법이나 뚜껑에 따라 달라질 수 있어요.</p>
     <div class="row"><button class="btn primary" id="run">냉각 시작</button><button class="btn" id="reset">처음부터</button></div>
     <div class="readout"><div><small>경과 시간</small><b id="time">0분</b></div><div><small>두 컵 온도 차</small><b id="diff">0.0 ℃</b></div></div>
     <h3>관찰 메모</h3>
@@ -53,7 +54,7 @@ window.APP = {
   question: "어떤 재료로 감싸야 뜨거운 물이 가장 천천히 식을까?",
   how: "두 컵을 다른 재료로 감싸고 냉각 그래프를 겹쳐 보세요. 차이가 벌어지는 순간에 메모를 남기면 그래프 위에 표시됩니다.",
   notes: ["어느 컵이 더 천천히 식을까요? 재료의 어떤 성질 때문일까요?", "몇 분에 온도 차가 몇 ℃까지 벌어졌나요? 그래프 모양은?", "단열·열의 이동(전도·대류·복사) 개념으로 설명해 보세요."],
-  prompt: "중학교 1학년 '열' 단원용 웹앱을 만들어 줘. 뜨거운 물이 든 두 컵을 서로 다른 재료(없음/종이/알루미늄 포일/스티로폼/양털)로 감싸고 시간에 따라 식는 온도를 한 그래프에 두 색으로 겹쳐 보여 줘. 처음 물 온도와 교실 온도를 바꿀 수 있고, 학생이 특정 시각에 관찰 메모를 남기면 그래프 위에 점으로 표시해 줘. 냉각은 뉴턴 냉각 법칙(주변 온도와의 차이에 비례)으로 계산하고, 재료마다 냉각 상수를 다르게 해 줘. 온도 센서 2개로 실제 값을 받을 수 있게 데이터 소스 자리를 비워 둬.",
+  prompt: "중학교 1학년 '열' 단원용 웹앱을 만들어 줘. 뜨거운 물이 든 두 컵을 서로 다른 재료(없음/종이/알루미늄 포일/스티로폼/양털)로 감싸고 시간에 따라 식는 온도를 한 그래프에 두 색으로 겹쳐 보여 줘. 처음 물 온도와 교실 온도를 바꿀 수 있고, 학생이 특정 시각에 관찰 메모를 남기면 그래프 위에 점으로 표시해 줘. 물은 교실 온도와의 차이가 클수록 빨리 식다가 교실 온도에 가까워지면(열평형) 천천히 식도록 계산하고, 재료마다 식는 빠르기를 다르게 해 줘. 온도 센서 2개로 실제 값을 받을 수 있게 데이터 소스 자리를 비워 둬.",
   next: "실제 컵으로 같은 실험을 하면 그래프가 이 모양과 어디가 다를까? 그 차이는 프롬프트에 어떤 조건을 추가해야 반영될까?"
 };
 SIH.shell();
@@ -79,7 +80,7 @@ window.addEventListener("sih:source", (e) => {
   src = e.detail.source;
   document.querySelectorAll(".sensor-only").forEach((el) => (el.hidden = src !== "sensor"));
   document.querySelectorAll(".sim-only").forEach((el) => (el.hidden = src === "sensor"));
-  $("condHint").textContent = src === "sensor" ? "실선은 센서로 잰 온도, 점선은 뉴턴 냉각 이론 곡선입니다. 냉각 상수를 움직여 점선을 실선에 맞춰 보세요." : "조건을 바꾸면 실험이 처음부터 다시 시작됩니다.";
+  $("condHint").textContent = src === "sensor" ? "실선은 센서로 잰 온도, 점선은 이론 곡선입니다. 냉각 상수를 움직여 점선을 실선에 맞춰 보세요." : "조건을 바꾸면 실험이 처음부터 다시 시작됩니다.";
   if (src === "sensor" && !window._insSub) window._insSub = SIHSensor.on((s) => {
     if (src !== "sensor" || s.quantity !== "temperature") return;
     const cup = cupOf(s); if (!cup) return;

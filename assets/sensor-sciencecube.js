@@ -192,7 +192,7 @@
     dev.push = dev.def.ch.map((c) => ctx.channel({ quantity: c.q, axis: c.axis, label: c.label, unit: c.unit, zeroable: c.zeroable, verified: !!dev.def.verified }));
 
     // 0.5초마다(빠른 센서는 0.1초) 스냅샷을 요청한다
-    const period = dev.def.fast && ctx.want.some((q) => q === "force" || q === "acceleration") ? 100 : 500;
+    const period = dev.def.fast && ctx.want.some((q) => q === "force" || q === "acceleration" || q === "distance") ? 100 : 500;
     (async () => { while (dev.open) { if (dev.txChar && device.gatt.connected && !dev.opening) await send(CMD.SNAPSHOT); await sleep(period); } })();
 
     /* 수업 중 끊기면 곤란하므로 스스로 다시 붙는다. 쉬지 않고 두드리면 윈도우 블루투스가 오히려 더 안 열려서

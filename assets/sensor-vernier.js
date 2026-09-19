@@ -65,7 +65,7 @@
     });
     gdx.on("device-closed", () => { if (st.open) { st.open = false; ctx.lost("연결이 끊겼습니다. 전원을 확인하고 다시 연결해 주세요"); } });
 
-    const fast = ctx.want.some((q) => q === "force" || q === "acceleration");
+    const fast = ctx.want.some((q) => q === "force" || q === "acceleration" || q === "distance");   // 거리: 자유 낙하는 0.5초 안에 끝난다
     const period = fast ? 50 : 500;
     try { await gdx.stop(); } catch (e) { /* 측정 중이 아니면 무시 */ }
     await gdx.start(period);

@@ -23,7 +23,7 @@
   <div class="stage">
     <div class="tabs" role="group" aria-label="그래프 종류">
       <button class="btn" id="tabWave">파형</button>
-      <button class="btn" id="tabSpec">진동수 분석</button>
+      <button class="btn" id="tabSpec">진동수 분석 (심화)</button>
     </div>
     <canvas id="w" role="img" aria-label="소리 그래프"></canvas>
     <p class="cap" id="cap"></p>
@@ -316,8 +316,8 @@ function draw() {
     series.push({ pts: spectrum(frame, rate), color: COL.live, width: 1.6 });
     legend.push({ label: SIH.source === "sensor" ? "마이크" : "연습용 소리", color: COL.live });
     if (est.f) marks.push({ x: est.f, y: 100, color: "#e29a2a", label: `기본 진동수 ${Math.round(est.f)} Hz` });
-    SIH.drawChart(ctx, { x: 0, y: 0, w: 760, h: 360, xMin: 0, xMax: 3000, yMin: 0, yMax: 110, xTicks: 6, yTicks: 5, xLabel: "진동수(Hz)", yLabel: "세기(가장 센 것 = 100)", series, legend, marks });
-    $("cap").textContent = "소리를 이루는 진동수별 세기입니다. 가장 왼쪽의 큰 봉우리가 기본 진동수(음의 높이)이고, 그 정수배 자리의 봉우리(배음)가 얼마나 센지에 따라 같은 높이라도 소리의 맵시가 달라집니다. 그래프마다 가장 센 봉우리를 100으로 맞춰 그리므로, 큰 소리와 작은 소리의 비교는 파형 그래프와 진폭 숫자로 하세요.";
+    SIH.drawChart(ctx, { x: 0, y: 0, w: 760, h: 360, xMin: 0, xMax: 3000, yMin: 0, yMax: 110, xTicks: 6, yTicks: 5, xLabel: "진동수(Hz)", yLabel: "크기(가장 큰 것 = 100)", series, legend, marks });
+    $("cap").textContent = "더 알아보기(교과서보다 한 걸음 더 나간 내용): 소리를 이루는 진동수별 크기입니다. 가장 왼쪽의 큰 봉우리가 기본 진동수(음의 높이)이고, 그 정수배 자리의 봉우리(배음)가 얼마나 큰지에 따라 같은 높이라도 소리의 맵시가 달라집니다. 그래프마다 가장 큰 봉우리를 100으로 맞춰 그리므로, 큰 소리와 작은 소리의 비교는 파형 그래프와 진폭 숫자로 하세요.";
   }
 }
 function capture(k) {

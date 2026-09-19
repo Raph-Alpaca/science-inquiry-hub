@@ -54,7 +54,7 @@ const ACT = {
   "g1-sound": async pg => { await pg.check("#use2"); await pg.click(".keys .btn >> nth=3"); },
   "g1-sound-lab": async pg => { await pg.click('.keys .btn[data-f="392"]'); await pg.click("#capA"); await pg.click("#tabSpec"); },
   "g1-color": async pg => { await pg.selectOption("#target", "100,100,100"); await pg.selectOption("#pred", "흰색"); await pg.click("#measure"); },
-  "g2-gas": async pg => { for (const v of [60, 30, 20]) { await pg.$eval("#vol", (el, v) => { el.value = v; el.dispatchEvent(new Event("input")); }, v); await pg.fill("#pred", String(60 / v + 0.2)); await pg.click("#measure"); } await pg.check("#curve"); await pg.waitForTimeout(2100); },
+  "g2-gas": async pg => { for (const v of [60, 30, 20]) { await pg.$eval("#vol", (el, v) => { el.value = v; el.dispatchEvent(new Event("input")); }, v); await pg.selectOption("#pred", "up"); await pg.click("#measure"); } await pg.check("#curve"); await pg.waitForTimeout(2100); },
   "g2-photosynthesis": async pg => { await pg.click("#run"); await pg.waitForTimeout(2500); await pg.click("#slopeAll"); await pg.click("#save"); },
   "g2-solar": async pg => { await pg.$eval("#day", el => { el.value = 7.4; el.dispatchEvent(new Event("input")); }); },
   "g3-energy": async pg => { await pg.click("#go"); await pg.waitForTimeout(1800); },
@@ -99,6 +99,25 @@ async function withPage(p, fn) { const { page, errors } = await openPage(ctx, p)
 { const { r } = await evalOn("g1-sound", "[1000/262, 340/262*100]"); check("도(262 Hz) 주기 3.82 ms, 파장 130 cm", Math.abs(r[0] - 3.817) < .01 && Math.round(r[1]) === 130, r.join(", ")); }
 { const { r } = await evalOn("g2-photosynthesis", "d=30; dark=false; const a=rate(); d=10; const b=rate(); d=100; const c=rate(); dark=true; const e=rate(); [a,b,c,e]");
   check("광합성: 가까울수록 CO₂ 더 빨리 감소, 100 cm·어둠에서는 증가", r[1] < r[0] && r[0] < 0 && r[2] > 0 && r[3] > 0, r.map(v => v.toFixed(1)).join(", ")); }
+{ const { r } = await evalOn("g2-photosynthesis", "[lampY(10), lampY(30), lampY(100)]");   // 그림 y 는 아래로 갈수록 크다 (식물은 아래쪽)
+  check("광합성 그림: 전등이 가까울수록(10 cm) 식물 쪽으로 내려와 그려짐", r[0] > r[1] && r[1] > r[2] && r[0] < 160, r.map(v => v.toFixed(0)).join(", ")); }
+await withPage("g1-color", async pg => {
+  const mixAt = async (R, G, B) => { for (const [k, v] of [["lR", R], ["lG", G], ["lB", B]]) await pg.$eval("#" + k, (el, v) => { el.value = v; el.dispatchEvent(new Event("input")); }, v); return pg.evaluate(() => est.share.map(Math.round)); };
+  const a = await mixAt(100, 50, 0), b = await mixAt(30, 60, 90);
+  check("빛 섞기: 슬라이더 빛의 양 비율 = 막대 비율 (100:50:0 → 67:33:0, 30:60:90 → 17:33:50)", Math.abs(a[0] - 67) <= 1 && Math.abs(a[1] - 33) <= 1 && a[2] === 0 && Math.abs(b[0] - 17) <= 1 && Math.abs(b[1] - 33) <= 1 && Math.abs(b[2] - 50) <= 1, `${a} / ${b}`);
+  const names = []; for (const m of [[100, 0, 0], [100, 100, 0], [100, 0, 100], [0, 100, 100], [100, 100, 100]]) { await mixAt(...m); names.push(await pg.textContent("#cname")); }
+  check("빛 섞기: 빨강·노랑·자홍·청록·흰색", names.join(",") === "빨강,노랑,자홍,청록,흰색", names.join(","));
+});
+await withPage("g2-gas", async pg => {
+  const at = async (v, pred) => { await pg.$eval("#vol", (el, v) => { el.value = v; el.dispatchEvent(new Event("input")); }, v); if (pred) await pg.selectOption("#pred", pred); await pg.click("#measure"); return pg.textContent("#cmp"); };
+  const t1 = await at(30, "up"), t2 = await at(45, "up"), ref = await pg.textContent("#refTxt");
+  check("기체: 압력 예측은 커진다/작아진다로 고르고 직전 측정과 비교해 판정", t1.includes("커졌어요") && t1.includes("맞았어요") && t2.includes("작아졌어요") && t2.includes("다시 생각") && ref.includes("45 mL"), `${t1} | ${t2} | ${ref}`);
+  const pv = await pg.evaluate(() => recs.map(r => r.p * r.v));
+  const pvCells = await pg.$$eval("#tb tr td:last-child", tds => tds.map(td => +td.textContent));
+  check("기체: 표에 P×V 열이 있고 값은 60으로 일정", pv.every(x => Math.abs(x - 60) < 1e-9) && pvCells.length === pv.length && pvCells.every(x => x === 60), `${pv.map(x => x.toFixed(1)).join(", ")} / 표 ${pvCells.join(", ")}`);
+  const sm = await pg.evaluate(() => { const s = smooth([[60, 1], [30, 2], [15, 4], [20, 3]]); return { mono: s.every((p, i) => !i || (p[0] >= s[i - 1][0] && p[1] <= s[i - 1][1] + 1e-9)), n: s.length }; });
+  check("기체: 측정점을 잇는 선은 점 사이에서 굽이치지 않는 부드러운 곡선", sm.mono && sm.n > 40, JSON.stringify(sm));
+});
 await withPage("g2-solar", async pg => {
   const at = async d => { await pg.$eval("#day", (el, d) => { el.value = d; el.dispatchEvent(new Event("input")); }, d); return [await pg.textContent("#phaseNow"), await pg.textContent("#litSide")]; };
   const q1 = await at(7.4), full = await at(14.8), q3 = await at(22.1), cr = await at(3.5), wn = await at(26);
@@ -131,17 +150,27 @@ await withPage("g3-energy", async pg => {
   await pg.click("#reset"); await pg.check("#fric"); await pg.click("#go"); await pg.waitForTimeout(1500);
   const f = await pg.evaluate(() => { const st = stateTrack(); return { x, sum: m * g * st.h + 0.5 * m * st.v * st.v + st.heat, E0: Etotal(), heat: st.heat }; });
   check("트랙: 마찰 켜도 출발하고, 역학적+열 에너지 = 처음 에너지", f.x > 1 && f.heat > 0 && Math.abs(f.sum - f.E0) / f.E0 < 0.005, JSON.stringify(f));
-  // 진자
-  await pg.click("#tabP"); await pg.selectOption("#spd", "1"); await pg.click("#go");
-  let pErr = 0; for (let i = 0; i < 15; i++) { await pg.waitForTimeout(150); const s = await pg.evaluate(() => { const st = statePend(); return (m * g * st.h + 0.5 * m * st.v * st.v) / Etotal(); }); pErr = Math.max(pErr, Math.abs(s - 1)); }
-  check("진자: 공기 저항 없을 때 역학적 에너지 보존 (오차 1% 미만)", pErr < 0.01, `최대 오차 ${(pErr * 100).toFixed(3)}%`);
+  check("에너지: 진자 화면은 없음 (트랙·자유 낙하 두 탭)", (await pg.$("#tabP")) === null && (await pg.$$(".tabs .btn")).length === 2);
+  // 자유 낙하: 5 m → 약 1.01 s 뒤 9.9 m/s, 위치+운동 에너지 = 처음 에너지
+  await pg.click("#tabF"); await pg.$eval("#hf", el => { el.value = 5; el.dispatchEvent(new Event("input")); });
+  await pg.selectOption("#spd", "1"); await pg.click("#go");
+  await pg.waitForFunction(() => state === "done", null, { timeout: 5000 });
+  const fr = await pg.evaluate(() => { const land = { t, v: stateFall().v, msg: document.getElementById("msg").textContent };
+    const errs = [0.2, 0.5, 0.9].map(tt => { t = tt; const s = stateFall(); return Math.abs(m * g * s.h + 0.5 * m * s.v * s.v - Etotal()) / Etotal(); });
+    return { ...land, err: Math.max(...errs), box: !document.getElementById("fallBox").hidden }; });
+  check("자유 낙하: 5 m → 1.01 s 뒤 바닥, 직전 속력 9.9 m/s", Math.abs(fr.t - 1.0102) < 0.01 && Math.abs(fr.v - 9.9) < 0.05 && fr.msg.includes("9.9"), JSON.stringify(fr));
+  check("자유 낙하: 떨어지는 동안 위치+운동 에너지 = 처음 에너지, 속력·에너지 그래프 표시", fr.err < 1e-9 && fr.box, `${fr.err}`);
+  check("자유 낙하: 1초마다 늘어나는 속력(그래프 기울기) 9.8 m/s 안내", (await pg.textContent("#fcap")).includes("9.8 m/s"));
 });
 await withPage("g3-equation", async pg => {
   const setC = async arr => { await pg.evaluate(a => { coef = a; render(); }, arr); return pg.textContent("#vd"); };
   check("반응식: 2H₂ + O₂ → 2H₂O 균형", (await setC([2, 1, 2])).includes("균형이 맞았어요"));
   check("반응식: 4H₂ + 2O₂ → 4H₂O 는 약분 안내", (await setC([4, 2, 4])).includes("나눌 수 있어요"));
+  check("반응식: 균형이 맞으면 계수비를 입자 수의 비로 (수소 : 산소 : 물 = 2 : 1 : 2)", (await setC([2, 1, 2])).includes("수소 : 산소 : 물 = 2 : 1 : 2") && (await pg.textContent("#vd")).includes("입자 수의 비"));
+  check("반응식: 원자량·질량 합·저울을 쓰지 않음 (중학교 범위)", (await pg.$("#scale")) === null && !(await pg.textContent("body")).match(/원자량|분자 모형/));
   await pg.selectOption("#rx", "4");
   check("반응식: CH₄ + 2O₂ → CO₂ + 2H₂O 균형", (await setC([1, 2, 1, 2])).includes("균형이 맞았어요"));
+  check("반응식: 5CH₄ + 5O₂ → 3CO₂ + 6H₂O 는 원자 수가 달라 완성으로 보지 않음", (await setC([5, 5, 3, 6])).includes("달라요"));
   await pg.selectOption("#rx", "2");
   check("반응식: N₂ + 3H₂ → 2NH₃ 균형", (await setC([1, 3, 2])).includes("균형이 맞았어요"));
   // 키보드로 계수 조작 (포커스 유지)
@@ -153,6 +182,21 @@ await withPage("g1-heating", async pg => {
   await pg.click("#heat"); await pg.waitForTimeout(4000); await pg.click("#heat");
   const r = await pg.evaluate(() => ({ marks, pts: pts.filter(p => p[0] > marks.m0 + 2 && p[0] < (marks.m1 ?? t) - 2).map(p => p[1]) }));
   check("가열: 융해 구간 동안 온도 0 ℃ 유지, 구간 길이 = 33400 J / 300 W ≈ 111 s", r.marks.m1 != null && r.pts.every(T => T === 0) && Math.abs(r.marks.m1 - r.marks.m0 - 111.3) < 1, JSON.stringify(r.marks));
+  // 입자 모형: 녹는 중·액체·기체 어느 상태에서도 입자끼리 겹쳐 그려지지 않음
+  const overlap = await pg.evaluate(async () => {
+    const out = {};
+    for (const [k, q] of [["녹는 중", (Q_melt0 + Q_melt1) / 2], ["액체 50 ℃", Q_melt1 + 100 * 4.18 * 50], ["기체", Q_END]]) {
+      Q = q; await new Promise(r => setTimeout(r, 1000));
+      let n = 0;
+      for (let s = 0; s < 10; s++) {   // 한 순간만이 아니라 0.1초 간격으로 열 번
+        await new Promise(r => setTimeout(r, 100));
+        for (let i = 0; i < parts.length; i++) for (let j = i + 1; j < parts.length; j++) if (Math.hypot(parts[i].x - parts[j].x, parts[i].y - parts[j].y) < 2 * PR - 0.5) n++;
+      }
+      out[k] = n;
+    }
+    return out;
+  });
+  check("가열 입자 모형: 녹는 중·액체·기체에서 입자가 서로 겹치지 않음", Object.values(overlap).every(n => n === 0), JSON.stringify(overlap));
 });
 await withPage("g3-dewpoint", async pg => {
   await pg.fill("#pred", "14"); await pg.click("#cool"); await pg.waitForTimeout(9000);

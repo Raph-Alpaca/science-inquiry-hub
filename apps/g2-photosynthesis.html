@@ -63,6 +63,8 @@ const WORDS = { idle: "측정 시작 (10분)", running: "일시정지", paused: 
 const light = () => dark ? 0 : (30 / d) ** 2;
 const rate = () => { const I = light(); return RESP - PMAX * I / (I + KHALF); };
 const condLabel = () => dark ? "어둠" : `${d} cm`;
+// 전등 그림의 높이: 가까울수록(10 cm) 용기 바로 위, 멀수록(100 cm) 그림 맨 위. 그림 속 간격은 실제 비율이 아님
+const lampY = d => 140 - (d - 10) * 118 / 90;
 function showCond() { cond = condLabel(); $("cond").textContent = cond; $("light").textContent = light().toFixed(2); drawChamber(); }
 SIH.bind("dist", v => { d = v; showCond(); }, " cm");
 $("dark").onchange = e => { dark = e.target.checked; $("dist").disabled = dark; showCond(); };
@@ -70,7 +72,7 @@ $("dark").onchange = e => { dark = e.target.checked; $("dist").disabled = dark; 
 function drawChamber() {
   const c = c1, f = s => SIH.px(c1, s); c.clearRect(0, 0, 220, 300);
   const glow = dark ? 0 : Math.min(1, light() / 3);
-  const ly = 22 + (d - 10) * 1.1;
+  const ly = lampY(d);
   if (!dark) {
     const grd = c.createRadialGradient(110, ly, 10, 110, ly, 250);
     grd.addColorStop(0, `rgba(226,154,42,${0.18 + glow * 0.4})`); grd.addColorStop(1, "rgba(226,154,42,0)");

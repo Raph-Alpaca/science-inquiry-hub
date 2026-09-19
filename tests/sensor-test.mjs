@@ -202,27 +202,31 @@ const wantChannel = (page, n = 1) => page.waitForFunction((n) => window.SIHSenso
   check("이슬점·가상: 콘솔 오류 없음", errors.length === 0, errors.join(" | "));
   await close();
 }
-{ // 진자: 장력 실측을 이론과 겹치고, 최대 장력에서 운동 에너지를 구함
+{ // 자유 낙하: 거리 센서로 잰 높이에서 떨어지는 구간을 찾아, 1초마다 늘어나는 속력과 위치·운동 에너지를 구함
   const { page, errors, close } = await open("g3-energy", "?sensor=virtual");
   await wantChannel(page);
-  check("에너지·가상: 트랙 탭에서는 시뮬레이션 그대로 (힘 센서는 진자 탭 안내)", (await page.isHidden("#forceBox")) && (await page.textContent("#msg")).includes("진자 탭"));
-  await page.click("#tabP");
-  check("에너지·가상: 진자 탭에서 실제 질량·줄 길이 입력으로 바뀜", (await page.isVisible("#lenCm")) && (await page.isHidden("#len")) && (await page.evaluate(() => L === 0.5 && m === 0.2)));
-  await page.click("#go"); await page.waitForTimeout(6000);
-  const r = await page.evaluate(() => ({ n: fpts.length, meas, th: { Tmax: theory.Tmax, period: theory.period }, E0: Etotal() }));
-  check("진자·가상: 실측 최대 장력 ≈ 이론 mg(3−2cosθ) (5 % 이내)", r.meas && Math.abs(r.meas.Tmax / r.th.Tmax - 1) < 0.05, `${r.meas?.Tmax} / ${r.th.Tmax}`);
-  check("진자·가상: 실측 주기 ≈ 이론 주기 (5 % 이내)", r.meas && Math.abs(r.meas.period / r.th.period - 1) < 0.05, `${r.meas?.period} / ${r.th.period}`);
-  check("진자·가상: 최대 장력으로 구한 운동 에너지 ≈ 처음 위치 에너지 (12 % 이내)", r.meas && Math.abs(r.meas.KE / r.E0 - 1) < 0.12, `${r.meas?.KE} / ${r.E0}`);
+  check("에너지·가상: 트랙 탭에서는 시뮬레이션 그대로 (거리 센서는 자유 낙하 탭 안내)", (await page.isHidden("#fallBox")) && (await page.textContent("#msg")).includes("자유 낙하 탭"));
+  await page.click("#tabF");
+  check("자유 낙하·가상: 센서 높이·물체 질량 입력으로 바뀌고 시뮬레이션 높이 슬라이더는 숨김", (await page.isVisible("#topCm")) && (await page.isVisible("#massG")) && (await page.isHidden("#hf")) && (await page.isHidden("#massField")));
+  await page.click("#go");
+  await page.waitForFunction(() => state === "done", null, { timeout: 15000 });
+  const r = await page.evaluate(() => ({ acc: drop.acc, T: drop.T, hTop: drop.hTop, KE: 0.5 * massKg() * drop.v(drop.T) ** 2, E0: Etotal(), cap: document.getElementById("fcap").textContent }));
+  check("자유 낙하·가상: 떨어지는 구간을 찾아 1초마다 늘어나는 속력 ≈ 9.8 m/s (5 % 이내)", Math.abs(r.acc / 9.8 - 1) < 0.05 && r.cap.includes("1초마다"), `${r.acc.toFixed(2)} · ${r.cap}`);
+  check("자유 낙하·가상: 낙하 높이 ≈ 1.15 m, 낙하 시간 ≈ 0.48 s", Math.abs(r.hTop - 1.15) < 0.03 && Math.abs(r.T - 0.484) < 0.04, `${r.hTop.toFixed(3)} m, ${r.T.toFixed(3)} s`);
+  check("자유 낙하·가상: 바닥 직전 운동 에너지 ≈ 처음 위치 에너지 (5 % 이내)", Math.abs(r.KE / r.E0 - 1) < 0.05, `${r.KE.toFixed(4)} / ${r.E0.toFixed(4)} J`);
+  await page.$eval("#pick", (el) => { el.value = 50; el.dispatchEvent(new Event("input")); });
+  const mid = await page.evaluate(() => { const s = stateFall(), M = massKg(); return { sum: M * 9.8 * s.h + 0.5 * M * s.v * s.v, E0: Etotal(), h: s.h }; });
+  check("자유 낙하·가상: 낙하 중간 시점에서도 위치+운동 에너지 ≈ 처음 에너지", Math.abs(mid.sum / mid.E0 - 1) < 0.05 && mid.h > 0.7 && mid.h < 1.0, JSON.stringify(mid));
   await page.screenshot({ path: `${OUT}/energy-virtual.png`, fullPage: true });
-  await page.click(".sb-zero"); await page.waitForTimeout(200);
-  check("진자·가상: 영점 버튼이 보정값을 만듦", await page.evaluate(() => SIHSensor.channels[0].offset !== 0));
-  check("진자·가상: 콘솔 오류 없음", errors.length === 0, errors.join(" | "));
+  await page.click("#reset");
+  check("자유 낙하·가상: 처음으로 누르면 결과를 지우고 다시 측정할 수 있음", await page.evaluate(() => drop === null && state === "idle" && !document.getElementById("go").disabled));
+  check("자유 낙하·가상: 콘솔 오류 없음", errors.length === 0, errors.join(" | "));
   await close();
 }
 for (const p of ["g1-insulation", "g1-heating", "g3-dewpoint", "g3-energy"]) { // 휴대폰 너비에서 센서 막대가 넘치지 않는지
   const { page, close } = await open(p, "?sensor=virtual", null, { width: 380, height: 800 });
   await wantChannel(page);
-  if (p === "g3-energy") await page.click("#tabP");
+  if (p === "g3-energy") await page.click("#tabF");
   await page.click("#sbDiag > summary"); await page.waitForTimeout(400);
   check(`380px: ${p} 센서 막대·진단 가로 넘침 없음`, await noOverflow(page));
   await page.screenshot({ path: `${OUT}/mobile-${p}.png`, fullPage: true });
@@ -250,6 +254,13 @@ async function connectFake(app, kind) {
   await o.page.click("#sbConnect");
   return o;
 }
+// 힘 센서를 쓰는 앱이 없어도 어댑터는 확인한다: 원하는 물리량(want)을 직접 주고 연결
+async function connectFakeWant(kind, want) {
+  const o = await open("g1-heating", "", FAKE_BLE);
+  await o.page.selectOption("#srcSel", "sensor"); await o.page.waitForSelector("#sbConnect");
+  await o.page.evaluate(async ([k, w]) => { window.__fakeNext = k; await SIHSensor.openDevice(await navigator.bluetooth.requestDevice({}), w); }, [kind, want]);
+  return o;
+}
 const chan = (page) => page.evaluate(() => SIHSensor.channels.map((c) => ({ q: c.quantity, axis: c.axis, v: c.last, raw: c.raw, unit: c.unit, src: c.source, ok: c.verified })));
 {
   const { page, errors, close } = await connectFake("g1-heating", "pasco-temp");
@@ -259,6 +270,8 @@ const chan = (page) => page.evaluate(() => SIHSensor.channels.map((c) => ({ q: c
   check("연결 버튼 하나: 기기 선택 창 한 번에 네 업체의 이름·서비스가 모두 들어감", ["Temperature", "Force Accel", "SC:", "EZ", "GDX"].every((p) => prefixes.includes(p)) && ["4a5c0001-0000-0000-0000-5c1e741f1c00", "49535343-fe7d-4ae5-8fa9-9fafd205e455", "6e400001-b5a3-f393-e0a9-e50e24dcca9e", "d91714ef-28b9-4f91-ba16-f0d9a604f112"].every((u) => req.optionalServices.includes(u)), prefixes.join(","));
   const c = await chan(page);
   check("PASCO 온도: 이름으로 판별, 원시값 26797 → 25.0 ℃", c.length === 1 && c[0].src === "pasco" && c[0].q === "temperature" && c[0].v === 25 && c[0].raw === 26797, JSON.stringify(c));
+  // 상태 표시는 다음 화면 프레임에 바뀌므로 잠깐 기다린 뒤 읽는다
+  await page.waitForFunction(() => document.getElementById("state").textContent === "액체(물)", null, { timeout: 2000 }).catch(() => {});
   check("PASCO 온도: 표준 스트림이 앱으로 전달 (상태 표시 = 액체)", (await page.evaluate(() => liveT)) === 25 && (await page.textContent("#state")) === "액체(물)");
   await page.click("#sbDiag > summary"); await page.waitForTimeout(400);
   const diag = await page.textContent("#sbDiag");
@@ -269,7 +282,7 @@ const chan = (page) => page.evaluate(() => SIHSensor.channels.map((c) => ({ q: c
   await close();
 }
 {
-  const { page, errors, close } = await connectFake("g3-energy", "pasco-force");
+  const { page, errors, close } = await connectFakeWant("pasco-force", ["force"]);
   await wantChannel(page);
   const c = await chan(page), want = +(50 * (32768 - 30000) / (32768 - 5000)).toFixed(2);
   check(`PASCO 힘·가속도: 힘 채널만 두드림, 원시값 30000 → ${want} N`, c.length === 1 && c[0].q === "force" && c[0].v === want, JSON.stringify(c));
@@ -287,7 +300,7 @@ const chan = (page) => page.evaluate(() => SIHSensor.channels.map((c) => ({ q: c
   await close();
 }
 {
-  const { page, errors, close } = await connectFake("g3-energy", "sc-force");
+  const { page, errors, close } = await connectFakeWant("sc-force", ["force"]);
   await wantChannel(page, 4);
   const c = await chan(page), f = c.find((x) => x.q === "force"), z = c.find((x) => x.axis === "z");
   check("사이언스큐브 힘·가속도: int16 −12 → −0.12 N, 가속도 g → m/s² (−94 → −9.22)", f && Math.abs(f.v + 0.12) < 1e-9 && z && Math.abs(z.v + 9.218) < 0.01 && z.unit === "m/s²", JSON.stringify(c));

@@ -20,16 +20,17 @@
       </div>
       <canvas id="g" role="img" aria-label="부피와 압력 그래프"></canvas>
     </div>
-    <p class="cap">빈 점은 예측, 찬 점은 측정값입니다. 입자가 피스톤에 부딪히는 횟수는 압력을 입자 모형으로 보여 주는 값입니다.</p>
+    <p class="cap">점은 측정값입니다. 부피가 줄 때 압력이 어떻게 바뀌는지 점들의 추세를 보세요. 입자가 피스톤에 부딪히는 횟수는 압력을 입자 모형으로 보여 주는 값입니다.</p>
   </div>
   <aside class="controls">
     <h3>주사기</h3>
     <div class="field"><label for="vol">피스톤을 밀어 부피 조절 <b></b></label><input type="range" id="vol" min="15" max="60" step="1" value="60"></div>
-    <div class="field"><label for="pred">이 부피에서 압력은 몇 기압일까? (예측)</label><input type="number" id="pred" step="0.1" min="0" max="10" placeholder="예: 1.5" inputmode="decimal"></div>
+    <div class="field"><label for="pred"><span id="refTxt">처음 상태(60 mL)</span>와 비교하면 압력은? (예측)</label>
+      <select id="pred"><option value="">고르기</option><option value="up">커진다</option><option value="down">작아진다</option><option value="same">변하지 않는다</option></select></div>
     <div class="row"><button class="btn primary" id="measure">압력 측정해서 기록</button><button class="btn" id="clear">기록 지우기</button></div>
     <div class="readout"><div><small>현재 부피</small><b id="vNow">60 mL</b></div><div><small>측정 압력</small><b id="pNow">?</b></div></div>
     <p class="result" id="cmp" hidden></p>
-    <div class="field"><label><input type="checkbox" id="curve"> 측정점을 잇는 선 보기 (3점 이상)</label></div>
+    <div class="field"><label><input type="checkbox" id="curve"> 측정점을 부드럽게 잇는 선 보기 (3점 이상)</label></div>
     <table><thead><tr><th>부피</th><th>예측</th><th>측정</th><th>P×V</th></tr></thead><tbody id="tb"></tbody></table>
     <p class="hint">온도와 기체의 양은 일정하다고 가정합니다(60 mL에서 1기압). 압력 센서는 압력만 재므로, 실제 실험에서는 부피를 주사기 눈금으로 읽어 직접 입력하게 됩니다.</p>
   </aside>
@@ -40,9 +41,9 @@ window.APP = {
   id: "g2-gas", grade: 2, unit: "기체의 성질", sensor: "압력 센서",
   title: "기체 압력 탐구실",
   question: "주사기 속 기체의 부피를 반으로 줄이면 압력은 어떻게 될까?",
-  how: "부피를 정하고, 먼저 압력을 예측해 적은 뒤 측정 버튼을 누르세요. 예측(빈 점)과 측정(찬 점)이 그래프에 함께 찍힙니다.",
-  notes: ["부피를 60→30 mL로 줄이면 압력은 몇 배가 될까요? 입자 상자는 어떻게 보일까요?", "측정한 P×V 값들은 비슷한가요? 예측과 측정의 차이는?", "압력이 커지는 이유를 입자의 충돌로 설명해 보세요."],
-  prompt: "중학교 2학년 '기체의 성질' 단원용 웹앱을 만들어 줘. 주사기 부피(15~60 mL)를 슬라이더로 바꾸면 안에 든 기체 입자 모형이 그만큼 좁은 공간에서 움직이고 벽에 부딪히는 횟수가 늘어나게 보여 줘. 학생이 먼저 압력을 예측해 입력한 뒤 측정 버튼을 누르면 보일 법칙(P×V 일정, 60 mL에서 1 atm)으로 계산한 압력이 기록되고, 부피–압력 그래프에 예측점과 측정점이 함께 찍히게 해 줘. 표에는 P×V도 계산해 보여 줘. 나중에 압력 센서 값을 넣을 자리를 남겨 두고, 부피는 직접 입력한다는 안내를 붙여 줘.",
+  how: "부피를 정하고, 직전 측정과 비교해 압력이 커질지 작아질지 먼저 고른 뒤 측정 버튼을 누르세요. 측정값이 그래프에 찍히고 예측이 맞았는지 알려 줍니다.",
+  notes: ["부피를 60→30 mL로 줄이면 압력은 커질까요, 작아질까요? 입자 상자는 어떻게 보일까요?", "부피를 줄일수록 압력은 어떻게 변했나요? 표의 P×V 값들은 비슷한가요?", "압력이 커지는 이유를 입자의 충돌로 설명해 보세요."],
+  prompt: "중학교 2학년 '기체의 성질' 단원용 웹앱을 만들어 줘. 주사기 부피(15~60 mL)를 슬라이더로 바꾸면 안에 든 기체 입자 모형이 그만큼 좁은 공간에서 움직이고 벽에 부딪히는 횟수가 늘어나게 보여 줘. 학생이 먼저 직전 측정과 비교해 압력이 커질지 작아질지 고른 뒤 측정 버튼을 누르면 보일 법칙(P×V 일정, 60 mL에서 1 atm)을 따르는 압력이 기록되고, 부피–압력 그래프에 측정점이 찍히며 예측이 맞았는지 알려 줘. 학생에게 압력을 계산하게 하지는 말고, 표에는 P×V를 보여 줘. 나중에 압력 센서 값을 넣을 자리를 남겨 두고, 부피는 직접 입력한다는 안내를 붙여 줘.",
   next: "온도를 올리면 이 그래프는 어떻게 바뀔까? 온도 조건을 넣으려면 프롬프트에 무엇을 추가해야 할까?"
 };
 SIH.shell();
@@ -82,31 +83,57 @@ function drawSyringe(dt) {
   for (let v = 0; v <= 60; v += 10) { const y = BOTTOM - FULL * v / V0; c.fillRect(RIGHT, y, 8, 1.5); c.fillText(v, RIGHT + 12, y + 4); }
   c.fillText("mL", RIGHT + 12, BOTTOM + 16);
 }
+// 측정점을 꺾은선이 아니라 부드러운 곡선으로 잇는다 (단조 3차 보간: 점 사이에서 넘치거나 굽이치지 않음)
+function smooth(pts) {
+  const by = new Map(); pts.forEach(([x, y]) => { const a = by.get(x) || []; a.push(y); by.set(x, a); });   // 같은 부피를 여러 번 재면 평균
+  const P = [...by].map(([x, ys]) => [x, ys.reduce((s, v) => s + v, 0) / ys.length]).sort((a, b) => a[0] - b[0]), n = P.length;
+  if (n < 3) return P;
+  const d = P.slice(1).map((p, i) => (p[1] - P[i][1]) / (p[0] - P[i][0]));
+  const m = P.map((_, i) => (i === 0 ? d[0] : i === n - 1 ? d[n - 2] : d[i - 1] * d[i] <= 0 ? 0 : (d[i - 1] + d[i]) / 2));
+  for (let i = 0; i < n - 1; i++) {
+    if (d[i] === 0) { m[i] = m[i + 1] = 0; continue; }
+    const a = m[i] / d[i], b = m[i + 1] / d[i], s = a * a + b * b;
+    if (s > 9) { const k = 3 / Math.sqrt(s); m[i] = k * a * d[i]; m[i + 1] = k * b * d[i]; }
+  }
+  const out = [];
+  for (let i = 0; i < n - 1; i++) {
+    const [x0, y0] = P[i], [x1, y1] = P[i + 1], h = x1 - x0;
+    for (let k = 0; k < 16; k++) {
+      const u = k / 16, h00 = 2 * u ** 3 - 3 * u ** 2 + 1, h10 = u ** 3 - 2 * u ** 2 + u, h01 = -2 * u ** 3 + 3 * u ** 2, h11 = u ** 3 - u ** 2;
+      out.push([x0 + u * h, h00 * y0 + h10 * h * m[i] + h01 * y1 + h11 * h * m[i + 1]]);
+    }
+  }
+  out.push(P[n - 1]);
+  return out;
+}
 function drawGraph() {
   const meas = recs.map(r => [r.v, r.p]).sort((a, b) => a[0] - b[0]);
-  const pred = recs.filter(r => r.pred != null).map(r => [r.v, r.pred]);
   const series = [];
-  if ($("curve").checked && meas.length >= 3) series.push({ pts: meas, color: "#2c7fd1", width: 1.8, dash: [6, 4] });
-  series.push({ pts: pred, color: "#2c7fd1", noLine: true, dots: 6, open: true });
+  if ($("curve").checked && meas.length >= 3) series.push({ pts: smooth(meas), color: "#2c7fd1", width: 1.8, dash: [6, 4] });
   series.push({ pts: meas, color: "#2c7fd1", noLine: true, dots: 6 });
-  SIH.drawChart(cG, { x: 0, y: 0, w: 460, h: 340, xMin: 0, xMax: 70, yMin: 0, yMax: 4.5, xTicks: 7, yTicks: 9, xLabel: "부피(mL)", yLabel: "압력(기압)", series,
-    legend: [{ label: "예측", color: "#2c7fd1", dot: "open" }, { label: "측정", color: "#2c7fd1", dot: "fill" }] });
+  SIH.drawChart(cG, { x: 0, y: 0, w: 460, h: 340, xMin: 0, xMax: 70, yMin: 0, yMax: 4.5, xTicks: 7, yTicks: 9, xLabel: "부피(mL)", yLabel: "압력(기압)", series });
 }
+// 예측은 수치가 아니라 직전 측정(처음에는 60 mL·1기압)과 비교한 방향으로 한다
+const WAY = { up: "커진다", down: "작아진다", same: "변하지 않는다" }, DID = { up: "커졌어요", down: "작아졌어요", same: "변하지 않았어요" };
+const ref = () => recs.length ? recs[recs.length - 1] : { v: V0, p: P0 };
+// 부피가 줄면 압력이 커진다 (온도·기체의 양 일정)
+const wayOf = (v, v0) => (v === v0 ? "same" : v < v0 ? "up" : "down");
+function showRef() { const r = ref(); $("refTxt").textContent = recs.length ? `직전 측정(${r.v} mL)` : `처음 상태(${r.v} mL)`; }
 function table() {
-  $("tb").innerHTML = recs.map(r => `<tr><td>${r.v} mL</td><td>${r.pred == null ? "–" : r.pred.toFixed(2)}</td><td>${r.p.toFixed(2)}</td><td>${(r.p * r.v).toFixed(0)}</td></tr>`).join("");
+  $("tb").innerHTML = recs.map(r => `<tr><td>${r.v} mL</td><td class="${r.pred ? (r.pred === r.way ? "yes" : "no") : ""}">${r.pred ? WAY[r.pred] : "–"}</td><td>${r.p.toFixed(2)}</td><td>${(r.p * r.v).toFixed(0)}</td></tr>`).join("");
 }
 function measure() {
-  const raw = $("pred").value.trim(), p = P(V), pred = raw === "" || isNaN(+raw) ? null : +raw;
-  recs.push({ v: V, p, pred });
+  const r0 = ref(), p = P(V), pred = $("pred").value || null, way = wayOf(V, r0.v);
+  recs.push({ v: V, p, pred, way });
   $("pNow").textContent = p.toFixed(2) + " 기압"; $("pred").value = "";
   const cmp = $("cmp"); cmp.hidden = false;
-  cmp.innerHTML = pred == null ? "예측 없이 측정했어요. 다음에는 먼저 예측해 보세요."
-    : `예측 ${pred.toFixed(2)} → 측정 ${p.toFixed(2)} 기압 · 차이 <b>${Math.abs(pred - p).toFixed(2)}</b>`;
-  table(); drawGraph();
+  const what = `${r0.v} mL → ${V} mL에서 압력이 <b>${DID[way]}</b>.`;
+  cmp.innerHTML = pred == null ? `${what} 다음에는 측정 전에 먼저 예측해 보세요.`
+    : `${what} 예측 "${WAY[pred]}" — ${pred === way ? '<span class="ok">맞았어요.</span>' : '<span class="bad">다시 생각해 볼까요?</span>'}`;
+  table(); drawGraph(); showRef();
 }
 $("measure").onclick = measure;
-$("pred").addEventListener("keydown", e => { if (e.key === "Enter") measure(); });
-$("clear").onclick = () => { recs = []; $("cmp").hidden = true; table(); drawGraph(); };
+$("clear").onclick = () => { recs = []; $("cmp").hidden = true; table(); drawGraph(); showRef(); };
 $("curve").onchange = drawGraph;
 function loop(now) {
   const dt = Math.min(0.05, (now - last) / 1000); last = now;

@@ -53,6 +53,10 @@ for (const [vn, vp] of Object.entries(VIEWS)) {
     check(`${vn}: 책장에 서가가 그려짐`, info.rows >= 3, info.labels.join(" | "));
     check(`${vn}: 선생님 예시 11권 + 학생 책 4권`, info.books === 15 || vn === "mobile", `${info.books}권`);
     check(`${vn}: 가로 넘침 없음`, info.scrollW <= info.W + 1, `${info.scrollW} > ${info.W}`);
+    if (vn !== "mobile") {   // 표지 아래 학년반·모둠명 줄이 줄어들어 글자 아래가 잘리지 않는지
+      const cut = await page.evaluate(() => [...document.querySelectorAll(".book .who")].filter((el) => el.scrollHeight > el.clientHeight + 1).map((el) => `${el.textContent} ${el.clientHeight}/${el.scrollHeight}`));
+      check(`${vn}: 책 표지의 학년반·모둠명 줄이 잘리지 않음`, cut.length === 0, cut.join(" | "));
+    }
     check(`${vn}: 승인 대기 책은 공개 책장에 없음`, !info.html.includes("우리 학교 기온 기록"));
     check(`${vn}: 모둠원 이름이 공개 화면에 없음`, !/김하늘|이서준|최민준|정수아/.test(info.html));
     check(`${vn}: 빈 서가 안내 문구`, info.html.includes("아직 꽂힌 책이 없어요"));

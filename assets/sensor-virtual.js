@@ -8,7 +8,8 @@
      heating                 얼음 −8 ℃ → 0 ℃에서 60초 머묾 → 100 ℃에서 머묾
      cup                     25 ℃ 컵이 1초에 0.12 ℃씩 식음
      air                     기온 24 ℃, 습도 55 %
-     pendulum                질량 200 g, 줄 50 cm, 45°에서 놓은 진자의 장력 (25 Hz) */
+     freefall                바닥에서 150 cm 높이에 아래를 향해 둔 거리 센서 (20 Hz). 센서 30 cm 아래에 1.5초 들고 있던 공을 놓아
+                             공기 저항 없이 떨어뜨리고, 바닥(센서에서 145 cm)에 닿으면 멈췄다가 4초마다 다시 들어 올린다 */
 (function () {
   const S = window.SIHSensor;
   const vs = +new URLSearchParams(location.search).get("vspeed");
@@ -22,12 +23,10 @@
       f: (s) => [(s < 20 ? -8 + 0.4 * s : s < 80 ? 0 : s < 280 ? (s - 80) * 0.5 : 100) + noise(0.1)] },
     cup: { label: "가상 온도 센서 (컵)", ms: 250, ch: [{ quantity: "temperature" }], f: (s) => [Math.max(3, 25 - 0.12 * s) + noise(0.05)] },
     air: { label: "가상 온습도 센서", ms: 500, ch: [{ quantity: "temperature" }, { quantity: "humidity" }], f: () => [24 + noise(0.05), 55 + noise(0.3)] },
-    pendulum: { label: "가상 힘 센서", ms: 40, ch: [{ quantity: "force", zeroable: true }], init: () => ({ th: Math.PI / 4, om: 0, last: null }),
-      f(s, st) {
-        const g = 9.8, L = 0.5, m = 0.2;
-        let dt = st.last === null ? 0 : s - st.last; st.last = s;
-        for (let n = Math.ceil(dt / 0.002), h = n ? dt / n : 0, i = 0; i < n; i++) { st.om += (-(g / L) * Math.sin(st.th) - 0.02 * st.om) * h; st.th += st.om * h; }
-        return [m * (g * Math.cos(st.th) + L * st.om * st.om) + noise(0.01)];
+    freefall: { label: "가상 거리 센서", ms: 50, ch: [{ quantity: "distance" }],
+      f(s) {
+        const u = s % 4 - 1.5;                                   // 놓은 뒤 시간 (음수면 아직 들고 있음)
+        return [(u <= 0 ? 0.3 : Math.min(1.45, 0.3 + 0.5 * 9.8 * u * u)) + noise(0.003)];
       } },
   };
 

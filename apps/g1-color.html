@@ -96,7 +96,7 @@ window.APP = {
   id: "g1-color", grade: 1, unit: "빛과 파동", sensor: "기기 카메라", mediaIn: true, icon: "🌈",
   title: "빛의 색 측정기",
   question: "빨강·초록·파랑 빛을 섞으면 어떤 색으로 보일까? 색이 있는 물체는 어떤 빛을 반사할까?",
-  how: "무엇을 잴지 고르고 색을 먼저 예측한 뒤, 카메라로 측정해 기록하세요. 색 화면은 다른 기기에서 띄우면 됩니다. 폰 카메라를 컴퓨터 화면에 아주 가까이 대면 빨강·초록·파랑의 작은 점(화소)도 보입니다.",
+  how: "무엇을 잴지 고르고 색을 먼저 예측한 뒤, 카메라로 측정해 기록하세요. 색 화면은 다른 기기에서 띄우면 됩니다. 폰 카메라를 컴퓨터 화면에 아주 가까이 대면 화소 하나를 이루는 빨강·초록·파랑의 작은 점도 보입니다.",
   notes: ["빨강 빛과 초록 빛을 함께 비추면 무슨 색으로 보일까요? 이유도 적어 보세요.", "측정한 색 이름과 빨강·초록·파랑 빛의 비율(%)을 표에서 옮겨 적어 보세요.", "영상 장치가 세 가지 빛만으로 여러 색을 만드는 원리를 빛의 합성으로 설명해 보세요."],
   prompt: "중학교 1학년 '빛과 파동' 단원의 빛의 합성과 물체의 색 탐구용 웹앱을 만들어 줘. 휴대폰 브라우저에서 뒷면 카메라를 켜고 화면 가운데 네모 안의 평균 색을 구해, 색 이름·색상·채도와 빨강·초록·파랑 빛의 비율 막대, 색상환 위의 점으로 보여 줘. '빨강+초록 빛' 같은 측정 대상을 고르고 색을 예측한 뒤 측정하면 표에 예측과 결과를 기록하고 CSV로 내려받게 해 줘. 다른 기기에서 화면 전체를 빨강·초록·파랑과 그 합성색으로 띄우는 색 화면 모드와, 카메라가 없을 때 세 빛의 세기를 슬라이더로 섞어 보는 시뮬레이션도 넣어 줘. 영상은 저장하거나 전송하지 마.",
   next: "빨강 셀로판을 댄 손전등으로 초록 색종이를 비추면 어떤 색으로 보일까? 측정으로 확인하려면 무엇을 같게 두어야 할까?"
@@ -185,7 +185,9 @@ function drawWheel() {
 window.addEventListener("sih:resize", () => { drawWheel(); if (SIH.source !== "sensor") drawSim(); });
 
 // ---------- 빛 섞기 (시뮬레이션) ----------
+// 슬라이더 %는 빛의 양이다. 화면에 그릴 때만 화소값으로 바꾸므로, 막대의 비율이 슬라이더의 비율과 같게 나온다
 const mix = { R: 100, G: 0, B: 0 };
+const code = k => unlin(mix[k] / 100);
 function drawSim() {
   const c = vctx;
   c.save();
@@ -193,9 +195,9 @@ function drawSim() {
   c.globalCompositeOperation = "lighter";
   const r = 118, cx = VW / 2, cy = VH / 2 + 8;
   [["R", 0, -58, [255, 0, 0]], ["G", -52, 34, [0, 255, 0]], ["B", 52, 34, [0, 0, 255]]].forEach(([k, dx, dy, col]) => {
-    const f = mix[k] / 100; if (!f) return;
+    if (!mix[k]) return;
     c.beginPath(); c.arc(cx + dx, cy + dy, r, 0, Math.PI * 2);
-    c.fillStyle = `rgb(${col.map(v => Math.round(v * f)).join(",")})`; c.fill();
+    c.fillStyle = `rgb(${col.map(v => (v ? Math.round(code(k)) : 0)).join(",")})`; c.fill();
   });
   c.restore();
   box(c);
@@ -211,7 +213,7 @@ function simMeasure() {
   const px = new Uint8ClampedArray(16 * 16 * 4);
   for (let i = 0; i < px.length; i += 4) {
     const n = () => (Math.random() - 0.5) * 3;
-    px[i] = 255 * mix.R / 100 + n(); px[i + 1] = 255 * mix.G / 100 + n(); px[i + 2] = 255 * mix.B / 100 + n(); px[i + 3] = 255;
+    px[i] = code("R") + n(); px[i + 1] = code("G") + n(); px[i + 2] = code("B") + n(); px[i + 3] = 255;
   }
   showEst(analyzePixels(px));
 }

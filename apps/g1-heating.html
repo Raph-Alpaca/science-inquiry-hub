@@ -141,6 +141,35 @@ function drawGraph() {
 }
 
 // 입자: 고체는 제자리 진동, 액체는 서로 붙어 아래에서 자유롭게, 기체는 상자 전체로 빠르게
+const PR = 10.5, BOX = { liquid: [13, 227, 92, 227], gas: [11, 229, 11, 229] };
+const clampBox = p => { const [x0, x1, y0, y1] = BOX[p.kind]; p.x = Math.min(x1, Math.max(x0, p.x)); p.y = Math.min(y1, Math.max(y0, p.y)); };
+// 입자끼리 겹치지 않게 떼어 놓는다. 고체 입자는 제자리에 두고 움직이는 입자만 밀려난다
+function separate() {
+  // 얼음 격자 틈에 끼여 몇 프레임째 빠져나오지 못한 입자(녹는 중에 온도가 오르내릴 때 생김)는 아래쪽 빈 곳으로 옮긴다
+  const hitsIce = p => parts.some(q => q.kind === "solid" && Math.hypot(q.x - p.x, q.y - p.y) < 2 * PR - 0.5);
+  parts.forEach(p => {
+    if (p.kind === "solid" || (p.stuck || 0) < 3) return;
+    const [x0, x1, , y1] = BOX[p.kind]; p.x = x0 + Math.random() * (x1 - x0); p.y = y1 - Math.random() * 30; p.vx = p.vy = 0; p.stuck = 0;
+  });
+  for (let it = 0; it < 8; it++) {
+    for (let i = 0; i < N; i++) for (let j = i + 1; j < N; j++) {
+      const a = parts[i], b = parts[j];
+      if (a.kind === "solid" && b.kind === "solid") continue;
+      let dx = b.x - a.x, dy = b.y - a.y, d = Math.hypot(dx, dy);
+      if (d >= 2 * PR) continue;
+      if (d < 1e-6) { const r = Math.random() * Math.PI * 2; dx = Math.cos(r); dy = Math.sin(r); d = 1; }
+      const push = (2 * PR - d) / d, wa = a.kind === "solid" ? 0 : b.kind === "solid" ? 1 : 0.5, wb = 1 - wa;
+      a.x -= dx * push * wa; a.y -= dy * push * wa; b.x += dx * push * wb; b.y += dy * push * wb;
+      // 기체 입자끼리는 부딪치면 튕겨 나간다(같은 질량의 탄성 충돌: 중심 방향 속도를 맞바꿈)
+      if (it === 0 && a.kind === "gas" && b.kind === "gas") {
+        const nx = dx / d, ny = dy / d, va = a.vx * nx + a.vy * ny, vb = b.vx * nx + b.vy * ny;
+        if (va > vb) { a.vx += (vb - va) * nx; a.vy += (vb - va) * ny; b.vx += (va - vb) * nx; b.vy += (va - vb) * ny; }
+      }
+    }
+    parts.forEach(p => { if (p.kind !== "solid") clampBox(p); });
+  }
+  parts.forEach(p => { p.stuck = p.kind !== "solid" && hitsIce(p) ? (p.stuck || 0) + 1 : 0; });
+}
 function drawParts(st, dt) {
   const c = ctxP, f = Math.min(3, dt * 60), calm = SIH.reduced ? 0.35 : 1;
   c.clearRect(0, 0, 240, 240);
@@ -148,6 +177,7 @@ function drawParts(st, dt) {
   parts.forEach((p, i) => {
     const solid = st.s === "solid" || (st.s === "melting" && (N - 1 - i) / N >= st.melt);
     const gas = st.s === "gas" || (st.s === "boiling" && i / N < st.boil);
+    p.kind = solid ? "solid" : gas ? "gas" : "liquid";
     if (solid) {
       const h = home(i), jit = (0.6 + Math.max(0, st.T + 20) / 20 * 1.4) * calm;
       p.x = h.x + (Math.random() - .5) * jit * 2; p.y = h.y + (Math.random() - .5) * jit * 2; p.vx = p.vy = 0;
@@ -165,7 +195,10 @@ function drawParts(st, dt) {
       if (p.x < 11) { p.x = 11; p.vx = Math.abs(p.vx); } if (p.x > 229) { p.x = 229; p.vx = -Math.abs(p.vx); }
       if (p.y < 11) { p.y = 11; p.vy = Math.abs(p.vy); } if (p.y > 229) { p.y = 229; p.vy = -Math.abs(p.vy); }
     }
-    c.beginPath(); c.arc(p.x, p.y, 10.5, 0, Math.PI * 2);
+  });
+  separate();
+  parts.forEach(p => {
+    c.beginPath(); c.arc(p.x, p.y, PR, 0, Math.PI * 2);
     c.fillStyle = "#2c7fd1"; c.fill(); c.strokeStyle = "#1d5f9f"; c.lineWidth = 1; c.stroke();
   });
 }

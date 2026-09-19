@@ -7,156 +7,247 @@
 <style>
   .stage .split { --cols: minmax(0, 1fr) 210px; }
   .side { --w: 210px; }
-  #tCtl, #pCtl { display: flex; flex-direction: column; gap: 14px; }
-  #tCtl[hidden], #pCtl[hidden] { display: none; }
+  #tCtl, #fCtl { display: flex; flex-direction: column; gap: 14px; }
+  #tCtl[hidden], #fCtl[hidden] { display: none; }
 </style>
 </head>
 <body>
 <section class="lab">
   <div class="stage">
     <div class="split">
-      <canvas id="c" role="img" aria-label="트랙 또는 진자 위의 공"></canvas>
+      <canvas id="c" role="img" aria-label="트랙 위의 공 또는 자유 낙하하는 공"></canvas>
       <div class="side"><canvas id="bars" role="img" aria-label="에너지 막대 그래프"></canvas></div>
     </div>
-    <div class="sensor-only" id="forceBox" hidden>
-      <canvas id="fc" role="img" aria-label="시간에 따른 진자 줄의 장력 그래프: 실측과 이론"></canvas>
-      <p class="cap" id="fcap">힘 센서에 진자를 매달고, 추를 놓는 순간 「놓기」를 누르세요.</p>
+    <div id="fallBox" hidden>
+      <canvas id="fc" role="img" aria-label="자유 낙하: 시간에 따른 속력 그래프와 에너지 그래프"></canvas>
+      <p class="cap" id="fcap"></p>
     </div>
     <p class="cap" id="cap">공을 놓으면 위치 에너지가 운동 에너지로 바뀝니다. 오른쪽 막대는 매 순간의 에너지입니다.</p>
   </div>
   <aside class="controls">
-    <div class="tabs" role="group" aria-label="화면 고르기"><button class="btn" id="tabT">트랙</button><button class="btn" id="tabP">진자</button></div>
+    <div class="tabs" role="group" aria-label="화면 고르기"><button class="btn" id="tabT">트랙</button><button class="btn" id="tabF">자유 낙하</button></div>
     <div id="tCtl">
       <div class="field"><label for="h0">출발 높이 <b></b></label><input type="range" id="h0" min="2" max="10" step="0.5" value="8"></div>
       <div class="field"><label for="hh">중간 언덕 높이 <b></b></label><input type="range" id="hh" min="0" max="10" step="0.5" value="5"></div>
       <div class="field"><label><input type="checkbox" id="fric"> 마찰 켜기</label></div>
     </div>
-    <div id="pCtl" hidden>
-      <div class="field"><label for="ang">놓는 각도 <b></b></label><input type="range" id="ang" min="10" max="80" step="5" value="45"></div>
-      <div class="field sim-only"><label for="len">줄 길이 <b></b></label><input type="range" id="len" min="1" max="3" step="0.5" value="2"></div>
-      <div class="field sensor-only" hidden><label for="lenCm">실제 줄 길이 (고정점~추 중심, cm)</label><input type="number" id="lenCm" min="10" max="200" step="1" value="50" inputmode="decimal"></div>
-      <div class="field sensor-only" hidden><label for="massG">실제 추의 질량 (g)</label><input type="number" id="massG" min="10" max="2000" step="1" value="200" inputmode="decimal"></div>
-      <div class="field"><label><input type="checkbox" id="fricP"> 공기 저항 켜기</label></div>
+    <div id="fCtl" hidden>
+      <div class="field sim-only"><label for="hf">떨어뜨리는 높이 <b></b></label><input type="range" id="hf" min="1" max="10" step="0.5" value="5"></div>
+      <div class="field sensor-only" hidden><label for="place">거리 센서를 둔 곳</label>
+        <select id="place"><option value="top">위에 두고 아래를 향함</option><option value="floor">바닥에 두고 위를 향함</option></select></div>
+      <div class="field sensor-only" hidden id="topField"><label for="topCm">바닥에서 센서까지 높이 (cm)</label><input type="number" id="topCm" min="30" max="300" step="1" value="150" inputmode="decimal"></div>
+      <div class="field sensor-only" hidden><label for="massG">떨어뜨리는 물체의 질량 (g)</label><input type="number" id="massG" min="5" max="2000" step="1" value="100" inputmode="decimal"></div>
+      <div class="field sensor-only" hidden><label for="pick">낙하 중 시점 고르기 <b></b></label><input type="range" id="pick" min="0" max="100" step="1" value="100" disabled></div>
     </div>
     <div class="field" id="massField"><label for="mass">공의 질량 <b></b></label><input type="range" id="mass" min="0.5" max="3" step="0.5" value="1"></div>
     <div class="field" id="spdField"><label for="spd">재생 속도</label>
       <select id="spd"><option value="0.25">아주 느리게 (¼배)</option><option value="0.5" selected>느리게 (½배)</option><option value="1">실제 빠르기</option></select></div>
     <div class="row"><button class="btn primary" id="go">놓기</button><button class="btn" id="reset">처음으로</button></div>
     <div class="readout"><div><small>높이</small><b id="rh">– m</b></div><div><small>속력</small><b id="rv">– m/s</b></div><div><small>위치 에너지</small><b id="rpe">– J</b></div><div><small>운동 에너지</small><b id="rke">– J</b></div></div>
-    <div class="readout sensor-only" id="measOut" hidden><div><small>최대 장력 (실측 / 이론)</small><b id="mT">–</b></div><div><small>주기 (실측 / 이론)</small><b id="mP">–</b></div><div><small>최하점 속력 (실측)</small><b id="mV">–</b></div><div><small>운동 에너지 (실측)</small><b id="mKE">–</b></div></div>
     <p class="result" id="msg" aria-live="polite" hidden></p>
-    <p class="hint">g = 9.8 m/s². 공은 구르지 않고 미끄러진다고 가정합니다. 언덕을 출발 높이보다 높게 하면 어떻게 될까요?</p>
+    <p class="hint" id="hint"></p>
   </aside>
 </section>
 <script src="../assets/hub.js"></script>
 <script>
 window.APP = {
-  id: "g3-energy", grade: 3, unit: "운동과 에너지", sensor: "힘 센서 · 진자 탭",
-  sensorIn: { want: ["force"], max: 1, virtual: ["pendulum"] },
+  id: "g3-energy", grade: 3, unit: "운동과 에너지", sensor: "거리 센서 · 자유 낙하 탭",
+  sensorIn: { want: ["distance"], max: 1, virtual: ["freefall"] },
   title: "에너지 전환 시뮬레이터",
-  question: "출발 높이가 낮은 공이 더 높은 언덕을 넘을 수 있을까? 에너지는 어디로 갈까?",
-  how: "높이와 질량을 바꾸고 공을 놓아 보세요. 위치 에너지와 운동 에너지 막대의 합이 어떻게 되는지, 마찰을 켜면 무엇이 달라지는지 관찰하세요.",
-  notes: ["출발 8 m, 언덕 5 m일 때 언덕 꼭대기에서 속력은? 언덕을 9 m로 올리면?", "막대 그래프에서 역학적 에너지는 변했나요? 마찰을 켰을 때 줄어든 만큼은 어디에 나타나나요?", "역학적 에너지 보존과 에너지 전환으로 설명해 보세요. 진자에서도 같은가요?"],
-  prompt: "중학교 3학년 '운동과 에너지' 단원용 웹앱을 만들어 줘. 첫 화면은 트랙: 출발 높이(2~10 m)와 중간 언덕 높이, 공의 질량을 슬라이더로 정하고 공을 놓으면 역학적 에너지 보존(g=9.8)에 따라 공이 굴러가고, 언덕이 출발점보다 높으면 넘지 못하고 되돌아오게 해 줘. 옆에는 위치·운동·역학적 에너지를 실시간 막대 그래프로 보여 주고, 마찰을 켜면 에너지가 줄어드는 것이 보이게 해 줘. 두 번째 화면은 진자: 놓는 각도와 줄 길이를 바꾸어 같은 막대 그래프로 관찰하게 해 줘. 높이·속력·에너지 값을 숫자로도 표시해 줘. 실제 거리 센서로 잰 위치–시간 데이터를 넣을 자리를 남겨 둬.",
-  next: "실제 공은 왜 시뮬레이션처럼 무한히 구르지 않을까? 거리 센서로 실제 속력을 재서 비교하려면 앱에 어떤 기능이 필요할까?"
+  question: "물체가 내려가는 동안 위치 에너지는 어떻게 운동 에너지로 바뀔까? 역학적 에너지는 보존될까?",
+  how: "트랙과 자유 낙하 중 하나를 고르고 공을 놓아 보세요. 위치 에너지와 운동 에너지 막대의 합이 어떻게 되는지, 마찰을 켜면 무엇이 달라지는지 관찰하세요.",
+  notes: ["자유 낙하하는 공의 속력은 1초마다 얼마씩 늘까요? 출발 8 m, 언덕 5 m인 트랙에서 언덕 꼭대기의 속력은?", "속력–시간 그래프의 기울기와, 위치·운동·역학적 에너지 막대의 값을 적어 보세요. 마찰을 켜면 줄어든 만큼은 어디에 나타나나요?", "역학적 에너지 전환과 보존으로 설명해 보세요. 트랙과 자유 낙하에서 모두 같은가요?"],
+  prompt: "중학교 3학년 '운동과 에너지' 단원용 웹앱을 만들어 줘. 화면은 두 개야. 트랙: 출발 높이(2~10 m)와 중간 언덕 높이, 공의 질량을 슬라이더로 정하고 공을 놓으면 역학적 에너지 보존(g=9.8)에 따라 공이 미끄러져 내려가고, 언덕이 출발점보다 높으면 넘지 못하고 되돌아오게 해 줘. 마찰을 켜면 줄어든 역학적 에너지가 열 에너지로 나타나게 해 줘. 자유 낙하: 떨어뜨리는 높이를 정하고 공기 저항 없이 떨어뜨리면 0.1초 간격의 공 위치를 남기고, 속력–시간 그래프와 위치·운동·역학적 에너지–시간 그래프를 그려 줘. 두 화면 모두 위치·운동·역학적 에너지 막대와 높이·속력·에너지 숫자를 보여 줘. 자유 낙하 화면에는 거리 센서로 잰 높이 데이터를 받아 떨어지는 구간을 찾고, 1초마다 늘어나는 속력과 위치·운동 에너지를 계산하는 기능을 넣어 줘.",
+  next: "실제로 떨어뜨린 공의 역학적 에너지는 왜 조금 줄어들까? 종이처럼 공기 저항이 큰 물체로 재면 속력–시간 그래프가 어떻게 달라질까?"
 };
 SIH.shell();
 
 const g = 9.8, X_END = 20, FRIC = 0.06; // 마찰: 1 m 이동할 때마다 높이 0.06 m에 해당하는 에너지가 열로
 const $ = id => document.getElementById(id);
-const cv = $("c"), ctx = SIH.dpr(cv, 600, 360), cb = $("bars"), ctb = SIH.dpr(cb, 210, 360);
-let mode = "track", h0 = 8, hh = 5, m = 1, state = "idle", x = 0, dir = 1, loss = 0, last = 0, ang = 45, L = 2, th = 0, om = 0, speed = 0.5, t = 0;
+const cv = $("c"), ctx = SIH.dpr(cv, 600, 360), cb = $("bars"), ctb = SIH.dpr(cb, 210, 360), fcv = $("fc"), fctx = SIH.dpr(fcv, 760, 240);
+let mode = "track", h0 = 8, hh = 5, m = 1, state = "idle", x = 0, dir = 1, loss = 0, last = 0, speed = 0.5, t = 0, hf = 5;
 const WORDS = { idle: "놓기", running: "멈춤", paused: "계속", done: "끝" };
-let src = "sim", fpts = [], ft0 = null, theory = null, meas = null;   // 실시간 센서(진자 탭) — 아래 설명 참고
-const fcv = $("fc"), fctx = SIH.dpr(fcv, 760, 240), sensorOn = () => src === "sensor" && mode === "pend";
+const WORDS_S = { idle: "측정 시작", running: "측정 멈춤", paused: "계속 측정", done: "끝" };
 // 트랙 모양: 출발 언덕(코사인) + 중간 언덕(종 모양)
 const H = xx => (xx < 6 ? h0 * 0.5 * (1 + Math.cos(Math.PI * xx / 6)) : 0) + hh * Math.exp(-(((xx - 12) / 1.6) ** 2));
 const PX = xx => 30 + xx * 27.5, PY = h => 330 - h * 27;
 const say = (txt) => { const el = $("msg"); el.hidden = !txt; el.textContent = txt || ""; };
+const HINT = {
+  track: "g = 9.8 m/s². 공은 구르지 않고 미끄러진다고 가정합니다. 언덕을 출발 높이보다 높게 하면 어떻게 될까요?",
+  fall: "g = 9.8 m/s². 공기 저항은 없다고 가정하고, 바닥을 높이 0(기준면)으로 봅니다. 옅은 공은 0.1초 간격의 위치입니다.",
+  fallSensor: "센서와 물체 사이를 20 cm 이상 띄우고, 공기 저항이 작은 공(테니스공 등)을 떨어뜨리세요. 떨어지는 공이 센서에 부딪히지 않게 하세요. 떨어진 곳(바닥)을 높이 0으로 봅니다.",
+};
+
+// 자유 낙하 탭의 센서 상태 (아래 SIH.bind 가 곧바로 reset()을 부르므로 먼저 선언)
+let src = "sim", fpts = [], ft0 = null, drop = null, liveH = null;
+const sensorOn = () => src === "sensor" && mode === "fall";
+const heightOf = d => ($("place").value === "top" ? Math.max(0.3, (+$("topCm").value || 150) / 100) - d : d);
+const massKg = () => (sensorOn() ? Math.max(0.005, (+$("massG").value || 100) / 1000) : m);
+const tLand = () => Math.sqrt(2 * hf / g);
 
 SIH.bind("h0", v => { h0 = v; reset(); }, " m"); SIH.bind("hh", v => { hh = v; reset(); }, " m"); SIH.bind("mass", v => { m = v; draw(); }, " kg");
-SIH.bind("ang", v => { ang = v; reset(); }, "°"); SIH.bind("len", v => { L = v; reset(); }, " m");
+SIH.bind("hf", v => { hf = v; reset(); }, " m");
 $("spd").onchange = e => speed = +e.target.value;
-$("fric").onchange = $("fricP").onchange = reset;
-// 실시간 센서(진자 탭): 힘 센서에 진자를 매달아 줄의 장력을 잰다.
-//  겹쳐 보기: 이론 장력 T = m(g·cosθ + L·ω²) 곡선을 실측 위에 그린다. 놓는 순간을 정확히 맞출 수 없으므로 첫 봉우리(최하점)끼리 맞춘다.
-//  입력으로 쓰기: 실측 최대 장력에서 최하점 속력 v² = (T최대/m − g)·L 을 구해 운동 에너지를 계산하고, 막대에 "실측" 눈금으로 표시한다.
-function peaks(pts) { // 앞뒤 3개보다 큰 점. 잡음으로 생긴 작은 봉우리는 전체 진폭의 70% 기준으로 거른다
-  const lo = Math.min(...pts.map(p => p[1])), hi = Math.max(...pts.map(p => p[1])), out = [];
-  for (let i = 3; i < pts.length - 3; i++) { const v = pts[i][1]; if (v > lo + (hi - lo) * 0.7 && [1, 2, 3].every(k => v >= pts[i - k][1] && v >= pts[i + k][1]) && (!out.length || pts[i][0] - out[out.length - 1][0] > 0.15)) out.push(pts[i]); }
-  return out;
+$("fric").onchange = reset;
+
+// ---------- 자유 낙하 · 거리 센서 ----------
+// 센서가 위에 있으면 높이 = 센서 높이 − 거리, 바닥에 있으면 높이 = 거리.
+// 떨어지는 구간(높이가 꾸준히 줄어드는 가장 긴 구간)을 찾아, 공중에 있던 점들로 포물선 h = a + bτ + cτ² 를 맞춘다.
+//   1초마다 늘어나는 속력 = −2c,  놓은 순간 = 포물선의 꼭짓점,  떨어진 곳(바닥)의 높이를 0(기준면)으로 본다.
+function fitQuad(p) { // 최소제곱 포물선 [a, b, c]
+  const S = [0, 0, 0, 0, 0], T = [0, 0, 0];
+  p.forEach(([u, h]) => { let k = 1; for (let i = 0; i < 5; i++) { S[i] += k; if (i < 3) T[i] += k * h; k *= u; } });
+  const A = [[S[0], S[1], S[2], T[0]], [S[1], S[2], S[3], T[1]], [S[2], S[3], S[4], T[2]]];
+  for (let i = 0; i < 3; i++) { let r = i; for (let j = i + 1; j < 3; j++) if (Math.abs(A[j][i]) > Math.abs(A[r][i])) r = j; [A[i], A[r]] = [A[r], A[i]];
+    if (Math.abs(A[i][i]) < 1e-12) return null; for (let j = 0; j < 3; j++) if (j !== i) { const f = A[j][i] / A[i][i]; for (let k = i; k < 4; k++) A[j][k] -= f * A[i][k]; } }
+  return [A[0][3] / A[0][0], A[1][3] / A[1][1], A[2][3] / A[2][2]];
 }
-function buildTheory() { // 마찰 없는 진자를 12초 적분해 장력 곡선과 주기를 구해 둔다
-  let a = ang * Math.PI / 180, o = 0; const pts = [], h = 0.001;
-  for (let i = 0; i <= 12000; i++) { if (i % 10 === 0) pts.push([i * h, m * (g * Math.cos(a) + L * o * o)]); o += -(g / L) * Math.sin(a) * h; a += o * h; }
-  const pk = peaks(pts);
-  theory = { pts, first: pk.length ? pk[0][0] : 0, period: pk.length > 2 ? pk[2][0] - pk[0][0] : NaN, Tmax: m * g * (3 - 2 * Math.cos(ang * Math.PI / 180)) };
+function findDrop(p) {
+  if (p.length < 6) return null;
+  const TOL = 0.02, FLAT = 0.015;
+  let best = null;
+  for (let i = 0; i < p.length - 1;) {
+    let j = i; while (j + 1 < p.length && p[j + 1][1] < p[j][1] + TOL) j++;
+    if (j > i) {
+      let a = i; while (a + 1 <= j && p[a + 1][1] >= p[i][1] - FLAT) a++;      // 손에 들고 있던 마지막 점
+      let b = j; while (b - 1 >= a && p[b - 1][1] <= p[j][1] + FLAT) b--;      // 바닥에 닿은 첫 점
+      const fall = p[a][1] - p[b][1];
+      // 가만히 들고 있던 점(a > i)이 있어야 처음 높이를 안다. 공중에 뜬 점이 3개 이상이어야 포물선을 맞출 수 있다
+      if (a > i && fall >= 0.2 && b - a - 1 >= 3 && (!best || fall > best.fall)) best = { a, b, fall, settled: p[p.length - 1][0] - p[b][0] };
+    }
+    i = j + 1;
+  }
+  if (!best) return null;
+  const air = p.slice(best.a + 1, best.b), t0 = air[0][0];
+  const q = fitQuad(air.map(([tt, h]) => [tt - t0, h]));
+  if (!q || q[2] >= 0) return null;
+  const [A, B, C] = q, acc = -2 * C, uv = -B / (2 * C);          // 꼭짓점 = 놓은 순간 (τ 기준)
+  const hTop = p[best.a][1], hFloor = p[best.b][1], fit = u => A + B * u + C * u * u;
+  const uLand = (-B - Math.sqrt(Math.max(0, B * B - 4 * C * (A - hFloor)))) / (2 * C);   // 포물선이 바닥 높이에 닿는 때
+  const T = Math.max(0.05, uLand - uv);
+  return {
+    acc, T, hTop: hTop - hFloor, hFloor, settled: best.settled,
+    h: s => Math.max(0, Math.min(hTop, fit(uv + s)) - hFloor),           // 놓은 뒤 s초의 높이 (바닥 = 0)
+    v: s => acc * Math.max(0, s),                                          // 놓은 뒤 s초의 속력
+    pts: p.slice(best.a, best.b + 1).map(([tt, h]) => [tt - t0 - uv, h - hFloor]),
+  };
 }
-function analyse() {
-  meas = null; if (fpts.length < 12) return;
-  const pk = peaks(fpts); if (!pk.length) return;
-  const Tmax = Math.max(...pk.map(p => p[1])), v2 = (Tmax / m - g) * L;
-  meas = { first: pk[0][0], Tmax, v: v2 > 0 ? Math.sqrt(v2) : 0, KE: v2 > 0 ? 0.5 * m * v2 : 0, period: pk.length > 2 ? 2 * (pk[pk.length - 1][0] - pk[0][0]) / (pk.length - 1) : NaN };
+function sensorFallState() {
+  const M = massKg();
+  if (!drop) return { h: liveH == null ? 0 : Math.max(0, liveH), v: 0, heat: 0 };
+  const s = +$("pick").value / 100 * drop.T, h = drop.h(s), v = drop.v(s);
+  return { h, v, heat: Math.max(0, M * g * drop.hTop - M * g * h - 0.5 * M * v * v), s };
 }
-function applyReal() { if (!sensorOn()) return; L = Math.max(0.1, (+$("lenCm").value || 50) / 100); m = Math.max(0.01, (+$("massG").value || 200) / 1000); }
+function stateFall() {
+  if (sensorOn()) return sensorFallState();
+  const s = Math.min(t, tLand());
+  return { h: Math.max(0, hf - 0.5 * g * s * s), v: g * s, heat: 0, s };
+}
+window.addEventListener("sih:source", e => {
+  src = e.detail.source;
+  if (src === "sensor" && !window._fallSub) window._fallSub = SIHSensor.on(smp => {
+    if (!sensorOn() || smp.quantity !== "distance") return;
+    liveH = heightOf(smp.value);
+    if (state !== "running") return;
+    if (ft0 === null) ft0 = smp.t;
+    fpts.push([smp.t - ft0, liveH]); if (fpts.length > 4000) fpts.shift();
+    drop = findDrop(fpts);
+    if (drop && drop.settled > 0.5) {         // 바닥에 닿고 0.5초 지나면 측정을 끝내고 결과를 보여 준다
+      state = "done"; SIHSensor.record(false); SIH.label($("go"), "done", WORDS_S);
+      $("pick").disabled = false; SIH.setRange("pick", 100);
+    }
+  });
+  sensorUi(); reset();
+  if (src === "sensor" && mode !== "fall") say("거리 센서는 자유 낙하 탭에서 씁니다. 트랙은 시뮬레이션으로 동작해요.");
+});
+$("place").onchange = () => { $("topField").hidden = !sensorOn() || $("place").value !== "top"; reset(); };
+$("topCm").oninput = $("massG").oninput = () => { if (drop) draw(); };
+SIH.bind("pick", () => draw(), " %");
 function sensorUi() {
   const on = sensorOn();
   document.querySelectorAll(".sensor-only").forEach(el => (el.hidden = !on));
   document.querySelectorAll(".sim-only").forEach(el => (el.hidden = on));
+  $("topField").hidden = !on || $("place").value !== "top";
   $("massField").hidden = $("spdField").hidden = on;
-  if (on) { applyReal(); speed = 1; SIH.refit(); } else { L = +$("len").value; m = +$("mass").value; speed = +$("spd").value; }
-}
-$("lenCm").oninput = $("massG").oninput = () => { applyReal(); reset(); };
-window.addEventListener("sih:source", e => {
-  src = e.detail.source;
-  if (src === "sensor" && !window._enSub) window._enSub = SIHSensor.on(s => {
-    if (!sensorOn() || s.quantity !== "force" || state !== "running") return;
-    if (ft0 === null) ft0 = s.t;
-    fpts.push([s.t - ft0, Math.abs(s.value)]); if (fpts.length > 3000) fpts.shift();
-  });
-  sensorUi(); reset();
-  if (src === "sensor" && mode !== "pend") say("힘 센서는 진자 탭에서 씁니다. 트랙은 시뮬레이션으로 동작해요.");
-});
-function drawForce() {
-  analyse();
-  const tEnd = fpts.length ? fpts[fpts.length - 1][0] : 0, xMax = Math.max(10, Math.ceil(tEnd / 5) * 5), xMin = xMax - 10;
-  const shift = meas && theory ? meas.first - theory.first : 0;   // 첫 봉우리끼리 맞춘다
-  const th = theory ? theory.pts.map(p => [p[0] + shift, p[1]]) : [];
-  const yMax = Math.max(1, Math.ceil(Math.max(theory ? theory.Tmax : 1, meas ? meas.Tmax : 0) * 1.2 * 2) / 2);
-  SIH.drawChart(fctx, { x: 0, y: 0, w: 760, h: 240, xMin, xMax, yMin: 0, yMax, xTicks: 5, yTicks: 4, xLabel: "시간(s)", yLabel: "줄의 장력(N)",
-    legend: [{ label: "실측", color: "#ee6b57" }, { label: "이론", color: "#567370", dash: [7, 5] }, { label: "추의 무게 mg", color: "#9db3ae", dash: [3, 4] }],
-    series: [{ pts: [[xMin, m * g], [xMax, m * g]], color: "#9db3ae", width: 1.4, dash: [3, 4] }, { pts: th, color: "#567370", width: 1.8, dash: [7, 5] }, { pts: fpts, color: "#ee6b57", width: 2.6 }] });
-  const f2 = v => v.toFixed(2);
-  $("mT").textContent = `${meas ? f2(meas.Tmax) : "–"} / ${theory ? f2(theory.Tmax) : "–"} N`;
-  $("mP").textContent = `${meas && isFinite(meas.period) ? f2(meas.period) : "–"} / ${theory && isFinite(theory.period) ? f2(theory.period) : "–"} s`;
-  $("mV").textContent = meas ? f2(meas.v) + " m/s" : "–"; $("mKE").textContent = meas ? meas.KE.toFixed(3) + " J" : "–";
-  $("fcap").textContent = meas ? `실측 최대 장력으로 구한 최하점 운동 에너지 ${meas.KE.toFixed(3)} J — 처음 위치 에너지 ${Etotal().toFixed(3)} J의 ${Math.round(meas.KE / Etotal() * 100)} %입니다. 막대 그래프의 "실측" 눈금과 비교해 보세요.` : "힘 센서에 진자를 매달고(매달기 전에 영점), 추를 놓는 순간 「놓기」를 누르세요. 가만히 매달려 있을 때 장력은 추의 무게 mg 와 같아야 합니다.";
+  $("fallBox").hidden = mode !== "fall";
+  $("hint").textContent = HINT[on ? "fallSensor" : mode];
+  speed = on ? 1 : +$("spd").value;
+  SIH.refit();
 }
 
-SIH.tabs([{ btn: "tabT", panel: "tCtl", key: "track" }, { btn: "tabP", panel: "pCtl", key: "pend" }], k => {
+function drawFallCharts() {
+  const M = massKg(), st = stateFall(), f2 = v => v.toFixed(2);
+  let vt, vDots = [], et, tMax, vMax, E0;
+  if (sensorOn()) {
+    if (drop) {
+      tMax = Math.max(0.3, Math.ceil(drop.T * 10) / 10); vMax = Math.max(1, drop.v(drop.T)); E0 = M * g * drop.hTop;
+      vt = [[0, 0], [drop.T, drop.v(drop.T)]];
+      // 이웃한 두 점으로 구한 속력. 마지막 공중 점은 이웃이 바닥에 닿은 점이라 빼 둔다
+      const P = drop.pts; for (let i = 1; i < P.length - 2; i++) vDots.push([P[i][0], -(P[i + 1][1] - P[i - 1][1]) / (P[i + 1][0] - P[i - 1][0])]);
+      const inAir = P.filter(p => p[0] >= 0 && p[0] <= drop.T);
+      et = [inAir.map(p => [p[0], M * g * p[1]]), inAir.map(p => [p[0], 0.5 * M * drop.v(p[0]) ** 2]), inAir.map(p => [p[0], M * g * p[1] + 0.5 * M * drop.v(p[0]) ** 2])];
+    } else { tMax = 0.6; vMax = 5; E0 = 1; vt = []; et = [[], [], []]; }
+  } else {
+    const T = tLand(), s = st.s, samp = []; for (let k = 0; k <= 40; k++) samp.push(s * k / 40);
+    tMax = Math.max(0.5, Math.ceil(T * 10) / 10); vMax = g * T; E0 = M * g * hf;
+    vt = samp.map(u => [u, g * u]);
+    et = [samp.map(u => [u, M * g * (hf - 0.5 * g * u * u)]), samp.map(u => [u, 0.5 * M * (g * u) ** 2]), samp.map(u => [u, E0])];
+  }
+  // 시간 눈금은 0.1초(길면 0.2·0.5초), 세로 눈금은 1·2·2.5·5 단위로 떨어지게 축 끝을 맞춘다
+  const tStep = tMax <= 0.8 ? 0.1 : tMax <= 1.6 ? 0.2 : 0.5;
+  tMax = Math.max(tStep * 3, Math.ceil(tMax / tStep - 1e-9) * tStep); const xTicks = Math.round(tMax / tStep);
+  const nice = v => { const p = 10 ** Math.floor(Math.log10(v)); return [1, 2, 2.5, 5, 10].find(k => k * p >= v - 1e-9) * p; };
+  const axis = raw => { const s = nice(raw / 5), n = Math.max(2, Math.ceil(raw / s - 1e-9)); return [n * s, n]; };
+  const [vTop, vTicks] = axis(vMax * 1.05), [yE0, eTicks] = axis(Math.max(1e-3, E0 * 1.15)); vMax = vTop;
+  fctx.fillStyle = "#fff"; fctx.fillRect(0, 0, 760, 240);
+  const vs = [{ pts: vt, color: "#ee6b57", width: 2.6 }], vl = [{ label: sensorOn() ? "맞춘 직선" : "속력", color: "#ee6b57" }];
+  if (vDots.length) { vs.push({ pts: vDots, color: "#17302e", noLine: true, dots: 4 }); vl.push({ label: "측정", color: "#17302e", dot: "fill" }); }
+  SIH.drawChart(fctx, { x: 0, y: 0, w: 372, h: 240, xMin: 0, xMax: tMax, yMin: 0, yMax: vMax, xTicks, yTicks: vTicks, xLabel: "놓은 뒤 시간(s)", yLabel: "속력(m/s)", series: vs, legend: vl });
+  const yE = yE0;
+  SIH.drawChart(fctx, { x: 388, y: 0, w: 372, h: 240, xMin: 0, xMax: tMax, yMin: 0, yMax: yE, xTicks, yTicks: eTicks, xLabel: "놓은 뒤 시간(s)", yLabel: "에너지(J)",
+    series: [{ pts: et[0], color: "#2c7fd1", width: 2.2 }, { pts: et[1], color: "#ee6b57", width: 2.2 }, { pts: et[2], color: "#23a087", width: 2.6, dash: [6, 4] }],
+    legend: [{ label: "위치", color: "#2c7fd1" }, { label: "운동", color: "#ee6b57" }, { label: "역학적", color: "#23a087", dash: [6, 4] }] });
+  let cap;
+  if (!sensorOn()) cap = `${hf} m에서 떨어뜨리면 ${f2(tLand())}초 뒤 바닥에 닿고, 그 직전 속력은 ${f2(g * tLand())} m/s입니다. 속력–시간 그래프의 기울기(1초마다 늘어나는 속력)는 ${g} m/s입니다.`;
+  else if (drop) { const KEend = 0.5 * M * drop.v(drop.T) ** 2, E = M * g * drop.hTop;
+    cap = `실측: ${f2(drop.hTop)} m를 ${f2(drop.T)}초 동안 떨어졌고, 속력이 1초마다 ${drop.acc.toFixed(1)} m/s씩 늘었습니다(이론 9.8). 처음 위치 에너지 ${E.toFixed(3)} J → 바닥 직전 운동 에너지 ${KEend.toFixed(3)} J (${Math.round(KEend / E * 100)} %). 「낙하 중 시점 고르기」로 중간의 에너지도 비교해 보세요.`; }
+  else cap = state === "running" ? "측정 중… 물체를 가만히 들고 있다가 놓으세요. 바닥에 닿으면 자동으로 분석합니다." : "「측정 시작」을 누른 뒤, 센서 앞에서 물체를 가만히 들고 있다가 놓으세요.";
+  $("fcap").textContent = cap;
+}
+
+SIH.tabs([{ btn: "tabT", panel: "tCtl", key: "track" }, { btn: "tabF", panel: "fCtl", key: "fall" }], k => {
   mode = k;
-  $("cap").textContent = k === "track" ? "공을 놓으면 위치 에너지가 운동 에너지로 바뀝니다. 오른쪽 막대는 매 순간의 에너지입니다." : "진자가 흔들리는 동안 가장 낮은 점과 가장 높은 점에서 두 에너지 막대를 비교해 보세요.";
+  $("cap").textContent = k === "track" ? "공을 놓으면 위치 에너지가 운동 에너지로 바뀝니다. 오른쪽 막대는 매 순간의 에너지입니다."
+    : "떨어지는 동안 위치 에너지가 줄어든 만큼 운동 에너지가 늘어나는지, 아래 그래프와 오른쪽 막대로 확인해 보세요.";
   sensorUi(); reset();
-  if (src === "sensor" && k !== "pend") say("힘 센서는 진자 탭에서 씁니다. 트랙은 시뮬레이션으로 동작해요.");
+  if (src === "sensor" && k !== "fall") say("거리 센서는 자유 낙하 탭에서 씁니다. 트랙은 시뮬레이션으로 동작해요.");
 });
 function reset() {
-  state = "idle"; x = 0; dir = 1; loss = 0; t = 0; th = ang * Math.PI / 180; om = 0; SIH.label($("go"), "idle", WORDS); say("");
-  fpts = []; ft0 = null; meas = null; if (sensorOn()) { buildTheory(); SIHSensor.record(false); SIHSensor.clearRecord(); }
+  state = "idle"; x = 0; dir = 1; loss = 0; t = 0; say("");
+  fpts = []; ft0 = null; drop = null; $("pick").disabled = true; SIH.setRange("pick", 100);
+  if (sensorOn()) { SIHSensor.record(false); SIHSensor.clearRecord(); }
+  SIH.label($("go"), "idle", sensorOn() ? WORDS_S : WORDS);
   draw();
 }
 $("reset").onclick = reset;
-$("go").onclick = () => { if (state === "running") state = "paused"; else if (state !== "done") state = "running"; if (sensorOn()) SIHSensor.record(state === "running"); SIH.label($("go"), state, WORDS); };
+$("go").onclick = () => {
+  if (state === "running") state = "paused"; else if (state !== "done") state = "running";
+  if (sensorOn()) SIHSensor.record(state === "running");
+  SIH.label($("go"), state, sensorOn() ? WORDS_S : WORDS);
+};
 
-function Etotal() { return m * g * (mode === "track" ? h0 : L * (1 - Math.cos(ang * Math.PI / 180))); }
+function Etotal() {
+  if (mode === "fall") return sensorOn() ? (drop ? massKg() * g * drop.hTop : 0) : m * g * hf;
+  return m * g * h0;
+}
 function stateTrack() { const h = H(x); const avail = Math.max(0, h0 - loss - h); return { h, v: Math.sqrt(2 * g * avail), heat: m * g * loss }; }
-function statePend() { const h = L * (1 - Math.cos(th)), v = Math.abs(om) * L; return { h, v, heat: Math.max(0, Etotal() - m * g * h - 0.5 * m * v * v) }; }
 
 function step(dt) {
   t += dt;
   if (mode === "track") {
     const fric = $("fric").checked, { v } = stateTrack();
     const slope = (H(x + 0.01) - H(x - 0.01)) / 0.02;
-    const ds = Math.max(v, 0.3) * dt, dx = ds / Math.sqrt(1 + slope * slope) * dir;   // 트랙을 따라 움직인 거리 ds
+    const ds = Math.max(v, 0.3) * dt, dx = ds / Math.sqrt(1 + slope * slope) * dir;   // 트랙을 따라 움직인 거리 ds (꼭대기에서 멈춰 서지 않게 최소 0.3 m/s)
     const nx = Math.max(0, x + dx), top = h0 - loss;
     if (H(nx) > top) {                      // 에너지가 모자라 더 오를 수 없음 → 되돌아옴
       dir *= -1;
@@ -169,12 +260,27 @@ function step(dt) {
     if (fric && h0 - loss - H(x) < 0.01 && H(x) < 0.01) { state = "done"; say("마찰 때문에 역학적 에너지가 모두 열 에너지로 바뀌어 공이 멈췄어요."); }
     if (x >= X_END) { x = X_END; state = "done"; say(`공이 트랙 끝에 도착했어요. 속력 ${stateTrack().v.toFixed(1)} m/s`); }
     if (state === "done") SIH.label($("go"), "done", WORDS);
-  } else {
-    const fric = $("fricP").checked;
-    const a = -(g / L) * Math.sin(th) - (fric ? 0.3 * om : 0);
-    om += a * dt; th += om * dt;               // 반암시적 오일러: 에너지가 잘 보존됨
-    if (fric && Math.abs(om) < 0.01 && Math.abs(th) < 0.005) { state = "done"; SIH.label($("go"), "done", WORDS); say("공기 저항 때문에 역학적 에너지가 모두 열 에너지로 바뀌어 진자가 멈췄어요."); }
+  } else if (!sensorOn() && t >= tLand()) {
+    t = tLand(); state = "done"; SIH.label($("go"), "done", WORDS);
+    say(`${t.toFixed(2)}초 만에 바닥에 닿았어요. 닿기 직전 속력 ${(g * t).toFixed(1)} m/s`);
   }
+}
+function drawFall(c, f) {
+  const on = sensorOn(), st = stateFall();
+  const Hmax = on ? Math.max(0.5, Math.ceil(((drop ? drop.hTop : liveH) || 1) * 1.15 * 4) / 4) : 10, k = 290 / Hmax, py = h => 330 - h * k, bx = 330;
+  c.lineWidth = 1; c.font = f(12); c.textAlign = "left";
+  const stepM = on ? (Hmax <= 1 ? 0.1 : Hmax <= 2.5 ? 0.25 : 0.5) : 1;
+  for (let y = 0; y <= Hmax + 1e-9; y += stepM) { c.strokeStyle = "#e6eeeb"; c.beginPath(); c.moveTo(56, py(y)); c.lineTo(560, py(y)); c.stroke(); c.fillStyle = "#567370"; c.fillText((on ? y.toFixed(2) : y) + " m", 0, py(y) + 4); }
+  c.fillStyle = "#4c6663"; c.fillRect(56, py(0), 504, 5); c.fillStyle = "#567370"; c.fillText("바닥 (높이 0)", 440, py(0) + 20);
+  const top = on ? (drop ? drop.hTop : null) : hf;
+  if (top != null) { c.strokeStyle = "#23a087"; c.setLineDash([6, 5]); c.lineWidth = 1.5; c.beginPath(); c.moveTo(56, py(top)); c.lineTo(560, py(top)); c.stroke(); c.setLineDash([]);
+    c.fillStyle = "#12705e"; c.font = f(12, 600); c.textAlign = "right"; c.fillText("처음 높이", 560, py(top) - 6); }
+  // 0.1초 간격의 위치 (실측이면 센서가 잰 점들)
+  const ghost = on ? (drop ? drop.pts.filter(p => p[0] >= 0).map(p => p[1]) : []) : (() => { const a = []; for (let s = 0; s <= st.s + 1e-9; s += 0.1) a.push(Math.max(0, hf - 0.5 * g * s * s)); return a; })();
+  ghost.forEach(h => { c.fillStyle = "rgba(238,107,87,.22)"; c.beginPath(); c.arc(bx, py(h) - 12, 11, 0, Math.PI * 2); c.fill(); });
+  c.fillStyle = "#ee6b57"; c.beginPath(); c.arc(bx, py(st.h) - 12, 12, 0, Math.PI * 2); c.fill(); c.strokeStyle = "#b8402b"; c.lineWidth = 1.5; c.stroke();
+  if (on && $("place").value === "top") { const ty = Math.max(12, py(Math.min(Hmax, (+$("topCm").value || 150) / 100))); c.fillStyle = "#8a5cd6"; c.fillRect(bx - 22, ty - 10, 44, 10); c.fillStyle = "#3f5956"; c.font = f(11); c.textAlign = "left"; c.fillText("거리 센서", bx + 28, ty); }
+  return st;
 }
 function draw() {
   const c = ctx, f = (s, w) => SIH.px(ctx, s, w);
@@ -194,44 +300,32 @@ function draw() {
     c.fillStyle = "#12705e"; c.font = f(12, 600); c.textAlign = "right"; c.fillText("출발 높이", 590, PY(h0) - 6);
     st = stateTrack(); c.fillStyle = "#ee6b57"; c.beginPath(); c.arc(PX(x), PY(st.h) - 11, 10, 0, Math.PI * 2); c.fill();
     c.strokeStyle = "#b8402b"; c.lineWidth = 1.5; c.stroke();
-  } else {
-    const ox = 300, oy = 34, s = sensorOn() ? 250 / L : 95, bx = ox + Math.sin(th) * L * s, by = oy + Math.cos(th) * L * s;
-    c.fillStyle = "#4c6663"; c.fillRect(ox - 60, oy - 6, 120, 6);
-    c.strokeStyle = "#d3e2dd"; c.setLineDash([4, 4]); c.lineWidth = 1; c.beginPath(); c.moveTo(ox, oy); c.lineTo(ox, oy + L * s + 22); c.stroke(); c.setLineDash([]);
-    const lowY = oy + L * s;
-    c.strokeStyle = "#e6eeeb"; c.beginPath(); c.moveTo(60, lowY); c.lineTo(540, lowY); c.stroke();
-    c.strokeStyle = "#4c6663"; c.lineWidth = 2; c.beginPath(); c.moveTo(ox, oy); c.lineTo(bx, by); c.stroke();
-    st = statePend(); c.fillStyle = "#ee6b57"; c.beginPath(); c.arc(bx, by, 13, 0, Math.PI * 2); c.fill();
-    c.strokeStyle = "#b8402b"; c.lineWidth = 1.5; c.stroke();
-    c.fillStyle = "#567370"; c.font = f(12); c.textAlign = "left"; c.fillText("가장 낮은 점 (높이 0)", 62, lowY - 6);
-  }
-  const PE = m * g * st.h, KE = 0.5 * m * st.v * st.v, E0 = Etotal();
+  } else st = drawFall(c, f);
+  const M = mode === "fall" ? massKg() : m;
+  const PE = M * g * st.h, KE = 0.5 * M * st.v * st.v, E0 = Etotal();
   const fe = (s, w) => SIH.px(ctb, s, w), b = ctb; b.fillStyle = "#fff"; b.fillRect(0, 0, 210, 360);
   const bars = [["위치", PE, "#2c7fd1"], ["운동", KE, "#ee6b57"], ["역학적", PE + KE, "#23a087"], ["열", st.heat, "#e29a2a"]];
-  const top = 34, base = 300, span = base - top;
+  const top = 34, base = 300, span = base - top, dg = E0 < 1 ? 3 : E0 < 5 ? 2 : E0 < 20 ? 1 : 0;
   bars.forEach(([n, E, col], i) => {
     const hgt = E0 ? Math.min(1.05, E / E0) * span : 0, X = 8 + i * 50;
     b.fillStyle = "#eef3f1"; b.fillRect(X, top, 40, span); b.fillStyle = col; b.fillRect(X, base - hgt, 40, hgt);
     b.fillStyle = "#3f5956"; b.font = fe(12, 600); b.textAlign = "center"; b.fillText(n, X + 20, base + 20);
-    b.font = fe(11); b.fillText(E.toFixed(E0 < 5 ? 2 : E0 < 20 ? 1 : 0), X + 20, base + 38);
+    b.font = fe(11); b.fillText(E0 ? E.toFixed(dg) : "–", X + 20, base + 38);
   });
-  if (sensorOn() && meas) { // 실측 최대 장력에서 구한 운동 에너지
-    const y = base - Math.min(1.05, meas.KE / E0) * span;
-    b.strokeStyle = "#17302e"; b.lineWidth = 2.5; b.beginPath(); b.moveTo(54, y); b.lineTo(102, y); b.stroke();
-    b.fillStyle = "#17302e"; b.font = fe(11, 600); b.textAlign = "center"; b.fillText("실측", 78, y - 5);
-  }
   b.strokeStyle = "#17302e"; b.setLineDash([4, 3]); b.lineWidth = 1; b.beginPath(); b.moveTo(4, top); b.lineTo(206, top); b.stroke(); b.setLineDash([]);
-  b.fillStyle = "#3f5956"; b.font = fe(11); b.textAlign = "left"; b.fillText(`처음 에너지 ${E0.toFixed(E0 < 5 ? 2 : E0 < 20 ? 1 : 0)} J`, 6, top - 10);
-  $("rh").textContent = st.h.toFixed(2) + " m"; $("rv").textContent = st.v.toFixed(2) + " m/s";
+  b.fillStyle = "#3f5956"; b.font = fe(11); b.textAlign = "left"; b.fillText(`처음 에너지 ${E0 ? E0.toFixed(dg) + " J" : "–"}`, 6, top - 10);
+  const noVal = sensorOn() && !drop;
+  $("rh").textContent = (sensorOn() && liveH == null ? "–" : st.h.toFixed(2)) + " m"; $("rv").textContent = (noVal ? "–" : st.v.toFixed(2)) + " m/s";
   const d = E0 < 5 ? 3 : 1;
-  $("rpe").textContent = PE.toFixed(d) + " J"; $("rke").textContent = KE.toFixed(d) + " J";
-  if (sensorOn()) drawForce();
+  $("rpe").textContent = (noVal ? "–" : PE.toFixed(d)) + " J"; $("rke").textContent = (noVal ? "–" : KE.toFixed(d)) + " J";
+  if (mode === "fall") drawFallCharts();
 }
 function loop(now) {
   const dt = Math.min(0.05, (now - last) / 1000); last = now;
-  if (state === "running") { const n = 8, h = dt * speed / n; for (let i = 0; i < n && state === "running"; i++) step(h); }
+  if (state === "running" && !sensorOn()) { const n = 8, h = dt * speed / n; for (let i = 0; i < n && state === "running"; i++) step(h); }
   draw(); requestAnimationFrame(loop);
 }
+$("hint").textContent = HINT.track;
 last = performance.now(); requestAnimationFrame(loop);
 </script>
 </body>
