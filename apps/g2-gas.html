@@ -2,12 +2,14 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>기체 압력 탐구실 · 과학탐구 앱 허브</title>
+<title>기체 압력·온도 탐구실 · 과학탐구 앱 허브</title>
 <link rel="stylesheet" href="../assets/hub.css">
 <style>
   .stage .split { --cols: 250px minmax(0, 1fr); }
   .side { --w: 240px; }
   .side b { color: var(--ink); font-variant-numeric: tabular-nums; }
+  #pvCtl, #tvCtl { display: flex; flex-direction: column; gap: 14px; }
+  #pvCtl[hidden], #tvCtl[hidden] { display: none; }
 </style>
 </head>
 <body>
@@ -16,68 +18,115 @@
     <div class="split">
       <div class="side">
         <canvas id="s" role="img" aria-label="주사기와 안의 기체 입자 모형"></canvas>
-        <div>피스톤에 부딪히는 횟수 <b id="hits">0</b> 번/초</div>
+        <div id="hitsRow">피스톤에 부딪히는 횟수 <b id="hits">0</b> 번/초</div>
+        <div id="tgRow" hidden>물 <b id="bathNow">20 ℃</b> · 기체 <b id="tgNow">20.0 ℃</b></div>
       </div>
-      <canvas id="g" role="img" aria-label="부피와 압력 그래프"></canvas>
+      <canvas id="g" role="img" aria-label="측정 그래프"></canvas>
     </div>
-    <p class="cap">점은 측정값입니다. 부피가 줄 때 압력이 어떻게 바뀌는지 점들의 추세를 보세요. 입자가 피스톤에 부딪히는 횟수는 압력을 입자 모형으로 보여 주는 값입니다.</p>
+    <p class="cap" id="cap"></p>
   </div>
   <aside class="controls">
-    <h3>주사기</h3>
-    <div class="field"><label for="vol">피스톤을 밀어 부피 조절 <b></b></label><input type="range" id="vol" min="15" max="60" step="1" value="60"></div>
-    <div class="field"><label for="pred"><span id="refTxt">처음 상태(60 mL)</span>와 비교하면 압력은? (예측)</label>
-      <select id="pred"><option value="">고르기</option><option value="up">커진다</option><option value="down">작아진다</option><option value="same">변하지 않는다</option></select></div>
-    <div class="row"><button class="btn primary" id="measure">압력 측정해서 기록</button><button class="btn" id="clear">기록 지우기</button></div>
-    <div class="readout"><div><small>현재 부피</small><b id="vNow">60 mL</b></div><div><small>측정 압력</small><b id="pNow">?</b></div></div>
-    <p class="result" id="cmp" hidden></p>
-    <div class="field"><label><input type="checkbox" id="curve"> 측정점을 부드럽게 잇는 선 보기 (3점 이상)</label></div>
-    <table><thead><tr><th>부피</th><th>예측</th><th>측정</th><th>P×V</th></tr></thead><tbody id="tb"></tbody></table>
-    <p class="hint">온도와 기체의 양은 일정하다고 가정합니다(60 mL에서 1기압). 압력 센서는 압력만 재므로, 실제 실험에서는 부피를 주사기 눈금으로 읽어 직접 입력하게 됩니다.</p>
+    <div class="tabs" role="group" aria-label="화면 고르기"><button class="btn" id="tabPV">압력과 부피</button><button class="btn" id="tabTV">온도와 부피</button></div>
+    <div id="pvCtl">
+      <div class="field"><label for="vol">피스톤을 밀어 부피 조절 <b></b></label><input type="range" id="vol" min="15" max="60" step="1" value="60"></div>
+      <div class="field"><label for="pred"><span id="refTxt">처음 상태(60 mL)</span>와 비교하면 압력은? (예측)</label>
+        <select id="pred"><option value="">고르기</option><option value="up">커진다</option><option value="down">작아진다</option><option value="same">변하지 않는다</option></select></div>
+      <div class="row"><button class="btn primary" id="measure">압력 측정해서 기록</button><button class="btn" id="clear">기록 지우기</button></div>
+      <div class="readout"><div><small>현재 부피</small><b id="vNow">60 mL</b></div><div><small>측정 압력</small><b id="pNow">?</b></div></div>
+      <p class="result" id="cmp" aria-live="polite" hidden></p>
+      <div class="field"><label><input type="checkbox" id="curve"> 측정점을 부드럽게 잇는 선 보기 (3점 이상)</label></div>
+      <table><thead><tr><th>부피</th><th>예측</th><th>측정</th><th>P×V</th></tr></thead><tbody id="tb"></tbody></table>
+      <p class="hint">온도와 기체의 양은 일정하다고 가정합니다(60 mL에서 1기압). 압력 센서는 압력만 재므로, 실제 실험에서는 부피를 주사기 눈금으로 읽어 직접 입력하게 됩니다.</p>
+    </div>
+    <div id="tvCtl" hidden>
+      <div class="field sim-only"><label for="tmp">물중탕 온도 <b></b></label><input type="range" id="tmp" min="0" max="80" step="5" value="20"></div>
+      <div class="field sensor-only" hidden><label for="vIn">주사기 눈금을 읽어 적기 (mL)</label><input type="number" id="vIn" min="5" max="60" step="0.5" inputmode="decimal"></div>
+      <div class="field"><label for="predV"><span id="refTxtV">처음 상태(20 ℃)</span>와 비교하면 부피는? (예측)</label>
+        <select id="predV"><option value="">고르기</option><option value="up">커진다</option><option value="down">작아진다</option><option value="same">변하지 않는다</option></select></div>
+      <div class="row"><button class="btn primary" id="measureV">부피 측정해서 기록</button><button class="btn" id="clearV">기록 지우기</button></div>
+      <div class="readout"><div><small id="tNowL">물 온도</small><b id="tNow">20 ℃</b></div><div><small>측정 부피</small><b id="vNowT">?</b></div></div>
+      <p class="result" id="cmpV" aria-live="polite" hidden></p>
+      <div class="field"><label><input type="checkbox" id="line"> 측정점들의 추세선 보기 (2점 이상)</label></div>
+      <table><thead><tr><th>온도</th><th>예측</th><th>부피</th></tr></thead><tbody id="tbV"></tbody></table>
+      <div class="row"><button class="btn small" id="csvG" disabled>표를 CSV로 내려받기</button></div>
+      <p class="hint" id="hintV"></p>
+    </div>
   </aside>
 </section>
 <script src="../assets/hub.js"></script>
 <script>
 window.APP = {
-  id: "g2-gas", grade: 2, unit: "기체의 성질", sensor: "압력 센서",
-  title: "기체 압력 탐구실",
-  question: "주사기 속 기체의 부피를 반으로 줄이면 압력은 어떻게 될까?",
-  how: "부피를 정하고, 직전 측정과 비교해 압력이 커질지 작아질지 먼저 고른 뒤 측정 버튼을 누르세요. 측정값이 그래프에 찍히고 예측이 맞았는지 알려 줍니다.",
-  notes: ["부피를 60→30 mL로 줄이면 압력은 커질까요, 작아질까요? 입자 상자는 어떻게 보일까요?", "부피를 줄일수록 압력은 어떻게 변했나요? 표의 P×V 값들은 비슷한가요?", "압력이 커지는 이유를 입자의 충돌로 설명해 보세요."],
-  prompt: "중학교 2학년 '기체의 성질' 단원용 웹앱을 만들어 줘. 주사기 부피(15~60 mL)를 슬라이더로 바꾸면 안에 든 기체 입자 모형이 그만큼 좁은 공간에서 움직이고 벽에 부딪히는 횟수가 늘어나게 보여 줘. 학생이 먼저 직전 측정과 비교해 압력이 커질지 작아질지 고른 뒤 측정 버튼을 누르면 보일 법칙(P×V 일정, 60 mL에서 1 atm)을 따르는 압력이 기록되고, 부피–압력 그래프에 측정점이 찍히며 예측이 맞았는지 알려 줘. 학생에게 압력을 계산하게 하지는 말고, 표에는 P×V를 보여 줘. 나중에 압력 센서 값을 넣을 자리를 남겨 두고, 부피는 직접 입력한다는 안내를 붙여 줘.",
-  next: "온도를 올리면 이 그래프는 어떻게 바뀔까? 온도 조건을 넣으려면 프롬프트에 무엇을 추가해야 할까?"
+  id: "g2-gas", grade: 2, unit: "기체의 성질", sensor: "온도 센서 · 온도와 부피 탭",
+  standards: ["9과06-01", "9과06-02", "9과06-03"],
+  sensorIn: { want: ["temperature"], max: 1, virtual: ["bath"] },
+  title: "기체 압력·온도 탐구실",
+  question: "주사기 속 기체의 부피는 압력과 온도에 따라 어떻게 달라질까?",
+  how: "압력과 부피: 부피를 정하고 직전 측정과 비교해 압력이 커질지 작아질지 먼저 고른 뒤 측정하세요. 온도와 부피: 주사기를 담근 물의 온도를 바꾸고 부피가 커질지 작아질지 고른 뒤 측정하세요. 측정값이 그래프와 표에 쌓이고 예측이 맞았는지 알려 줍니다.",
+  notes: ["부피를 60→30 mL로 줄이면 압력은 어떻게 될까요? 물 온도를 20 ℃에서 60 ℃로 올리면 기체의 부피는 어떻게 될까요?", "압력–부피 표의 P×V 값들, 온도–부피 그래프에서 점들이 놓인 모양을 적어 보세요. 입자 모형은 어떻게 달라졌나요?", "압력이 커지는 이유와, 온도가 높아지면 부피가 커지는 이유를 입자의 운동으로 설명해 보세요."],
+  prompt: "중학교 2학년 '기체의 성질' 단원용 웹앱을 만들어 줘. 화면은 두 개야. 압력과 부피: 주사기 부피(15~60 mL)를 슬라이더로 바꾸면 안의 기체 입자 모형이 좁은 공간에서 움직이고 벽에 부딪히는 횟수가 늘어나게 보여 줘. 학생이 직전 측정과 비교해 압력이 커질지 작아질지 고른 뒤 측정하면 보일 법칙(P×V 일정, 60 mL에서 1기압)을 따르는 압력이 기록되고 그래프에 찍히며 예측이 맞았는지 알려 줘. 온도와 부피: 끝을 막은 주사기를 물중탕에 담그고 물 온도(0~80 ℃)를 바꾸면, 입자가 더 빠르게(또는 느리게) 움직이고 피스톤이 밀려 올라가(또는 내려와) 부피가 달라지게 해 줘(바깥 압력 일정, 20 ℃에서 40 mL). 부피가 커질지 작아질지 먼저 고르고 측정하면 온도–부피 그래프와 표에 기록하고 CSV로 내려받게 해 줘. 입자의 크기와 개수는 바뀌지 않게 하고, 학생에게 계산식은 보여 주지 마. 온도 센서 값을 받아 물 온도로 쓰고 부피는 주사기 눈금을 읽어 직접 적는 센서 모드도 넣어 줘.",
+  next: "압력 센서로 주사기 속 압력을 직접 재면 압력–부피 그래프가 이 앱과 같은 모양일까? 여러 모둠의 온도–부피 데이터를 한 그래프에 모으면 무엇이 같고 무엇이 다를까?"
 };
 SIH.shell();
 
 const V0 = 60, P0 = 1;               // 60 mL에서 1기압
 const P = v => P0 * V0 / v;          // 보일 법칙: P×V = 일정
+// 온도와 부피: 바깥 압력과 기체의 양이 일정하면 부피는 절대 온도에 비례한다 (20 ℃에서 40 mL). 화면에는 계산식을 내지 않는다
+const T_REF = 20, V_REF = 40;
+const VofT = T => V_REF * (T + 273.15) / (T_REF + 273.15);
+const SPEED = 220;                   // 20 ℃ 입자의 빠르기 (px/초)
+const speedOf = T => SPEED * Math.sqrt((T + 273.15) / (T_REF + 273.15));
+// 동작 줄이기: 시간을 절반으로 흘린다. 충돌 횟수는 시뮬레이션 시간으로 세므로 표시값은 그대로다
+const TIME = SIH.reduced ? 0.5 : 1;
 const $ = id => document.getElementById(id);
 const cs = $("s"), cS = SIH.dpr(cs, 280, 300);
 const cg = $("g"), cG = SIH.dpr(cg, 460, 340);
-let V = 60, recs = [], hitLog = [], last = performance.now();
+let mode = "pv", src = "sim", V = 60, recs = [], recsT = [], hitLog = [], last = performance.now(), simT = 0;
+let tmp = T_REF, Tg = T_REF, curSpd = SPEED, liveT = null, gasSub = false;
 const TOP = 30, BOTTOM = 280, FULL = BOTTOM - TOP, LEFT = 60, RIGHT = 220, R = 6;
-const SPEED = SIH.reduced ? 110 : 220; // px/초
 const N = 30, parts = Array.from({ length: N }, () => {
   const a = Math.random() * Math.PI * 2;
   return { x: LEFT + 10 + Math.random() * 140, y: TOP + 10 + Math.random() * 230, vx: Math.cos(a) * SPEED, vy: Math.sin(a) * SPEED };
 });
-SIH.bind("vol", v => { V = v; $("vNow").textContent = v + " mL"; $("pNow").textContent = "?"; $("cmp").hidden = true; }, " mL");
+SIH.bind("vol", v => { if (mode === "pv") V = v; $("vNow").textContent = v + " mL"; $("pNow").textContent = "?"; $("cmp").hidden = true; }, " mL");
+SIH.bind("tmp", v => { tmp = v; if (src !== "sensor") $("tNow").textContent = v + " ℃"; $("vNowT").textContent = "?"; $("cmpV").hidden = true; }, " ℃");
 
+// 입자 색: 차가우면 짙은 파랑, 20 ℃는 파랑, 뜨거우면 주황 (압력과 부피 화면은 20 ℃ 그대로)
+const mixCol = (a, b, k) => `rgb(${a.map((x, i) => Math.round(x + (b[i] - x) * k)).join(",")})`;
+const COLD = [31, 95, 174], ROOM = [44, 127, 209], HOT = [224, 102, 45];
+const partCol = T => (T <= T_REF ? mixCol(ROOM, COLD, Math.min(1, (T_REF - T) / T_REF)) : mixCol(ROOM, HOT, Math.min(1, (T - T_REF) / 60)));
+const bathT = () => (mode !== "tv" ? T_REF : src === "sensor" ? (liveT == null ? T_REF : liveT) : tmp);
+const volIn = () => { const x = parseFloat($("vIn").value); return isFinite(x) && x >= 5 && x <= 60 ? x : null; };
+
+// 기체 온도는 물 온도를 천천히 따라가고, 입자가 빨라지는 만큼 피스톤이 밀려 부피가 커진다
+function stepGas(dt) {
+  const target = bathT();
+  Tg = SIH.reduced || src === "sensor" ? target : target + (Tg - target) * Math.exp(-dt / 0.8);
+  if (mode === "tv") V = src === "sensor" ? (volIn() ?? (recsT.length ? recsT[recsT.length - 1].v : V_REF)) : VofT(Tg);
+  const k = speedOf(Tg) / curSpd;
+  if (Math.abs(k - 1) > 1e-6) { parts.forEach(p => { p.vx *= k; p.vy *= k; }); curSpd *= k; }
+}
 function drawSyringe(dt) {
   const c = cS; c.clearRect(0, 0, 280, 300);
-  const wallY = BOTTOM - FULL * V / V0, now = performance.now();
+  const wallY = BOTTOM - FULL * V / V0;
+  if (mode === "tv") {   // 물중탕 (주사기 둘레에 보이는 물)
+    const bt = bathT(), cool = [150, 200, 235], warm = [240, 170, 120];
+    c.fillStyle = mixCol(cool, warm, Math.min(1, Math.max(0, bt / 80))); c.globalAlpha = 0.55;
+    c.fillRect(44, 140, 188, 152); c.globalAlpha = 1;
+  }
   c.fillStyle = "#f5f9f7"; c.fillRect(LEFT, TOP, RIGHT - LEFT, FULL);
   if (wallY - TOP > 8) { c.fillStyle = "#c9d8d4"; c.fillRect(LEFT, TOP, RIGHT - LEFT, wallY - TOP - 8); } // 피스톤 위 빈 공간
   c.fillStyle = "#4c6663"; c.fillRect(LEFT, wallY - 8, RIGHT - LEFT, 8);             // 피스톤
   c.fillRect(132, 4, 16, wallY - 10);                                                  // 손잡이 막대
   c.fillRect(104, 2, 72, 8);
   c.strokeStyle = "#86a09c"; c.lineWidth = 2; c.strokeRect(LEFT, TOP, RIGHT - LEFT, FULL);
+  const col = mode === "tv" ? partCol(Tg) : "#2c7fd1";
   parts.forEach(p => {
     p.x += p.vx * dt; p.y += p.vy * dt;
     if (p.x < LEFT + R) { p.x = LEFT + R; p.vx = Math.abs(p.vx); }
     if (p.x > RIGHT - R) { p.x = RIGHT - R; p.vx = -Math.abs(p.vx); }
-    if (p.y < wallY + R) { if (p.vy < 0) hitLog.push(now); p.y = wallY + R; p.vy = Math.abs(p.vy); }
+    if (p.y < wallY + R) { if (p.vy < 0) hitLog.push(simT); p.y = wallY + R; p.vy = Math.abs(p.vy); }
     if (p.y > BOTTOM - R) { p.y = BOTTOM - R; p.vy = -Math.abs(p.vy); }
-    c.beginPath(); c.arc(p.x, p.y, R, 0, Math.PI * 2); c.fillStyle = "#2c7fd1"; c.fill();
+    c.beginPath(); c.arc(p.x, p.y, R, 0, Math.PI * 2); c.fillStyle = col; c.fill();
   });
   c.fillStyle = "#4c6663"; c.font = SIH.px(cS, 12); c.textAlign = "left";
   for (let v = 0; v <= 60; v += 10) { const y = BOTTOM - FULL * v / V0; c.fillRect(RIGHT, y, 8, 1.5); c.fillText(v, RIGHT + 12, y + 4); }
@@ -106,7 +155,23 @@ function smooth(pts) {
   out.push(P[n - 1]);
   return out;
 }
+// 추세선: 측정한 온도 범위 안에서만 긋는다 (범위 밖으로 늘이지 않음)
+function trend(pts) {
+  const n = pts.length; if (n < 2) return null;
+  const mx = pts.reduce((s, p) => s + p[0], 0) / n, my = pts.reduce((s, p) => s + p[1], 0) / n;
+  const sxx = pts.reduce((s, p) => s + (p[0] - mx) ** 2, 0); if (sxx < 1e-9) return null;
+  const b = pts.reduce((s, p) => s + (p[0] - mx) * (p[1] - my), 0) / sxx;
+  const x0 = Math.min(...pts.map(p => p[0])), x1 = Math.max(...pts.map(p => p[0]));
+  return [[x0, my + b * (x0 - mx)], [x1, my + b * (x1 - mx)]];
+}
 function drawGraph() {
+  if (mode === "tv") {
+    const pts = recsT.map(r => [r.t, r.v]), series = [], L = $("line").checked && trend(pts);
+    if (L) series.push({ pts: L, color: "#e0662d", width: 1.8, dash: [6, 4] });
+    series.push({ pts, color: "#e0662d", noLine: true, dots: 6 });
+    SIH.drawChart(cG, { x: 0, y: 0, w: 460, h: 340, xMin: 0, xMax: 100, yMin: 0, yMax: 60, xTicks: 10, yTicks: 6, xLabel: "온도(℃)", yLabel: "부피(mL)", series });
+    return;
+  }
   const meas = recs.map(r => [r.v, r.p]).sort((a, b) => a[0] - b[0]);
   const series = [];
   if ($("curve").checked && meas.length >= 3) series.push({ pts: smooth(meas), color: "#2c7fd1", width: 1.8, dash: [6, 4] });
@@ -115,6 +180,7 @@ function drawGraph() {
 }
 // 예측은 수치가 아니라 직전 측정(처음에는 60 mL·1기압)과 비교한 방향으로 한다
 const WAY = { up: "커진다", down: "작아진다", same: "변하지 않는다" }, DID = { up: "커졌어요", down: "작아졌어요", same: "변하지 않았어요" };
+const verdict = (pred, way) => (pred === way ? '<span class="ok">맞았어요.</span>' : '<span class="bad">다시 생각해 볼까요?</span>');
 const ref = () => recs.length ? recs[recs.length - 1] : { v: V0, p: P0 };
 // 부피가 줄면 압력이 커진다 (온도·기체의 양 일정)
 const wayOf = (v, v0) => (v === v0 ? "same" : v < v0 ? "up" : "down");
@@ -128,22 +194,96 @@ function measure() {
   $("pNow").textContent = p.toFixed(2) + " 기압"; $("pred").value = "";
   const cmp = $("cmp"); cmp.hidden = false;
   const what = `${r0.v} mL → ${V} mL에서 압력이 <b>${DID[way]}</b>.`;
-  cmp.innerHTML = pred == null ? `${what} 다음에는 측정 전에 먼저 예측해 보세요.`
-    : `${what} 예측 "${WAY[pred]}" — ${pred === way ? '<span class="ok">맞았어요.</span>' : '<span class="bad">다시 생각해 볼까요?</span>'}`;
+  cmp.innerHTML = pred == null ? `${what} 다음에는 측정 전에 먼저 예측해 보세요.` : `${what} 예측 "${WAY[pred]}" — ${verdict(pred, way)}`;
   table(); drawGraph(); showRef();
 }
 $("measure").onclick = measure;
 $("clear").onclick = () => { recs = []; $("cmp").hidden = true; table(); drawGraph(); showRef(); };
 $("curve").onchange = drawGraph;
+
+// ---------- 온도와 부피 ----------
+// 기준: 직전 측정. 시뮬레이션의 처음 상태는 20 ℃·40 mL, 센서는 첫 기록부터 비교한다
+const refT = () => (recsT.length ? recsT[recsT.length - 1] : src === "sensor" ? null : { t: T_REF, v: V_REF });
+// 부피가 커졌는지는 측정한 부피로 판단한다 (센서 모드에서는 눈금 읽기 차이 0.5 mL 미만은 "변하지 않음")
+const wayV = (v, v0) => { const d = v - v0; return Math.abs(d) < (src === "sensor" ? 0.5 : 1e-9) ? "same" : d > 0 ? "up" : "down"; };
+const fmtT = t => (Number.isInteger(t) ? t : t.toFixed(1)) + " ℃";
+function showRefT() { const r = refT(); $("refTxtV").textContent = !r ? "직전 측정" : recsT.length ? `직전 측정(${fmtT(r.t)})` : `처음 상태(${fmtT(r.t)})`; }
+function sayV(html) { const el = $("cmpV"); el.hidden = !html; el.innerHTML = html || ""; }
+function tableT() {
+  $("tbV").innerHTML = recsT.map(r => `<tr><td>${fmtT(r.t)}</td><td class="${r.pred && r.way ? (r.pred === r.way ? "yes" : "no") : ""}">${r.pred ? WAY[r.pred] : "–"}</td><td>${r.v.toFixed(1)} mL</td></tr>`).join("");
+  $("csvG").disabled = !recsT.length;
+}
+function measureT() {
+  let t, v;
+  if (src === "sensor") {
+    if (liveT == null) return sayV("온도 센서 값이 아직 없어요. 위에서 센서를 연결해 주세요.");
+    v = volIn(); if (v == null) return sayV("주사기 눈금을 읽어 부피(5~60 mL)를 적어 주세요.");
+    t = Math.round(liveT * 10) / 10;
+  } else { t = tmp; v = VofT(tmp); }
+  const r0 = refT(), pred = $("predV").value || null, way = r0 ? wayV(v, r0.v) : null;
+  recsT.push({ t, v, pred, way, src });
+  $("vNowT").textContent = v.toFixed(1) + " mL"; $("predV").value = "";
+  if (!r0) sayV("첫 기록입니다. 물 온도를 바꾼 뒤 다음 기록부터 부피 변화를 비교해요.");
+  else {
+    const what = `${fmtT(r0.t)} → ${fmtT(t)}에서 부피가 <b>${DID[way]}</b>.`;
+    sayV(pred == null ? `${what} 다음에는 측정 전에 먼저 예측해 보세요.` : `${what} 예측 "${WAY[pred]}" — ${verdict(pred, way)}`);
+  }
+  tableT(); drawGraph(); showRefT();
+}
+$("measureV").onclick = measureT;
+$("clearV").onclick = () => { recsT = []; sayV(""); tableT(); drawGraph(); showRefT(); };
+$("line").onchange = drawGraph;
+$("csvG").onclick = () => SIH.csv("기체-온도와부피.csv", [["순서", "온도(℃)", "예측", "부피(mL)", "데이터"]].concat(recsT.map((r, i) => [i + 1, r.t, r.pred ? WAY[r.pred] : "", +r.v.toFixed(1), r.src === "sensor" ? "센서" : "시뮬레이션"])));
+
+const CAP = {
+  pv: "점은 측정값입니다. 부피가 줄 때 압력이 어떻게 바뀌는지 점들의 추세를 보세요. 입자가 피스톤에 부딪히는 횟수는 압력을 입자 모형으로 보여 주는 값입니다.",
+  tv: "물 온도가 높아지면 기체 입자가 더 빠르게 움직여 피스톤을 안쪽에서 더 세게 밀고, 피스톤은 안팎에서 미는 정도가 같아질 때까지 밀려 올라갑니다. 입자의 크기와 개수는 그대로이고 입자 사이 거리만 달라져요. 입자 색: 파랑(차가움) → 주황(뜨거움).",
+};
+const HINT_TV = {
+  sim: "바깥 압력(대기압)과 기체의 양은 일정하다고 가정합니다(20 ℃에서 40 mL). 실제 실험에서는 끝을 막은 주사기를 물에 담그고, 피스톤이 더 움직이지 않을 때 눈금을 읽어요. 온도와 부피 사이의 이 관계를 샤를 법칙이라고 합니다.",
+  sensor: "온도 센서를 주사기 옆 물에 넣으세요. 물 온도를 바꾼 뒤 1~2분 기다려 피스톤이 멈추면 눈금을 읽어 적고 기록하세요. 피스톤이 뻑뻑하면 살짝 돌려 주고, 뜨거운 물은 조심해서 다루세요.",
+};
+function ui() {
+  const on = src === "sensor";
+  SIH.bySource(on);
+  $("tNowL").textContent = on ? "센서 온도" : "물 온도";
+  $("tNow").textContent = on ? (liveT == null ? "–" : liveT.toFixed(1) + " ℃") : tmp + " ℃";
+  $("hintV").textContent = HINT_TV[on ? "sensor" : "sim"];
+  $("hitsRow").hidden = mode === "tv";   // 압력이 일정할 때는 충돌 횟수가 압력을 뜻하지 않으므로 감춘다
+  $("tgRow").hidden = mode !== "tv";
+  $("cap").textContent = CAP[mode];
+  if (on && mode === "pv") { const cmp = $("cmp"); cmp.hidden = false; cmp.textContent = "온도 센서는 '온도와 부피' 화면에서 씁니다. 이 화면은 시뮬레이션으로 동작해요."; }
+}
+window.addEventListener("sih:source", e => {
+  src = e.detail.source;
+  if (src === "sensor" && !gasSub) {
+    gasSub = true;
+    SIHSensor.on(s => {
+      if (src !== "sensor" || s.quantity !== "temperature") return;
+      liveT = s.value;
+      if (mode === "tv") $("tNow").textContent = liveT.toFixed(1) + " ℃";
+    });
+  }
+  if (src !== "sensor") liveT = null;
+  recsT = []; sayV(""); tableT(); showRefT(); ui(); drawGraph();   // 시뮬레이션과 실측 기록은 섞지 않는다
+});
+
 function loop(now) {
-  const dt = Math.min(0.05, (now - last) / 1000); last = now;
+  const dt = Math.min(0.05, (now - last) / 1000) * TIME; last = now; simT += dt;
+  stepGas(dt);
   drawSyringe(dt);
-  hitLog = hitLog.filter(h => now - h < 2000);            // 최근 2초 평균
+  hitLog = hitLog.filter(h => simT - h < 2);            // 최근 2초 평균 (시뮬레이션 시간)
   $("hits").textContent = Math.round(hitLog.length / 2);
+  if (mode === "tv") { $("bathNow").textContent = fmtT(Math.round(bathT() * 10) / 10); $("tgNow").textContent = Tg.toFixed(1) + " ℃"; }
   requestAnimationFrame(loop);
 }
+SIH.tabs([{ btn: "tabPV", panel: "pvCtl", key: "pv" }, { btn: "tabTV", panel: "tvCtl", key: "tv" }], m => {
+  mode = m;
+  if (m === "pv") V = +$("vol").value;
+  ui(); drawGraph();
+});
 window.addEventListener("sih:resize", drawGraph);
-drawGraph(); requestAnimationFrame(loop);
+showRefT(); drawGraph(); requestAnimationFrame(loop);
 </script>
 </body>
 </html>

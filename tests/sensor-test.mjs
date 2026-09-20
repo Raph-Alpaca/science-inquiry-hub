@@ -143,7 +143,7 @@ const wantChannel = (page, n = 1) => page.waitForFunction((n) => window.SIHSenso
   served.length = 0;
   const { page, errors, close } = await open("g1-insulation");
   check("시뮬레이션 모드: 센서 스크립트를 불러오지 않음", !served.some((p) => p.includes("sensor")), served.filter((p) => p.includes("sensor")).join(","));
-  check("센서가 없는 앱(g2-gas 등)은 데이터 칸과 '준비 중' 문구가 없음", await (async () => { const g = await open("g2-gas"); const d = (await g.page.$("#srcSel")) === null && !(await g.page.textContent("body")).includes("준비 중") && g.errors.length === 0; await g.close(); return d; })());
+  check("센서가 없는 앱(g2-solar 등)은 데이터 칸과 '준비 중' 문구가 없음", await (async () => { const g = await open("g2-solar"); const d = (await g.page.$("#srcSel")) === null && !(await g.page.textContent("body")).includes("준비 중") && g.errors.length === 0; await g.close(); return d; })());
   check("센서를 쓰는 앱은 센서 선택이 활성", !(await page.$eval('#srcSel option[value="sensor"]', (o) => o.disabled)) && errors.length === 0, errors.join(" | "));
   await close();
 }
@@ -223,10 +223,44 @@ const wantChannel = (page, n = 1) => page.waitForFunction((n) => window.SIHSenso
   check("자유 낙하·가상: 콘솔 오류 없음", errors.length === 0, errors.join(" | "));
   await close();
 }
-for (const p of ["g1-insulation", "g1-heating", "g3-dewpoint", "g3-energy"]) { // 휴대폰 너비에서 센서 막대가 넘치지 않는지
+{ // 구름 만들기: 온도 센서가 페트병 속 온도를 재고, 뚜껑을 연 뒤 10초 안의 최저 온도로 온도 변화를 구한다
+  const { page, errors, close } = await open("g3-dewpoint", "?tab=bottle&sensor=virtual&vspeed=5");
+  await wantChannel(page);
+  check("구름·가상: 병 속 온도 센서를 쓰면 펌프·뚜껑 단추 대신 「뚜껑 열었어요」가 보임", (await page.isHidden("#pump")) && (await page.isVisible("#openedBtn")) && (await page.isVisible("#fogSeen")));
+  await page.waitForFunction(() => bT > 25, null, { timeout: 20000 });     // 펌프로 눌러 데워진 때
+  await page.click("#openedBtn");
+  await page.waitForTimeout(2500);                                          // 가상 시계로 약 12초
+  await page.selectOption("#fogSeen", "clear");
+  await page.click("#saveB");
+  const row = await page.$$eval("#logB tr td", (tds) => tds.map((td) => td.textContent));
+  const drop = parseFloat(row[3]);
+  check("구름·가상: 뚜껑을 연 뒤 떨어진 온도(약 −5 ℃)와 눈으로 본 흐려짐을 기록", row.length === 5 && drop < -2 && drop > -9 && row[4] === "뚜렷함", row.join(" / "));
+  check("구름·가상: 콘솔 오류 없음", errors.length === 0, errors.join(" | "));
+  await page.screenshot({ path: `${OUT}/dewpoint-bottle-virtual.png`, fullPage: true });
+  await close();
+}
+{ // 기체 온도와 부피: 온도 센서 값이 물 온도가 되고, 부피는 눈금을 읽어 적는다
+  const { page, errors, close } = await open("g2-gas", "?sensor=virtual&vspeed=20&tab=tv");
+  await wantChannel(page);
+  check("기체·가상: 온도와 부피 탭에서 온도 슬라이더 대신 눈금 입력이 보임", (await page.isHidden("#tmp")) && (await page.isVisible("#vIn")) && (await page.textContent("#tNowL")) === "센서 온도");
+  await page.waitForFunction(() => liveT != null);
+  await page.fill("#vIn", "38"); await page.click("#measureV");
+  const first = await page.textContent("#cmpV");
+  await page.waitForTimeout(2000);                       // 가상 시계 40초: 물 온도가 크게 오른다
+  await page.fill("#vIn", "44"); await page.selectOption("#predV", "up"); await page.click("#measureV");
+  const r = await page.evaluate(() => ({ recs: recsT.map((x) => [x.t, x.v, x.src]), msg: document.getElementById("cmpV").textContent }));
+  check("기체·가상: 두 번 기록하면 센서 온도와 적은 부피로 '커졌어요' 판정", first.includes("첫 기록") && r.recs.length === 2 && r.recs[1][0] > r.recs[0][0] + 10 && r.recs[1][2] === "sensor" && r.msg.includes("커졌어요") && r.msg.includes("맞았어요"), JSON.stringify(r));
+  await page.click("#tabPV");
+  check("기체·가상: 압력과 부피 탭에서는 온도 센서를 쓰지 않는다고 안내", (await page.textContent("#cmp")).includes("온도와 부피"));
+  await page.screenshot({ path: `${OUT}/gas-virtual.png`, fullPage: true });
+  check("기체·가상: 콘솔 오류 없음", errors.length === 0, errors.join(" | "));
+  await close();
+}
+for (const p of ["g1-insulation", "g1-heating", "g2-gas", "g3-dewpoint", "g3-energy"]) { // 휴대폰 너비에서 센서 막대가 넘치지 않는지
   const { page, close } = await open(p, "?sensor=virtual", null, { width: 380, height: 800 });
   await wantChannel(page);
   if (p === "g3-energy") await page.click("#tabF");
+  if (p === "g2-gas") await page.click("#tabTV");
   await page.click("#sbDiag > summary"); await page.waitForTimeout(400);
   check(`380px: ${p} 센서 막대·진단 가로 넘침 없음`, await noOverflow(page));
   await page.screenshot({ path: `${OUT}/mobile-${p}.png`, fullPage: true });

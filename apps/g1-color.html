@@ -22,6 +22,12 @@
   .mix { display: grid; gap: 8px; }
   .mix .field label { align-items: center; }
   #camBtn.on { background: var(--coral); border-color: var(--coral); color: #fff; }
+  #mixCtl, #objCtl { display: flex; flex-direction: column; gap: 14px; }
+  #mixCtl[hidden], #objCtl[hidden] { display: none; }
+  .lamps { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
+  .lamps .btn { padding: 7px 4px; font-size: .88em; }
+  .stage .why { margin: 10px 0 0; }
+  .stage .why:empty { display: none; }
   .logwrap { overflow-x: auto; }
   .logwrap td, .logwrap th { white-space: nowrap; }
   .logwrap td:nth-child(2), .logwrap td:nth-child(3), .logwrap th:nth-child(2), .logwrap th:nth-child(3) { text-align: left; }
@@ -50,26 +56,41 @@
       </div>
     </div>
     <p class="cap" id="cap"></p>
+    <p class="result why" id="objWhy" aria-live="polite"></p>
     <p class="result" id="msg" role="status"></p>
   </div>
   <aside class="controls">
+    <div class="tabs" role="group" aria-label="화면 고르기"><button class="btn" id="tabMix">빛의 합성</button><button class="btn" id="tabObj">물체의 색</button></div>
     <h3>색 받기</h3>
     <div class="row"><button class="btn primary" id="camBtn">카메라 켜기</button></div>
     <p class="hint">폰 뒷면 카메라로 가운데 네모 안의 색을 잽니다. 네모 안이 한 가지 색으로 가득 차게 가까이 대세요.</p>
     <div class="sim-only mix" id="simBox">
-      <div class="field"><label>빛 섞기 (카메라 없이)</label></div>
+      <div class="field"><label id="mixTitle">빛 섞기 (카메라 없이)</label></div>
       <div class="field"><label for="lR">빨강 빛 <b></b></label><input type="range" id="lR" min="0" max="100" step="5" value="100"></div>
       <div class="field"><label for="lG">초록 빛 <b></b></label><input type="range" id="lG" min="0" max="100" step="5" value="0"></div>
       <div class="field"><label for="lB">파랑 빛 <b></b></label><input type="range" id="lB" min="0" max="100" step="5" value="0"></div>
     </div>
     <h3>예측하고 측정하기</h3>
-    <div class="field"><label for="target">무엇을 재나요?</label>
-      <select id="target">
-        <option value="100,0,0">빨강 빛</option><option value="0,100,0">초록 빛</option><option value="0,0,100">파랑 빛</option>
-        <option value="100,100,0">빨강 + 초록 빛</option><option value="0,100,100">초록 + 파랑 빛</option><option value="100,0,100">빨강 + 파랑 빛</option>
-        <option value="100,100,100">빨강 + 초록 + 파랑 빛</option><option value="free">직접 적기 (셀로판, 색종이 등)</option>
-      </select></div>
-    <div class="field" id="freeBox" hidden><label for="freeText">대상 이름</label><input type="text" id="freeText" maxlength="24" placeholder="예: 빨강 셀로판 + 흰 빛"></div>
+    <div id="mixCtl">
+      <div class="field"><label for="target">무엇을 재나요?</label>
+        <select id="target">
+          <option value="100,0,0">빨강 빛</option><option value="0,100,0">초록 빛</option><option value="0,0,100">파랑 빛</option>
+          <option value="100,100,0">빨강 + 초록 빛</option><option value="0,100,100">초록 + 파랑 빛</option><option value="100,0,100">빨강 + 파랑 빛</option>
+          <option value="100,100,100">빨강 + 초록 + 파랑 빛</option><option value="free">직접 적기 (셀로판, 색종이 등)</option>
+        </select></div>
+      <div class="field" id="freeBox" hidden><label for="freeText">대상 이름</label><input type="text" id="freeText" maxlength="24" placeholder="예: 빨강 셀로판 + 흰 빛"></div>
+    </div>
+    <div id="objCtl" hidden>
+      <div class="field"><label for="obj">물체</label>
+        <select id="obj"><option value="apple">빨간 사과</option><option value="leaf">초록 잎</option><option value="ball">파란 공</option><option value="banana">노란 바나나</option><option value="paper">흰 종이</option><option value="cloth">검은 천</option></select></div>
+      <div class="field"><label id="lampLbl">비추는 빛</label>
+        <div class="lamps" id="lampBtns" role="group" aria-labelledby="lampLbl">
+          <button class="btn" data-l="100,100,100">흰 빛</button><button class="btn" data-l="100,0,0">빨강</button><button class="btn" data-l="0,100,0">초록</button><button class="btn" data-l="0,0,100">파랑</button>
+          <button class="btn" data-l="100,100,0">빨+초</button><button class="btn" data-l="0,100,100">초+파</button><button class="btn" data-l="100,0,100">빨+파</button>
+        </div></div>
+      <div class="field sim-only"><label><input type="checkbox" id="freeLook"> 결과 바로 보기 (빛을 바꾸는 대로)</label></div>
+      <p class="hint" id="objHint"></p>
+    </div>
     <div class="field"><label for="pred">예측한 색</label>
       <select id="pred"><option value="">고르기</option><option>빨강</option><option>주황</option><option>노랑</option><option>연두</option><option>초록</option><option>청록</option><option>파랑</option><option>보라</option><option>자홍</option><option>흰색</option><option>회색</option><option>검정</option></select></div>
     <div class="row"><button class="btn primary" id="measure">측정해서 기록</button></div>
@@ -94,11 +115,12 @@
 <script>
 window.APP = {
   id: "g1-color", grade: 1, unit: "빛과 파동", sensor: "기기 카메라", mediaIn: true, icon: "🌈",
+  standards: ["9과10-03"],
   title: "빛의 색 측정기",
   question: "빨강·초록·파랑 빛을 섞으면 어떤 색으로 보일까? 색이 있는 물체는 어떤 빛을 반사할까?",
-  how: "무엇을 잴지 고르고 색을 먼저 예측한 뒤, 카메라로 측정해 기록하세요. 색 화면은 다른 기기에서 띄우면 됩니다. 폰 카메라를 컴퓨터 화면에 아주 가까이 대면 화소 하나를 이루는 빨강·초록·파랑의 작은 점도 보입니다.",
-  notes: ["빨강 빛과 초록 빛을 함께 비추면 무슨 색으로 보일까요? 이유도 적어 보세요.", "측정한 색 이름과 빨강·초록·파랑 빛의 비율(%)을 표에서 옮겨 적어 보세요.", "영상 장치가 세 가지 빛만으로 여러 색을 만드는 원리를 빛의 합성으로 설명해 보세요."],
-  prompt: "중학교 1학년 '빛과 파동' 단원의 빛의 합성과 물체의 색 탐구용 웹앱을 만들어 줘. 휴대폰 브라우저에서 뒷면 카메라를 켜고 화면 가운데 네모 안의 평균 색을 구해, 색 이름·색상·채도와 빨강·초록·파랑 빛의 비율 막대, 색상환 위의 점으로 보여 줘. '빨강+초록 빛' 같은 측정 대상을 고르고 색을 예측한 뒤 측정하면 표에 예측과 결과를 기록하고 CSV로 내려받게 해 줘. 다른 기기에서 화면 전체를 빨강·초록·파랑과 그 합성색으로 띄우는 색 화면 모드와, 카메라가 없을 때 세 빛의 세기를 슬라이더로 섞어 보는 시뮬레이션도 넣어 줘. 영상은 저장하거나 전송하지 마.",
+  how: "빛의 합성: 무엇을 잴지 고르고 색을 먼저 예측한 뒤 측정해 기록하세요. 물체의 색: 물체와 비추는 빛을 고르고 어떤 색으로 보일지 예측한 뒤 확인하세요. 색 화면은 다른 기기에서 띄우면 됩니다. 폰 카메라를 컴퓨터 화면에 아주 가까이 대면 화소 하나를 이루는 빨강·초록·파랑의 작은 점도 보입니다.",
+  notes: ["빨강 빛과 초록 빛을 함께 비추면 무슨 색으로 보일까요? 빨간 사과에 초록 빛만 비추면 무슨 색으로 보일까요?", "측정한 색 이름과 빨강·초록·파랑 빛의 비율(%)을 표에서 옮겨 적어 보세요. 물체마다 어떤 빛을 반사하고 어떤 빛을 흡수했나요?", "영상 장치가 세 가지 빛만으로 여러 색을 만드는 원리를 빛의 합성으로, 물체가 색을 띠는 까닭을 빛의 반사로 설명해 보세요."],
+  prompt: "중학교 1학년 '빛과 파동' 단원의 빛의 합성과 물체의 색 탐구용 웹앱을 만들어 줘. 휴대폰 브라우저에서 뒷면 카메라를 켜고 화면 가운데 네모 안의 평균 색을 구해, 색 이름·색상·채도와 빨강·초록·파랑 빛의 비율 막대, 색상환 위의 점으로 보여 줘. '빨강+초록 빛' 같은 측정 대상을 고르고 색을 예측한 뒤 측정하면 표에 예측과 결과를 기록하고 CSV로 내려받게 해 줘. 다른 기기에서 화면 전체를 빨강·초록·파랑과 그 합성색으로 띄우는 색 화면 모드와, 카메라가 없을 때 세 빛의 세기를 슬라이더로 섞어 보는 시뮬레이션도 넣어 줘. 두 번째 화면은 물체의 색: 빨간 사과·초록 잎·파란 공·노란 바나나·흰 종이·검은 천 중 하나에 흰 빛이나 빨강·초록·파랑 빛(과 그 합성)을 비추면, 물체가 반사하는 빛만 눈으로 들어가고 나머지는 흡수되는 모습을 광선으로 그리고 보이는 색을 알려 줘. 학생이 먼저 예측한 뒤 확인하게 결과를 가려 두고, 카메라로 실제 물체를 잴 때는 같은 조건의 모형 결과를 함께 기록해 줘. 영상은 저장하거나 전송하지 마.",
   next: "빨강 셀로판을 댄 손전등으로 초록 색종이를 비추면 어떤 색으로 보일까? 측정으로 확인하려면 무엇을 같게 두어야 할까?"
 };
 SIH.shell();
@@ -182,7 +204,7 @@ function drawWheel() {
   logRows.forEach((r, i) => pt(r.est, 5, `rgb(${r.est.rgb.join(",")})`, String(i + 1)));
   if (est) pt(est, 8, `rgb(${est.rgb.join(",")})`);
 }
-window.addEventListener("sih:resize", () => { drawWheel(); if (SIH.source !== "sensor") drawSim(); });
+window.addEventListener("sih:resize", () => { drawWheel(); if (SIH.source !== "sensor") (mode === "obj" ? drawObj() : drawSim()); });
 
 // ---------- 빛 섞기 (시뮬레이션) ----------
 // 슬라이더 %는 빛의 양이다. 화면에 그릴 때만 화소값으로 바꾸므로, 막대의 비율이 슬라이더의 비율과 같게 나온다
@@ -217,8 +239,104 @@ function simMeasure() {
   }
   showEst(analyzePixels(px));
 }
-const refreshSim = () => { if (SIH.source !== "sensor") { drawSim(); simMeasure(); } };
-["R", "G", "B"].forEach(k => SIH.bind("l" + k, v => { mix[k] = v; refreshSim(); }, "%"));
+
+// ---------- 물체의 색 (시뮬레이션) ----------
+// 물체는 비춘 빛 가운데 자신이 반사하는 빛만 눈으로 보내고 나머지는 흡수한다.
+// 눈에 들어오는 빛 = 빨강·초록·파랑 빛 각각 (비춘 빛의 양 × 그 빛을 반사하는 정도). 반사하지 않는 빛은 0 (교과서 모형)
+const OBJ = {
+  apple: { name: "빨간 사과", josa: "는", rho: [1, 0, 0], shape: "round" },
+  leaf: { name: "초록 잎", josa: "은", rho: [0, 1, 0], shape: "leaf" },
+  ball: { name: "파란 공", josa: "은", rho: [0, 0, 1], shape: "round" },
+  banana: { name: "노란 바나나", josa: "는", rho: [1, 1, 0], shape: "banana" },
+  paper: { name: "흰 종이", josa: "는", rho: [0.9, 0.9, 0.9], shape: "rect" },
+  cloth: { name: "검은 천", josa: "은", rho: [0, 0, 0], shape: "rect" },
+};
+const KEYS = ["R", "G", "B"], KNAME = ["빨강", "초록", "파랑"], PURE = ["#ff2e2e", "#2cf04c", "#3d73ff"];
+const LAMP = { "100,100,100": "흰 빛", "100,0,0": "빨강 빛", "0,100,0": "초록 빛", "0,0,100": "파랑 빛", "100,100,0": "빨강 + 초록 빛", "0,100,100": "초록 + 파랑 빛", "100,0,100": "빨강 + 파랑 빛", "0,0,0": "빛 없음" };
+let mode = "mix", revealed = false, objEntered = false;
+const curObj = () => OBJ[$("obj").value];
+const seenOf = (o = curObj()) => KEYS.map((k, i) => mix[k] / 100 * o.rho[i]);
+const lampKey = () => KEYS.map(k => mix[k]).join(",");
+const lampName = () => LAMP[lampKey()] || `빨강 ${mix.R}%·초록 ${mix.G}%·파랑 ${mix.B}% 빛`;
+const ro = n => (/[두라]$/.test(n) ? "로" : "으로");
+// 잡음 없는 16×16 네모를 빛 섞기와 같은 계산에 넣는다 (아주 어두운 색에서 잡음이 비율 막대를 흔들지 않게)
+function patchOf(s) {
+  const px = new Uint8ClampedArray(16 * 16 * 4);
+  for (let i = 0; i < px.length; i += 4) { px[i] = unlin(s[0]); px[i + 1] = unlin(s[1]); px[i + 2] = unlin(s[2]); px[i + 3] = 255; }
+  return analyzePixels(px);
+}
+const modelName = () => patchOf(seenOf()).name;
+function whyText() {
+  const o = curObj(), s = seenOf(o);
+  const own = KNAME.filter((_, i) => o.rho[i] > 0), not = KNAME.filter((_, i) => o.rho[i] === 0);
+  const first = !own.length ? `${o.name}${o.josa} 빨강·초록·파랑 빛을 모두 흡수해요.` : !not.length ? `${o.name}${o.josa} 빨강·초록·파랑 빛을 모두 반사해요.` : `${o.name}${o.josa} ${own.join("·")} 빛을 반사하고 ${not.join("·")} 빛을 흡수해요.`;
+  const lit = KNAME.filter((_, i) => mix[KEYS[i]] > 0), back = KNAME.filter((_, i) => s[i] > 0);
+  if (!lit.length) return `${first} 비추는 빛이 없으니 눈에 들어오는 빛도 없어 검게 보여요.`;
+  if (!back.length) return `${first} 비춘 ${lit.join("·")} 빛이 모두 흡수되어 눈에 들어오는 빛이 없으므로 검게 보여요.`;
+  const n = patchOf(s).name;
+  return `${first} 비춘 빛 가운데 ${back.join("·")} 빛이 반사되어 눈에 들어오므로 ${n}${ro(n)} 보여요.`;
+}
+function objPath(c, shape, x, y) {
+  c.beginPath();
+  if (shape === "round") c.arc(x, y, 64, 0, Math.PI * 2);
+  else if (shape === "leaf") c.ellipse(x, y, 104, 54, -0.3, 0, Math.PI * 2);
+  else if (shape === "banana") { c.moveTo(x - 108, y - 45); c.quadraticCurveTo(x, y + 85, x + 108, y - 45); c.quadraticCurveTo(x, y - 5, x - 108, y - 45); }
+  else c.rect(x - 92, y - 62, 184, 124);
+}
+// 빛줄기: 빨강·초록·파랑 빛을 나란한 세 줄로 그린다. 진하기 = 빛의 양
+function rays(c, [x1, y1], [x2, y2], amt, s0, s1) {
+  const dx = x2 - x1, dy = y2 - y1, len = Math.hypot(dx, dy), ux = dx / len, uy = dy / len, a = Math.atan2(dy, dx);
+  amt.forEach((v, i) => {
+    if (v <= 0) return;
+    const off = (i - 1) * 7, ax = x1 + ux * s0 - uy * off, ay = y1 + uy * s0 + ux * off, bx = x2 - ux * s1 - uy * off, by = y2 - uy * s1 + ux * off;
+    c.globalAlpha = 0.3 + 0.7 * Math.min(1, v); c.strokeStyle = PURE[i]; c.lineWidth = 3; c.lineCap = "round";
+    c.beginPath(); c.moveTo(ax, ay); c.lineTo(bx, by);
+    c.moveTo(bx, by); c.lineTo(bx - 11 * Math.cos(a - 0.4), by - 11 * Math.sin(a - 0.4));
+    c.moveTo(bx, by); c.lineTo(bx - 11 * Math.cos(a + 0.4), by - 11 * Math.sin(a + 0.4)); c.stroke();
+  });
+  c.globalAlpha = 1;
+}
+function drawObj() {
+  const c = vctx, o = curObj(), s = seenOf(o), show = revealed || $("freeLook").checked;
+  const L = [70, 76], E = [410, 76], ox = 240, oy = 215, hitIn = [ox - 40, oy - 20], hitOut = [ox + 40, oy - 20];
+  c.save();
+  c.fillStyle = "#05090b"; c.fillRect(0, 0, VW, VH);
+  objPath(c, o.shape, ox, oy);
+  if (show) { c.fillStyle = `rgb(${s.map(v => Math.round(unlin(v))).join(",")})`; c.fill(); c.lineWidth = 1.5; c.strokeStyle = "rgba(255,255,255,.28)"; c.stroke(); }
+  else {
+    c.fillStyle = "#28323a"; c.fill(); c.setLineDash([6, 5]); c.lineWidth = 2; c.strokeStyle = "#7d8f96"; c.stroke(); c.setLineDash([]);
+    c.fillStyle = "#dfe8ea"; c.font = SIH.px(c, 40, 800); c.textAlign = "center"; c.textBaseline = "middle"; c.fillText("?", ox, oy - 4);
+  }
+  rays(c, L, hitIn, KEYS.map(k => mix[k] / 100), 28, 0);
+  if (show) rays(c, hitOut, E, s, 0, 30);
+  // 조명과 눈
+  c.beginPath(); c.arc(L[0], L[1], 24, 0, Math.PI * 2); c.fillStyle = `rgb(${KEYS.map(k => Math.round(code(k))).join(",")})`; c.fill(); c.lineWidth = 2; c.strokeStyle = "#8aa0a8"; c.stroke();
+  c.beginPath(); c.ellipse(E[0], E[1], 26, 15, 0, 0, Math.PI * 2); c.fillStyle = "#e9eef0"; c.fill();
+  c.beginPath(); c.arc(E[0] - 7, E[1] + 2, 8, 0, Math.PI * 2); c.fillStyle = "#1c2a30"; c.fill();
+  c.font = SIH.px(c, 13, 600); c.fillStyle = "rgba(255,255,255,.85)"; c.textAlign = "center"; c.textBaseline = "alphabetic";
+  c.fillText("조명", L[0], L[1] + 44); c.fillText("눈", E[0], E[1] + 38); c.fillText(o.name, ox, VH - 12);
+  const lit = KNAME.filter((_, i) => mix[KEYS[i]] > 0), back = KNAME.filter((_, i) => s[i] > 0), gone = lit.filter(k => !back.includes(k));
+  c.font = SIH.px(c, 13, 600); c.fillStyle = "rgba(255,255,255,.9)";
+  if (!show) c.fillText("어떤 색으로 보일지 예측한 뒤 확인하세요", VW / 2, 26);
+  else {
+    c.fillText(`반사: ${back.length ? back.join("·") + " 빛" : "없음"}   흡수: ${gone.length ? gone.join("·") + " 빛" : "없음"}`, VW / 2, 26);
+    if (!back.length) { c.fillStyle = "#ffb4a8"; c.fillText("들어오는 빛 없음", E[0], E[1] + 58); }
+  }
+  c.restore();
+}
+function hideResult() { revealed = false; $("objWhy").textContent = ""; }
+function markLamp() { const k = lampKey(); $("lampBtns").querySelectorAll("[data-l]").forEach(b => b.setAttribute("aria-pressed", b.dataset.l === k ? "true" : "false")); }
+function setLamp(v) { const [r, g, b] = v.split(",").map(Number); SIH.setRange("lR", r); SIH.setRange("lG", g); SIH.setRange("lB", b); }
+
+const refreshSim = () => {
+  if (SIH.source === "sensor") return;
+  if (mode === "obj") { drawObj(); if (revealed || $("freeLook").checked) showEst(patchOf(seenOf())); else clearEst(); }
+  else { drawSim(); simMeasure(); }
+};
+["R", "G", "B"].forEach(k => SIH.bind("l" + k, v => { mix[k] = v; markLamp(); if (mode === "obj") hideResult(); refreshSim(); }, "%"));
+$("lampBtns").querySelectorAll("[data-l]").forEach(b => (b.onclick = () => setLamp(b.dataset.l)));
+$("obj").onchange = () => { hideResult(); refreshSim(); };
+$("freeLook").onchange = () => { hideResult(); refreshSim(); };
 
 // ---------- 카메라 ----------
 let stream = null, video = null, failed = false, raf = 0, req = 0;
@@ -278,14 +396,25 @@ function stopCam() {
   if (video) { video.srcObject = null; video.remove(); }
   stream = video = null;
 }
+const CAP = {
+  cam: "카메라의 자동 색 보정 때문에 같은 색도 조명·기기에 따라 조금 다르게 잽니다. 두 대상을 비교할 때는 같은 폰, 같은 거리, 같은 조명에서 재세요.",
+  mix: "빛의 삼원색 막대는 가운데 네모 안으로 들어오는 빨강·초록·파랑 빛의 양을 합이 100%가 되게 나눈 것입니다. 색상환에서 점이 가장자리에 가까울수록 선명한 색입니다.",
+  obj: "물체는 비춘 빛 가운데 자신이 반사하는 빛만 눈으로 보내고, 나머지 빛은 흡수합니다. 막대는 물체에서 반사되어 눈에 들어오는 빨강·초록·파랑 빛의 비율입니다. 그림 속 빛줄기의 진하기는 빛의 양을 나타내요.",
+  objCam: "다른 기기의 색 화면을 조명으로 삼아 어두운 곳에서 실제 물체를 비추고, 가운데 네모를 물체로 채워 재세요. 기록에는 같은 조건에서 모형이 보여 주는 색이 함께 남습니다. 두 물체를 비교할 때는 같은 폰, 같은 거리, 같은 조명에서 재세요.",
+};
+const HINT_OBJ = {
+  sim: "반사하는 빛만 눈에 들어와 그 색으로 보입니다. 실제 물체는 다른 색 빛도 조금씩 반사해 완전히 검게 보이지는 않아요. 카메라로 확인해 보세요.",
+  cam: "고른 빛은 색 화면에 띄운 빛과 같게 맞추세요. 카메라는 어두우면 스스로 밝게 보정하므로 색 이름과 함께 빛의 비율 막대도 보세요.",
+};
 function syncMode() {
   const live = SIH.source === "sensor";
   $("camBtn").textContent = live ? "카메라 끄기" : "카메라 켜기";
   $("camBtn").classList.toggle("on", live);
   $("simBox").hidden = live;
-  $("cap").textContent = live
-    ? "카메라의 자동 색 보정 때문에 같은 색도 조명·기기에 따라 조금 다르게 잽니다. 두 대상을 비교할 때는 같은 폰, 같은 거리, 같은 조명에서 재세요."
-    : "빛의 삼원색 막대는 가운데 네모 안으로 들어오는 빨강·초록·파랑 빛의 양을 합이 100%가 되게 나눈 것입니다. 색상환에서 점이 가장자리에 가까울수록 선명한 색입니다.";
+  $("mixTitle").textContent = mode === "obj" ? "비추는 빛의 세기 (카메라 없이)" : "빛 섞기 (카메라 없이)";
+  $("measure").textContent = mode === "obj" && !live ? "확인해서 기록" : "측정해서 기록";
+  $("objHint").textContent = HINT_OBJ[live ? "cam" : "sim"];
+  $("cap").textContent = live ? (mode === "obj" ? CAP.objCam : CAP.cam) : CAP[mode];
 }
 window.addEventListener("sih:source", e => {
   syncMode();
@@ -295,7 +424,8 @@ window.addEventListener("sih:source", e => {
     startCam();
   } else {
     stopCam(); if (!failed) say(""); failed = false;
-    drawSim(); simMeasure();
+    if (mode === "obj") hideResult();
+    refreshSim();
   }
 });
 $("camBtn").onclick = () => SIH.setSource(SIH.source === "sensor" ? "sim" : "sensor");
@@ -312,15 +442,28 @@ $("target").onchange = () => {
   if (v !== "free" && SIH.source !== "sensor") { const [r, g, b] = v.split(",").map(Number); SIH.setRange("lR", r); SIH.setRange("lG", g); SIH.setRange("lB", b); }
 };
 $("measure").onclick = () => {
+  const live = SIH.source === "sensor";
+  // 물체의 색(시뮬레이션): 예측한 뒤 누르면 그때 결과를 보여 준다
+  if (mode === "obj" && !live && !revealed) { revealed = true; refreshSim(); }
   if (!est) return say("아직 측정한 색이 없습니다.");
   const sel = $("target");
-  const target = sel.value === "free" ? ($("freeText").value.trim() || "직접 적은 대상") : sel.options[sel.selectedIndex].text;
+  const target = mode === "obj" ? `${curObj().name} + ${lampName()}` : sel.value === "free" ? ($("freeText").value.trim() || "직접 적은 대상") : sel.options[sel.selectedIndex].text;
+  const model = mode === "obj" && live ? modelName() : null;
   const pred = $("pred").value;
-  logRows.push({ target, pred, est: { ...est, share: est.share.slice(), rgb: est.rgb.slice() }, src: SIH.source === "sensor" ? "카메라" : "시뮬레이션" });
+  logRows.push({ target, pred, model, est: { ...est, share: est.share.slice(), rgb: est.rgb.slice() }, src: live ? "카메라" : "시뮬레이션" });
   renderLog();
-  if (!pred) say(`측정 결과: ${est.name}. 다음에는 측정 전에 색을 먼저 예측해 보세요.`);
-  else if (pred === est.name) say(`예측(${pred})과 측정 결과(${est.name})가 같습니다.`, true);
-  else say(`예측은 ${pred}, 측정 결과는 ${est.name}입니다. 빨강·초록·파랑 빛의 비율을 보고 왜 다른지 생각해 보세요.`);
+  if (mode === "obj" && !live) {
+    const n = est.name;
+    if (!pred) say(`${n}${ro(n)} 보여요. 다음에는 확인하기 전에 색을 먼저 예측해 보세요.`);
+    else if (pred === n) say(`예측한 대로 ${n}${ro(n)} 보여요.`, true);
+    else say(`예측은 ${pred}, 실제로는 ${n}${ro(n)} 보여요. 어떤 빛이 반사되고 어떤 빛이 흡수되었는지 보고 왜 다른지 생각해 보세요.`);
+  } else {
+    const m = model ? ` (같은 조건의 모형: ${model})` : "";
+    if (!pred) say(`측정 결과: ${est.name}${m}. 다음에는 측정 전에 색을 먼저 예측해 보세요.`);
+    else if (pred === est.name) say(`예측(${pred})과 측정 결과(${est.name})가 같습니다.${m}`, true);
+    else say(`예측은 ${pred}, 측정 결과는 ${est.name}입니다.${m} 빨강·초록·파랑 빛의 비율을 보고 왜 다른지 생각해 보세요.`);
+  }
+  if (mode === "obj") $("objWhy").textContent = (model ? "모형으로 보면: " : "") + whyText();
   drawWheel();
 };
 function renderLog() {
@@ -329,21 +472,16 @@ function renderLog() {
   if (!logRows.length) { const tr = document.createElement("tr"); const td = document.createElement("td"); td.colSpan = 4; td.style.textAlign = "left"; td.style.color = "var(--muted)"; td.textContent = "아직 기록이 없습니다."; tr.appendChild(td); tb.appendChild(tr); }
   logRows.forEach((r, i) => {
     const tr = document.createElement("tr");
-    const cells = [String(i + 1), r.target, `${r.pred || "–"} → ${r.est.name}`, r.est.share.map(Math.round).join("·")];
+    const cells = [String(i + 1), r.target, `${r.pred || "–"} → ${r.est.name}${r.model ? ` (모형: ${r.model})` : ""}`, r.est.share.map(Math.round).join("·")];
     cells.forEach((t, j) => { const td = document.createElement("td"); td.textContent = t; if (j === 2 && r.pred) td.className = r.pred === r.est.name ? "yes" : "no"; tr.appendChild(td); });
     tb.appendChild(tr);
   });
   $("csv").disabled = $("clearLog").disabled = !logRows.length;
 }
 $("csv").onclick = () => {
-  // 이름이 = + - @ 로 시작하면 엑셀이 수식으로 실행하므로 앞에 ' 를 붙인다
-  const q = v => { let t = String(v); if (typeof v === "string" && /^[=+\-@\t\r]/.test(t)) t = "'" + t; return `"${t.replace(/"/g, '""')}"`; };
-  const rows = [["순서", "대상", "입력", "예측", "측정한 색", "색상(°)", "채도(%)", "밝기(%)", "빨강 빛(%)", "초록 빛(%)", "파랑 빛(%)", "R", "G", "B"]]
-    .concat(logRows.map((r, i) => [i + 1, r.target, r.src, r.pred, r.est.name, Math.round(r.est.h), Math.round(r.est.s * 100), Math.round(r.est.v * 100), ...r.est.share.map(x => x.toFixed(1)), ...r.est.rgb]));
-  const a = document.createElement("a");
-  const url = URL.createObjectURL(new Blob(["﻿" + rows.map(r => r.map(q).join(",")).join("\r\n")], { type: "text/csv;charset=utf-8" }));
-  a.href = url; a.download = "빛의색-측정기록.csv"; document.body.appendChild(a); a.click(); a.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  const rows = [["순서", "대상", "입력", "예측", "측정한 색", "색상(°)", "채도(%)", "밝기(%)", "빨강 빛(%)", "초록 빛(%)", "파랑 빛(%)", "R", "G", "B", "같은 조건의 모형"]]
+    .concat(logRows.map((r, i) => [i + 1, r.target, r.src, r.pred, r.est.name, Math.round(r.est.h), Math.round(r.est.s * 100), Math.round(r.est.v * 100), ...r.est.share.map(x => x.toFixed(1)), ...r.est.rgb, r.model || ""]));
+  SIH.csv("빛의색-측정기록.csv", rows);
 };
 $("clearLog").onclick = () => { logRows.length = 0; renderLog(); drawWheel(); };
 
@@ -387,8 +525,14 @@ scr.addEventListener("keydown", e => {
 });
 document.addEventListener("fullscreenchange", () => { if (!document.fullscreenElement && !scr.hidden) closeScreen(); });
 
-syncMode();
-drawSim(); simMeasure();
+SIH.tabs([{ btn: "tabMix", panel: "mixCtl", key: "mix" }, { btn: "tabObj", panel: "objCtl", key: "obj" }], m => {
+  mode = m; hideResult();
+  if (SIH.source !== "sensor") {
+    if (m === "obj" && !objEntered) { objEntered = true; setLamp("100,100,100"); }   // 처음에는 흰 빛으로
+    if (m === "mix" && $("target").value !== "free") setLamp($("target").value);      // 빛 섞기는 고른 대상의 빛으로
+  }
+  syncMode(); refreshSim();
+});
 </script>
 </body>
 </html>

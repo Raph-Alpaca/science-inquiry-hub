@@ -122,10 +122,10 @@ Storage 를 켠 경우에만 `--only firestore:rules,storage` 로 함께 올립�
 cd tests && npm install && npm test
 ```
 
-- `app-test.mjs` 탐구 앱 12쪽 (1920·1280·380) 59항목
-- `sensor-test.mjs` 실시간 센서 모드 58항목 (가상 센서 시나리오, 가짜 블루투스로 어댑터 4종, 외부 전송 0건)
-- `media-test.mjs` 마이크·카메라 앱 57항목 (진동수·색 계산, 크롬 가짜 마이크·카메라에 WAV·Y4M 입력, 권한 거부·미지원, 색 화면, 외부 전송 0건)
-- `shelf-test.mjs` 책장·제출·선생님 화면 (1920·1200·380) 107항목
+- `app-test.mjs` 탐구 앱 12쪽 (1920·1280·380) 123항목
+- `sensor-test.mjs` 실시간 센서 모드 67항목 (가상 센서 시나리오, 가짜 블루투스로 어댑터 4종, 외부 전송 0건)
+- `media-test.mjs` 마이크·카메라 앱 58항목 (진동수·색 계산, 크롬 가짜 마이크·카메라에 WAV·Y4M 입력, 권한 거부·미지원, 색 화면, 외부 전송 0건)
+- `shelf-test.mjs` 책장·제출·선생님 화면 (1920·1200·380) 143항목
 - `peek-test.mjs` 선생님 화면 옆 패널 39항목
 - `code-entry-test.mjs` 책장 코드 입력 칸 22항목
 - `rules-test.mjs` 보안 규칙 61항목 (승인 전 책 비공개, 모둠원 이름 차단, 틀린 코드 제출 차단, 관리자 판별 등)
@@ -142,9 +142,10 @@ cd tests && npm install && npm test
 </section>
 <script src="../assets/hub.js"></script>
 <script>
-window.APP = { id, grade, unit, title, question, how, notes:[…], prompt, next, sensor, sensorIn };
-SIH.shell();          // 상단 바·탐구 기록·프롬프트 보기 생성
-// SIH.dpr / SIH.px / SIH.drawChart / SIH.bind / SIH.label / SIH.tabs / SIH.reduced
+window.APP = { id, grade, unit, title, question, how, notes:[…], prompt, next, sensor, sensorIn, standards:["9과06-03"] };
+SIH.shell();          // 상단 바(성취기준 코드 포함)·탐구 기록·프롬프트 보기 생성
+// SIH.dpr / SIH.px / SIH.drawChart / SIH.bind / SIH.label / SIH.tabs / SIH.csv / SIH.bySource / SIH.reduced
+// 화면이 여럿인 앱은 SIH.tabs 로 나누고, 주소에 ?tab=<key> 를 붙이면 그 화면으로 열립니다
 // window "sih:resize" 이벤트 → 창 크기가 바뀌면 다시 그리기
 </script>
 ```
@@ -159,7 +160,9 @@ SIH.shell();          // 상단 바·탐구 기록·프롬프트 보기 생성
 |---|---|---|---|
 | g1-insulation 단열 | 온도 1~2개 (연결 순서대로 컵 A·B) | 첫 측정값이 이론 곡선의 처음 온도 | 실측 곡선 위에 이론 냉각 곡선(점선). 냉각 상수를 움직여 맞춘다 |
 | g1-heating 가열 곡선 | 온도 | 실측 온도가 입자 모형·상태 표시를 움직임 | 실측 곡선 위에 이론 가열 곡선. 0 ℃·100 ℃ 에 머문 구간을 실측에서 찾음 |
+| g2-gas 온도와 부피 탭 | 온도 (주사기를 담근 물) | 물 온도. 부피는 주사기 눈금을 읽어 직접 입력 | 온도–부피 그래프에 측정점과 추세선 |
 | g3-dewpoint 이슬점 | 온도(컵 표면) + 온습도(공기, 있으면) | 컵 온도·기온·습도 | 눈으로 본 이슬 맺힘 온도 ↔ 곡선의 이슬점 ↔ 예측 |
+| g3-dewpoint 구름 만들기 탭 | 온도 (페트병 속) | 병 속 온도. 뚜껑을 연 뒤 10초 안의 최저 온도로 온도 변화 | 온도–시간 그래프, 조건별 기록 표 |
 | g3-energy 자유 낙하 탭 | 거리 (위에서 아래로, 또는 바닥에서 위로) | 높이 → 떨어지는 구간을 찾아 포물선을 맞춤 → 1초마다 늘어나는 속력, 위치·운동 에너지 | 속력–시간(측정점 + 맞춘 직선), 위치·운동·역학적 에너지–시간. 시점을 골라 막대로 비교 |
 
 구조
@@ -236,5 +239,6 @@ Netlify 에서만 생기는 짧은 주소: `/shelf` `/teacher` `/submit` `/hub`,
 
 ## 주의
 
-시뮬레이션 값은 교과서 수준의 단순화된 모형(뉴턴 냉각, 보일 법칙, 포화 수증기량 근사식 등)으로
-계산한 것이며 실제 측정값과 다를 수 있습니다.
+시뮬레이션 값은 교과서 수준의 단순화된 모형(뉴턴 냉각, 보일 법칙, 온도–부피 비례, 포화 수증기량 근사식,
+단열 팽창 모형, 크게 과장한 달 궤도의 기울기 등)으로 계산한 것이며 실제 측정값과 다를 수 있습니다.
+특히 페트병 구름 실험의 온도 변화 폭은 실제 실험과 비슷해 보이도록 맞춘 값입니다(`apps/g3-dewpoint.html` 의 `K_ADIA`).

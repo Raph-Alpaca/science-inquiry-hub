@@ -8,6 +8,8 @@
      heating                 얼음 −8 ℃ → 0 ℃에서 60초 머묾 → 100 ℃에서 머묾
      cup                     25 ℃ 컵이 1초에 0.12 ℃씩 식음
      air                     기온 24 ℃, 습도 55 %
+     bath                    주사기를 담근 물중탕: 10 ℃에서 뜨거운 물을 부어 약 70 ℃까지 천천히 오름 (시상수 40초)
+     bottle                  구름 만들기 페트병 속 (20초 주기): 펌프로 23→25.5 ℃, 뚜껑을 열면 20.5 ℃로 뚝 떨어졌다가 천천히 회복
      freefall                바닥에서 150 cm 높이에 아래를 향해 둔 거리 센서 (20 Hz). 센서 30 cm 아래에 1.5초 들고 있던 공을 놓아
                              공기 저항 없이 떨어뜨리고, 바닥(센서에서 145 cm)에 닿으면 멈췄다가 4초마다 다시 들어 올린다 */
 (function () {
@@ -23,6 +25,9 @@
       f: (s) => [(s < 20 ? -8 + 0.4 * s : s < 80 ? 0 : s < 280 ? (s - 80) * 0.5 : 100) + noise(0.1)] },
     cup: { label: "가상 온도 센서 (컵)", ms: 250, ch: [{ quantity: "temperature" }], f: (s) => [Math.max(3, 25 - 0.12 * s) + noise(0.05)] },
     air: { label: "가상 온습도 센서", ms: 500, ch: [{ quantity: "temperature" }, { quantity: "humidity" }], f: () => [24 + noise(0.05), 55 + noise(0.3)] },
+    bath: { label: "가상 온도 센서 (물중탕)", ms: 250, ch: [{ quantity: "temperature" }], f: (s) => [10 + 60 * (1 - Math.exp(-s / 40)) + noise(0.05)] },
+    bottle: { label: "가상 온도 센서 (페트병 속)", ms: 250, ch: [{ quantity: "temperature" }],
+      f(s) { const u = s % 20; return [(u < 8 ? 23 + 0.31 * u : u < 10 ? 25.5 : 20.5 + 5 * (1 - Math.exp(-(u - 10) / 5))) + noise(0.05)]; } },
     freefall: { label: "가상 거리 센서", ms: 50, ch: [{ quantity: "distance" }],
       f(s) {
         const u = s % 4 - 1.5;                                   // 놓은 뒤 시간 (음수면 아직 들고 있음)

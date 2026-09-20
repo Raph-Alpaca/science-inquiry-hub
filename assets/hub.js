@@ -17,8 +17,11 @@
      SIH.drawChart(ctx, opts)       선 그래프. 반환 {px, py, inv, box}
      SIH.canvasXY(canvas, ev, w, h) 클릭 위치 → 캔버스 논리 좌표
      SIH.bind(id, fn, unit)         슬라이더 값 표시 + 콜백
-     SIH.tabs([{btn, panel, key}], onChange)
+     SIH.tabs([{btn, panel, key}], onChange)   주소의 ?tab=key 로 처음 탭을 고를 수 있다
+     SIH.bySource(on)               .sensor-only / .sim-only 요소 전환
+     SIH.csv(filename, rows)        표를 CSV 파일로 내려받기
      SIH.fmt(v)                     눈금 숫자 표기
+   APP.standards = ["9과06-03"] 을 주면 제목 위에 성취기준 코드를 표시한다.
 */
 (function () {
   const SIH = (window.SIH = {});
@@ -64,6 +67,7 @@
       </header>
       <section class="sensorbar" id="sensorBar" aria-label="실시간 센서" hidden></section>
       <section class="ask">
+        ${A.standards && A.standards.length ? `<p class="std" aria-label="성취기준">${A.standards.map((s) => `<span>[${esc(s)}]</span>`).join("")}</p>` : ""}
         <h1>${esc(A.title)}</h1>
         <p class="q">${esc(A.question)}</p>
         ${A.how ? `<p class="how">${esc(A.how)}</p>` : ""}
@@ -123,7 +127,8 @@
       }
     };
     $("noteDown").onclick = () => {
-      const t = `[${A.title}] 탐구 기록\n탐구 질문: ${A.question}\n\n■ 예측\n${$("n1").value}\n\n■ 관찰\n${$("n2").value}\n\n■ 설명\n${$("n3").value}\n`;
+      const std = A.standards && A.standards.length ? `성취기준: ${A.standards.map((s) => `[${s}]`).join(" ")}\n` : "";
+      const t = `[${A.title}] 탐구 기록\n${std}탐구 질문: ${A.question}\n\n■ 예측\n${$("n1").value}\n\n■ 관찰\n${$("n2").value}\n\n■ 설명\n${$("n3").value}\n`;
       const a = document.createElement("a");
       const url = URL.createObjectURL(new Blob([t], { type: "text/plain;charset=utf-8" }));
       a.href = url; a.download = `${A.id}-탐구기록.txt`;
@@ -170,7 +175,7 @@
     if (new URLSearchParams(location.search).get("sensor") === "virtual") {
       setTimeout(async () => {
         await SIH.setSource("sensor", true);
-        const list = A.sensorIn.virtual || [], n = Math.min(list.length, A.sensorIn.max || 1);
+        const v = A.sensorIn.virtual, list = (typeof v === "function" ? v() : v) || [], n = Math.min(list.length, A.sensorIn.max || 1);
         for (let i = 0; i < n; i++) await window.SIHSensor.connectVirtual(list[i], A.sensorIn.want);
       }, 0);
     }
@@ -358,8 +363,26 @@
       onChange && onChange(key);
     };
     defs.forEach((d) => (document.getElementById(d.btn).onclick = () => set(d.key)));
-    set(defs[0].key);
+    // ?tab=key → 그 탭으로 연다 (허브 카드의 바로 가기, 자동 검사)
+    const want = new URLSearchParams(location.search).get("tab");
+    set(defs.some((d) => d.key === want) ? want : defs[0].key);
     return set;
+  };
+
+  // 센서 모드에서만 / 시뮬레이션에서만 보이는 요소
+  SIH.bySource = function (on) {
+    document.querySelectorAll(".sensor-only").forEach((el) => (el.hidden = !on));
+    document.querySelectorAll(".sim-only").forEach((el) => (el.hidden = on));
+  };
+
+  // 표를 CSV 로 내려받는다. rows = [[머리글…], [값…], …]. 엑셀이 한글을 읽도록 BOM 을 붙이고, 수식으로 읽힐 값은 막는다
+  SIH.csv = function (filename, rows) {
+    const cell = (v) => { let s = String(v == null ? "" : v); if (typeof v === "string" && /^[=+\-@\t\r]/.test(s)) s = "'" + s; return `"${s.replace(/"/g, '""')}"`; };
+    const url = URL.createObjectURL(new Blob(["﻿" + rows.map((r) => r.map(cell).join(",")).join("\r\n")], { type: "text/csv;charset=utf-8" }));
+    const a = document.createElement("a");
+    a.href = url; a.download = filename;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
   };
 
   // 실행 버튼의 상태 표시를 통일: play(btn, {idle, running, paused, done})

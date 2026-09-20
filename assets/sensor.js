@@ -265,7 +265,8 @@
   /* ---------- 센서 막대 (연결 버튼 · 값 · 진단) ---------- */
   S.mount = function (el, opt) {
     opt = opt || {};
-    const want = opt.want || [], max = opt.max || 1, profiles = opt.virtual || [];
+    const want = opt.want || [], max = opt.max || 1;
+    const profilesNow = () => (typeof opt.virtual === "function" ? opt.virtual() : opt.virtual) || [];   // 탭마다 가상 센서가 다른 앱은 함수로 준다
     el.innerHTML = `
       <div class="sb-row">
         <button class="btn primary" id="sbConnect">센서 연결</button>
@@ -302,7 +303,7 @@
     $("sbConnect").onclick = () => go(false);
     $("sbAll").onclick = () => go(true);
     $("sbVirtual").onclick = async () => {
-      const n = S.devices.filter((d) => d.virtual).length;
+      const n = S.devices.filter((d) => d.virtual).length, profiles = profilesNow();
       if (S.devices.length >= max || !profiles.length) return;
       if (opt.onVirtual) await opt.onVirtual();      // 시뮬레이션에 머물러 있었다면 센서 모드로 바꾼 뒤 연결한다
       await S.connectVirtual(profiles[n % profiles.length], want);
@@ -325,7 +326,7 @@
       $("sbStatus").textContent = S.devices.length ? `센서 ${S.devices.length}개 연결됨${real < S.devices.length ? " (가상 포함)" : ""}` : "연결된 센서 없음";
       $("sbConnect").textContent = S.devices.length ? "＋ 센서 추가" : "센서 연결";
       $("sbConnect").disabled = !S.support().ok || S.devices.length >= max;
-      $("sbVirtual").hidden = !profiles.length || S.devices.length >= max;
+      $("sbVirtual").hidden = !profilesNow().length || S.devices.length >= max;
       if (S.lastNotice) notice(esc(S.lastNotice));
       if (S.devices.some((d) => d.virtual)) notice("지금 값은 <b>가상 데이터</b>입니다 — 실제 센서 측정값이 아닙니다.");
     }

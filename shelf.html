@@ -102,7 +102,6 @@ const params = new URLSearchParams(location.search);
 const codes = [...new Set((params.get("code") || "").split(",").map((s) => s.trim().toUpperCase()).filter(Boolean))];
 const code = codes[0] || "";
 const merged = codes.length > 1;
-const PER_ROW = 10;
 let flat = [];            // 펼쳐 보기용 순서
 let openIndex = -1, animating = false, lastFocus = null;
 let examples = null, rendered = false, seen = null, waiting = null;
@@ -259,24 +258,24 @@ const byClass = (a, b) => {
 };
 const toBook = (b) => ({ ...b, who: `${b.grade}-${b.classNo} · ${b.team}` });
 
+// 한 서가는 칸 하나에 다 꽂는다. 넘치는 만큼은 옆으로 넘겨 본다 (‹ › 단추·손가락·마우스 끌기)
 function rowsOf(sec, fresh) {
-  const chunks = [];
-  for (let i = 0; i < Math.max(1, sec.books.length); i += PER_ROW) chunks.push(sec.books.slice(i, i + PER_ROW));
-  return chunks.map((chunk, ci) => `
-    <section class="shelf-row${chunk.length ? "" : " empty"}">
+  const books = sec.books;
+  return `
+    <section class="shelf-row${books.length ? "" : " empty"}">
       <div class="row-label">
-        <h2>${esc(sec.label)}${ci ? " (이어서)" : ""}</h2>
-        ${ci === 0 ? `<span class="count">${esc(sec.note)}</span>` : ""}
+        <h2>${esc(sec.label)}</h2>
+        <span class="count">${esc(sec.note)}</span>
       </div>
       <div class="bay">
         <button class="row-nav prev" type="button" aria-label="${esc(sec.label)} 왼쪽 책 보기" hidden>‹</button>
-        <div class="row-inner" data-key="${esc(sec.key)}-${ci}">
-          ${chunk.length ? chunk.map((b) => bookHtml(b, fresh.has(b.id))).join("") : `<p class="row-empty">아직 꽂힌 책이 없어요. 첫 산출물을 제출해 보세요!</p>`}
+        <div class="row-inner" data-key="${esc(sec.key)}" tabindex="0" role="group" aria-label="${esc(sec.label)} 책들 (좌우 화살표로 넘기기)">
+          ${books.length ? books.map((b) => bookHtml(b, fresh.has(b.id))).join("") : `<p class="row-empty">아직 꽂힌 책이 없어요. 첫 산출물을 제출해 보세요!</p>`}
         </div>
         <button class="row-nav next" type="button" aria-label="${esc(sec.label)} 오른쪽 책 보기" hidden>›</button>
       </div>
       <div class="row-board"></div>
-    </section>`).join("");
+    </section>`;
 }
 function bookHtml(b, isNew) {
   const i = flat.indexOf(b);
@@ -312,6 +311,33 @@ function wireBay(bay) {
   prev.onclick = () => go(-1);
   next.onclick = () => go(1);
   row.addEventListener("scroll", update, { passive: true });
+  row.addEventListener("keydown", (e) => {
+    if (e.key !== "ArrowRight" && e.key !== "ArrowLeft") return;
+    if (e.target !== row) return;                      // 책에 포커스가 있을 때는 브라우저의 기본 이동에 맡긴다
+    e.preventDefault(); go(e.key === "ArrowRight" ? 1 : -1);
+  });
+  // 마우스로 끌어서 넘기기. 6px 넘게 끌었을 때만 스크롤로 보고, 그 뒤 클릭 한 번은 막아 책이 펼쳐지지 않게 한다
+  let drag = null;
+  row.addEventListener("pointerdown", (e) => {
+    if (e.pointerType === "touch" || e.button !== 0) return;   // 손가락은 브라우저가 알아서 민다
+    drag = { x: e.clientX, left: row.scrollLeft, moved: false };
+  });
+  row.addEventListener("pointermove", (e) => {
+    if (!drag) return;
+    const dx = e.clientX - drag.x;
+    if (!drag.moved && Math.abs(dx) < 6) return;
+    if (!drag.moved) { drag.moved = true; row.classList.add("dragging"); row.setPointerCapture(e.pointerId); }
+    row.scrollLeft = drag.left - dx;
+  });
+  const endDrag = (e) => {
+    if (!drag) return;
+    if (drag.moved) { row.classList.remove("dragging"); row.addEventListener("click", (c) => { c.preventDefault(); c.stopPropagation(); }, { capture: true, once: true }); }
+    if (row.hasPointerCapture && e.pointerId != null && row.hasPointerCapture(e.pointerId)) row.releasePointerCapture(e.pointerId);
+    drag = null;
+  };
+  row.addEventListener("pointerup", endDrag);
+  row.addEventListener("pointercancel", endDrag);
+  row.addEventListener("dragstart", (e) => e.preventDefault());
   update();
   bays.add(update);
 }
@@ -390,6 +416,9 @@ function fromShelf(el) {
   if (!el) return null;
   const from = el.getBoundingClientRect();
   if (!from.width || from.bottom < 0 || from.top > innerHeight) return null;
+  // 옆으로 넘겨 둔 칸에서는 책이 칸 밖(가려진 자리)에 있을 수 있다. 그때는 책장 밖에서 날아오는 것처럼 보이므로 그냥 펼친다
+  const bay = el.closest(".bay");
+  if (bay) { const b = bay.getBoundingClientRect(); if (from.right < b.left + 2 || from.left > b.right - 2) return null; }
   const to = mover.getBoundingClientRect();
   if (!to.height) return null;
   const s = from.height / to.height;

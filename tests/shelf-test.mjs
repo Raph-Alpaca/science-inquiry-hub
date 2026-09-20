@@ -60,6 +60,27 @@ for (const [vn, vp] of Object.entries(VIEWS)) {
     check(`${vn}: 승인 대기 책은 공개 책장에 없음`, !info.html.includes("우리 학교 기온 기록"));
     check(`${vn}: 모둠원 이름이 공개 화면에 없음`, !/김하늘|이서준|최민준|정수아/.test(info.html));
     check(`${vn}: 빈 서가 안내 문구`, info.html.includes("아직 꽂힌 책이 없어요"));
+    // 한 서가는 칸 하나에 다 꽂고, 넘치는 만큼 옆으로 넘겨 본다 (예전에는 10권마다 "(이어서)" 칸이 생겼다)
+    check(`${vn}: 서가를 나눠 "(이어서)" 칸을 만들지 않음`, !info.labels.some((t) => t.includes("이어서")), info.labels.join(" | "));
+    if (vn !== "mobile") {
+      const teacher = await page.evaluate(() => {
+        const row = [...document.querySelectorAll(".row-inner")].find((r) => r.querySelectorAll(".book[data-i]").length);
+        return { n: row.querySelectorAll(".book[data-i]").length, over: row.scrollWidth > row.clientWidth + 2, next: !row.closest(".bay").querySelector(".row-nav.next").hidden };
+      });
+      check(`${vn}: 선생님 예시 11권이 한 칸에 모두`, teacher.n === 11, `${teacher.n}권`);
+      if (teacher.over) {
+        const moved = await page.evaluate(async () => {
+          // 책장은 자료가 들어오면 다시 그려지므로 그때마다 칸을 다시 찾는다
+          const find = () => [...document.querySelectorAll(".row-inner")].find((r) => r.scrollWidth > r.clientWidth + 2);
+          const a = find().scrollLeft;
+          find().closest(".bay").querySelector(".row-nav.next").click();
+          for (let i = 0; i < 30 && find().scrollLeft <= a + 50; i++) await new Promise((r) => setTimeout(r, 100));   // 부드러운 스크롤이 끝날 때까지
+          const row = find();
+          return { a, b: row.scrollLeft, prevShown: !row.closest(".bay").querySelector(".row-nav.prev").hidden };
+        });
+        check(`${vn}: 넘치면 › 단추로 옆으로 넘어가고 ‹ 단추가 나타남`, teacher.next && moved.b > moved.a + 50 && moved.prevShown, JSON.stringify(moved));
+      }
+    }
 
     // 책 펼치기
     const first = vn === "mobile" ? ".book-row" : ".book";

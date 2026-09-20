@@ -67,6 +67,8 @@ canvas { max-width: 100%; }
 
 /* ---------- 제목·탐구 질문 ---------- */
 .ask { margin-bottom: 22px; }
+.ask .std { margin: 0 0 8px; display: flex; flex-wrap: wrap; gap: 6px; font-size: .8em; color: var(--muted); font-variant-numeric: tabular-nums; }
+.ask .std span { border: 1px solid var(--line); border-radius: 999px; padding: 1px 9px; background: var(--card); }
 .ask h1 { font-size: 1.9em; line-height: 1.25; margin: 0 0 10px; letter-spacing: -0.015em; font-weight: 800; }
 .ask .q { margin: 0; font-size: 1.15em; font-weight: 600; padding-left: 14px; border-left: 4px solid var(--g); }
 .ask .how { margin: 10px 0 0; color: var(--ink-2); font-size: .95em; max-width: 72ch; }
@@ -78,6 +80,7 @@ canvas { max-width: 100%; }
   padding: 16px; min-height: 320px; min-width: 0;
 }
 .stage canvas { width: 100%; height: auto; display: block; }
+.stage canvas[hidden] { display: none; }
 .stage .cap { margin: 10px 0 0; font-size: .9em; color: var(--ink-2); }
 /* 무대 안 두 칸 배치: 앱에서 --cols 로 비율만 정한다. 좁은 화면에서는 한 줄로 */
 .stage .split { display: grid; grid-template-columns: var(--cols, 1fr 1fr); gap: 14px; align-items: start; min-width: 0; }
@@ -114,8 +117,8 @@ canvas { max-width: 100%; }
 .btn.small { padding: 6px 10px; font-size: .9em; min-height: 34px; }
 .btn[disabled] { opacity: .45; cursor: not-allowed; }
 .btn[aria-pressed="true"], .btn.on { background: var(--g); color: #fff; border-color: var(--g); }
-.tabs { display: flex; gap: 6px; }
-.tabs .btn { flex: 1; }
+.tabs { display: flex; gap: 6px; flex-wrap: wrap; }
+.tabs .btn { flex: 1 1 auto; }
 .readout { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .readout div { background: var(--paper); border-radius: var(--radius-s); padding: 8px 10px; min-width: 0; }
 .readout small { display: block; color: var(--muted); font-size: .8em; }

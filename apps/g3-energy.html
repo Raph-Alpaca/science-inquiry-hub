@@ -52,6 +52,7 @@
 <script>
 window.APP = {
   id: "g3-energy", grade: 3, unit: "운동과 에너지", sensor: "거리 센서 · 자유 낙하 탭",
+  standards: ["9과19-02","9과19-03","9과19-04"],
   sensorIn: { want: ["distance"], max: 1, virtual: ["freefall"] },
   title: "에너지 전환 시뮬레이터",
   question: "물체가 내려가는 동안 위치 에너지는 어떻게 운동 에너지로 바뀔까? 역학적 에너지는 보존될까?",
@@ -165,8 +166,7 @@ $("topCm").oninput = $("massG").oninput = () => { if (drop) draw(); };
 SIH.bind("pick", () => draw(), " %");
 function sensorUi() {
   const on = sensorOn();
-  document.querySelectorAll(".sensor-only").forEach(el => (el.hidden = !on));
-  document.querySelectorAll(".sim-only").forEach(el => (el.hidden = on));
+  SIH.bySource(on);
   $("topField").hidden = !on || $("place").value !== "top";
   $("massField").hidden = $("spdField").hidden = on;
   $("fallBox").hidden = mode !== "fall";

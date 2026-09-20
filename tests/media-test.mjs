@@ -249,6 +249,12 @@ for (const [file, want, label, rgb] of [["yellow.y4m", "노랑", "노랑 화면"
     const px = await page.evaluate(() => { const c = document.getElementById("view"); const d = c.getContext("2d").getImageData(c.width / 4, c.height / 4, 1, 1).data; return [...d]; });
     check("가짜 카메라: 카메라 영상이 미리보기에 그려짐", px[0] > 180 && px[1] > 180 && px[2] < 80, px.join(","));
     await page.screenshot({ path: `${OUT}/color-camera.png` });
+    // 물체의 색 탭: 카메라는 그대로 켜 두고, 기록에 같은 조건의 모형 결과를 함께 남긴다
+    await page.click("#tabObj"); await page.selectOption("#obj", "banana"); await page.click('#lampBtns [data-l="0,100,0"]');
+    await page.selectOption("#pred", "초록"); await page.click("#measure");
+    const orow = await page.$$eval("#log tr", trs => [...trs.at(-1).children].map(td => td.textContent));
+    check("가짜 카메라 · 물체의 색: 카메라 측정값과 같은 조건의 모형 색을 함께 기록", (await page.evaluate(() => SIH.source)) === "sensor" && orow[1] === "노란 바나나 + 초록 빛" && orow[2] === "초록 → 노랑 (모형: 초록)" && (await page.textContent("#objWhy")).startsWith("모형으로 보면"), orow.join(" / "));
+    await page.click("#tabMix");
     const track = await page.evaluateHandle(() => stream.getVideoTracks()[0]);
     await page.click("#camBtn");
     const off = await page.evaluate(() => ({ stream, src: SIH.source, name: cname.textContent }));
