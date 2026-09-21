@@ -22,7 +22,6 @@
     </div>
     <span class="grow"></span>
     <span class="code-chip" id="codeChip" hidden><small>책장 코드</small><b id="codeText"></b></span>
-    <a class="login" href="teacher.html">선생님 로그인</a>
   </header>
 
   <main>
@@ -126,7 +125,7 @@ if (DEMO) $("demoBar").hidden = false;
       <h2>선생님께 책장 코드를 받으세요</h2>
       <p>선생님이 알려 준 코드를 넣어 주세요. QR 코드나 주소로 들어오면 바로 열립니다.</p>
       ${codeEntryHtml({ value: lastCode(), page: "shelf" })}
-      <p class="links"><a href="teacher.html">선생님이신가요? 책장 만들기</a> · <a href="shelf.html?code=DEMO-2026-BOOK&demo=1">미리보기 책장 열어 보기</a></p>
+      <p class="links"><a href="shelf.html?code=DEMO-2026-BOOK&demo=1">미리보기 책장 열어 보기</a></p>
     </div>`;
     bindCodeEntry(DEMO);
     return;

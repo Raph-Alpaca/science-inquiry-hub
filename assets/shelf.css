@@ -86,8 +86,6 @@ img { max-width: 100%; }
 }
 .code-chip small { color: var(--ink-2); font-size: 13px; }
 .code-chip b { font-size: 16px; letter-spacing: .04em; font-variant-numeric: tabular-nums; }
-.head .login { color: var(--ink-2); text-decoration: none; font-size: 14.5px; padding: 8px 2px; white-space: nowrap; border-bottom: 1px solid transparent; }
-.head .login:hover { color: var(--ink); border-bottom-color: var(--ink); }
 
 /* ---------- 책장(호두나무) ---------- */
 .shelf-wrap { transition: filter var(--t-dim) ease-out; }

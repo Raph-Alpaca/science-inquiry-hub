@@ -185,6 +185,7 @@ let adminCtx, adminPage;
   await page.click("#rq-send");
   await page.waitForSelector("#reqCancel", { timeout: 10000 }).catch(() => {});
   await page.screenshot({ path: `${OUT}/applicant-sent.png`, fullPage: true });
+  check("접수 화면에 오래 걸릴 때 연락처", (await page.textContent("#reqContact")).includes("raphres@sen.go.kr"));
   check("신청 뒤 '접수되었습니다' 화면", (await page.textContent("#main")).includes("접수되었습니다") && (await page.textContent("#main")).includes("부산○○중학교"));
   let rows = await waitRows((r) => r.some((x) => x.includes(APPLICANT)));
   await adminPage.screenshot({ path: `${OUT}/admin-request.png`, fullPage: true });

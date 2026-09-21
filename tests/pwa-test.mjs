@@ -61,6 +61,7 @@ const browser = await chromium.launch();
   check("앱 다시 실행: 책장이 그려짐", (await page.$$(".row-label h2")).length >= 3);
   await page.goto(BASE + "/shelf.html?demo=1", { waitUntil: "networkidle" }); await page.waitForTimeout(300);
   check("브라우저로 코드 없이 오면 예전처럼 입력 칸", await page.$("#codeInput") !== null);
+  check("학생 화면에는 선생님 화면 링크가 없음", !(await page.$('a[href^="teacher.html"]')));
   await ctx.close();
 }
 

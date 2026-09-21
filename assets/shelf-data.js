@@ -66,7 +66,8 @@ async function fb() {
     import(`${SDK}/firebase-auth.js`),
   ]);
   const app = A.initializeApp(EMU ? { ...firebaseConfig, projectId: "demo-sih" } : firebaseConfig);
-  _fb = { F, U, db: F.getFirestore(app), auth: U.getAuth(app), app };
+  // 일부 휴대폰 망·브라우저는 Firestore 의 스트리밍 연결을 막아 응답이 영영 오지 않는다. long polling 으로 붙는다.
+  _fb = { F, U, db: F.initializeFirestore(app, { experimentalForceLongPolling: true }), auth: U.getAuth(app), app };
   if (EMU) {
     // 검사용: 로컬 에뮬레이터에 붙는다 (tests/ 의 검사 스크립트가 쓴다). 실제 데이터에는 손대지 않는다.
     F.connectFirestoreEmulator(_fb.db, "127.0.0.1", 8080);
@@ -432,6 +433,18 @@ export async function checkAccess(user) {
 /* 승인 여부를 계속 지켜본다. cb({ admin, approved, denied })
  * 서버가 확인해 준 값이 올 때까지는 부르지 않는다. 관리자가 승인(취소)하면 곧바로 다시 부른다.
  * 돌려준 함수를 부르면 그만 지켜본다. */
+// SDK 연결과 상관없이 일반 웹 요청으로 문서가 있는지 본다. 규칙은 똑같이 적용된다. true·false, 거부되면 "denied"
+async function restHas(col, key) {
+  const { auth } = await fb();
+  if (!auth.currentUser) throw new Error("로그인 전");
+  const token = await auth.currentUser.getIdToken();
+  const url = `https://firestore.googleapis.com/v1/projects/${firebaseConfig.projectId}/databases/(default)/documents/${col}/${encodeURIComponent(key)}?mask.fieldPaths=email`;
+  const res = await fetch(url, { headers: { Authorization: "Bearer " + token }, cache: "no-store" });
+  if (res.status === 200) return true;
+  if (res.status === 404) return false;
+  if (res.status === 403) return "denied";
+  throw new Error("REST " + res.status);
+}
 export function watchAccess(user, cb) {
   if (DEMO) { cb({ admin: true, approved: true, denied: false }); return () => {}; }
   const key = mailKey(user);
@@ -448,7 +461,24 @@ export function watchAccess(user, cb) {
       (snap) => { if (snap.metadata.fromCache) return; st[field] = snap.exists(); emit(); },   // 캐시 값은 믿지 않는다
       (e) => { if (isDenied(e)) st.denied = true; st[field] = false; emit(); });
     const unA = sub("admins", "admin"), unB = sub("allowed", "allowed");
-    stop = () => { unA(); unB(); };
+    // 실시간 답이 FIRST_WAIT_MS 안에 오지 않으면(휴대폰 망 등) 웹 요청으로 직접 확인하고, 답을 얻을 때까지 되풀이한다
+    let tries = 0, timer = null;
+    const fallback = async () => {
+      timer = null;
+      if (cancelled || (st.admin !== null && st.allowed !== null)) return;
+      try {
+        const [a, b] = EMU ? [null, null] : await Promise.all([restHas("admins", key), restHas("allowed", key)]);
+        if (a !== null && !cancelled && (st.admin === null || st.allowed === null)) {
+          st.denied = a === "denied" || b === "denied";
+          st.admin = a === true; st.allowed = b === true;
+          emit();
+          return;
+        }
+      } catch (e) { console.warn("승인 여부를 웹 요청으로 확인하지 못했습니다:", e.message); }
+      if (++tries < 20) timer = setTimeout(fallback, 5000);
+    };
+    timer = setTimeout(fallback, FIRST_WAIT_MS);
+    stop = () => { unA(); unB(); if (timer) clearTimeout(timer); };
   }).catch((e) => cb({ admin: false, approved: false, denied: false, error: e }));
   return () => { cancelled = true; stop(); };
 }
