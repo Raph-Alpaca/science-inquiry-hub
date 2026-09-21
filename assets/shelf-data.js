@@ -481,6 +481,59 @@ export function watchAllowed(cb, onError) {
   if (DEMO) { listAllowed().then(cb); return () => {}; }
   return watchCollection("allowed", listAllowed, (docs) => sortAllowed(docs.map(allowedOf)), cb, onError);
 }
+/* ---------- 사용 신청 ----------
+ * requests/{이메일} : 로그인한 선생님이 직접 내는 신청(학교·성함·연락처). 승인·거절하면 지워서 연락처를 남기지 않는다. */
+const requestOf = (d) => { const x = d.data({ serverTimestamps: "estimate" }); return { id: d.id, ...x, createdAt: ms(x.createdAt) }; };
+const sortRequests = (list) => list.sort((a, b) => a.createdAt - b.createdAt);
+export async function submitRequest(user, { name, school, phone }) {
+  if (DEMO) return;
+  const { F, db } = await fb();
+  const key = mailKey(user);
+  await F.setDoc(F.doc(db, "requests", key), {
+    email: key, name: String(name || "").trim(), school: String(school || "").trim(), phone: String(phone || "").trim(),
+    createdAt: F.serverTimestamp(),
+  });
+}
+/* 내 신청을 지켜본다. cb(신청 | null). 캐시 값은 믿지 않고 서버가 확인해 준 값만 넘긴다 (watchAccess 와 같은 이유) */
+export function watchMyRequest(user, cb) {
+  const key = mailKey(user);
+  if (DEMO || !key) { cb(null); return () => {}; }
+  let stop = () => {}, cancelled = false;
+  fb().then(({ F, db }) => {
+    if (cancelled) return;
+    stop = F.onSnapshot(F.doc(db, "requests", key), { includeMetadataChanges: true },
+      (snap) => { if (snap.metadata.fromCache) return; cb(snap.exists() ? requestOf(snap) : null); },
+      () => cb(null));
+  }).catch(() => cb(null));
+  return () => { cancelled = true; stop(); };
+}
+export async function listRequests() {
+  if (DEMO) return [];
+  const { F, db } = await fb();
+  const snap = await fromServer(() => F.getDocsFromServer(F.collection(db, "requests")));
+  return sortRequests(snap.docs.map(requestOf));
+}
+export function watchRequests(cb, onError) {
+  if (DEMO) { cb([]); return () => {}; }
+  return watchCollection("requests", listRequests, (docs) => sortRequests(docs.map(requestOf)), cb, onError);
+}
+// 승인: 명단에 넣는 것과 신청서를 지우는 것을 한 번에 한다 (성함은 명단의 note 칸에 남긴다)
+export async function approveRequest(req, by) {
+  if (DEMO) return;
+  const { F, db } = await fb();
+  const batch = F.writeBatch(db);
+  batch.set(F.doc(db, "allowed", req.id), {
+    email: req.id, school: req.school || "", note: req.name || "", addedBy: by || "", addedAt: F.serverTimestamp(),
+  });
+  batch.delete(F.doc(db, "requests", req.id));
+  await batch.commit();
+}
+// 거절·본인 취소
+export async function removeRequest(key) {
+  if (DEMO) return;
+  const { F, db } = await fb();
+  await F.deleteDoc(F.doc(db, "requests", key));
+}
 /* 관리자 화면: 전체 책장을 구독한다. cb(목록) */
 export function watchAllShelves(cb, onError) {
   if (DEMO) return demoWatch(() => demoRead().shelves, cb);

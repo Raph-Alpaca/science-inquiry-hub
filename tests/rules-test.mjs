@@ -1,7 +1,7 @@
 // Firestore / Storage 보안 규칙을 에뮬레이터로 검증한다.
 import { initializeTestEnvironment, assertFails, assertSucceeds } from "@firebase/rules-unit-testing";
 import {
-  doc, getDoc, setDoc, addDoc, updateDoc, deleteDoc, collection, getDocs, query, where, serverTimestamp,
+  doc, getDoc, setDoc, addDoc, updateDoc, deleteDoc, collection, getDocs, query, where, serverTimestamp, writeBatch,
 } from "firebase/firestore";
 import { ref, uploadBytes, getBytes, deleteObject } from "firebase/storage";
 import fs from "node:fs";
@@ -100,6 +100,37 @@ await no("승인 안 된 계정: 스스로 승인 추가 차단", setDoc(doc(str
 await ok("관리자: 승인 명단 전체 조회", getDocs(collection(admin, "allowed")));
 await ok("관리자: 선생님 승인 추가", setDoc(doc(admin, "allowed", "new@school.kr"), { email: "new@school.kr", school: "새학교", note: "", addedBy: ADMIN_MAIL, addedAt: serverTimestamp() }));
 await ok("관리자: 승인 취소", deleteDoc(doc(admin, "allowed", "new@school.kr")));
+
+// 사용 신청 (requests/{이메일})
+const reqOf = (mail, extra = {}) => ({ email: mail, name: "박선생", school: "새학교", phone: "", createdAt: serverTimestamp(), ...extra });
+await ok("미승인 계정: 자기 이메일로 사용 신청", setDoc(doc(stranger, "requests", STRANGER_MAIL), reqOf(STRANGER_MAIL, { phone: "010-0000-0000" })));
+await ok("미승인 계정: 자기 신청 읽기", getDoc(doc(stranger, "requests", STRANGER_MAIL)));
+await ok("미승인 계정: 신청 내용 고쳐 다시 내기", setDoc(doc(stranger, "requests", STRANGER_MAIL), reqOf(STRANGER_MAIL, { school: "고친 학교" })));
+await no("남의 이메일로 사용 신청 차단", setDoc(doc(stranger, "requests", "someone@school.kr"), reqOf("someone@school.kr")));
+await no("비로그인: 사용 신청 차단", setDoc(doc(anon, "requests", "anon@school.kr"), reqOf("anon@school.kr")));
+await no("이메일 인증 안 된 계정: 사용 신청 차단", setDoc(doc(env.authenticatedContext("nv", { email: "nv@school.kr", email_verified: false }).firestore(), "requests", "nv@school.kr"), reqOf("nv@school.kr")));
+await no("사용 신청: 허용 밖 필드 차단", setDoc(doc(stranger, "requests", STRANGER_MAIL), reqOf(STRANGER_MAIL, { approved: true })));
+await no("사용 신청: 빈 성함 차단", setDoc(doc(stranger, "requests", STRANGER_MAIL), reqOf(STRANGER_MAIL, { name: "" })));
+await no("사용 신청: 빈 학교 차단", setDoc(doc(stranger, "requests", STRANGER_MAIL), reqOf(STRANGER_MAIL, { school: "" })));
+await no("사용 신청: 너무 긴 연락처 차단", setDoc(doc(stranger, "requests", STRANGER_MAIL), reqOf(STRANGER_MAIL, { phone: "0".repeat(21) })));
+await no("사용 신청: 신청 시각 조작 차단", setDoc(doc(stranger, "requests", STRANGER_MAIL), reqOf(STRANGER_MAIL, { createdAt: new Date(2020, 0, 1) })));
+await no("선생님: 남의 신청 읽기 차단", getDoc(doc(mine, "requests", STRANGER_MAIL)));
+await no("선생님: 신청 목록 조회 차단", getDocs(collection(mine, "requests")));
+await no("선생님: 남의 신청 삭제 차단", deleteDoc(doc(mine, "requests", STRANGER_MAIL)));
+await no("비로그인: 신청 목록 조회 차단", getDocs(collection(anon, "requests")));
+await ok("관리자: 신청 목록 조회", getDocs(collection(admin, "requests")));
+{
+  // 승인 = 명단에 넣고 신청서를 지우는 일을 한 번에
+  const b = writeBatch(admin);
+  b.set(doc(admin, "allowed", STRANGER_MAIL), { email: STRANGER_MAIL, school: "고친 학교", note: "박선생", addedBy: ADMIN_MAIL, addedAt: serverTimestamp() });
+  b.delete(doc(admin, "requests", STRANGER_MAIL));
+  await ok("관리자: 신청 승인 (명단 추가 + 신청서 삭제를 한 번에)", b.commit());
+  await ok("관리자: 승인 뒤 정리", deleteDoc(doc(admin, "allowed", STRANGER_MAIL)));
+}
+await ok("미승인 계정: 다시 신청", setDoc(doc(stranger, "requests", STRANGER_MAIL), reqOf(STRANGER_MAIL)));
+await ok("미승인 계정: 자기 신청 취소", deleteDoc(doc(stranger, "requests", STRANGER_MAIL)));
+await ok("미승인 계정: 또 신청", setDoc(doc(stranger, "requests", STRANGER_MAIL), reqOf(STRANGER_MAIL)));
+await ok("관리자: 신청 거절(삭제)", deleteDoc(doc(admin, "requests", STRANGER_MAIL)));
 await no("관리자: 관리자 명단 추가 차단 (콘솔에서만)", setDoc(doc(admin, "admins", "another@example.com"), { email: "another@example.com" }));
 await no("선생님: 관리자 명단 조회 차단", getDocs(collection(mine, "admins")));
 

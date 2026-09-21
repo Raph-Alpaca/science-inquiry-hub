@@ -12,7 +12,8 @@
     "code": "node code-entry-test.mjs .. shots/code",
     "sensor": "node sensor-test.mjs .. shots/sensor",
     "media": "node media-test.mjs .. shots/media",
-    "ui": "npm run app && npm run sensor && npm run media && npm run shelf && npm run peek && npm run code",
+    "pwa": "node pwa-test.mjs .. shots/pwa",
+    "ui": "npm run app && npm run sensor && npm run media && npm run shelf && npm run peek && npm run code && npm run pwa",
     "rules": "firebase emulators:exec --config ../firebase.json --project demo-sih --only firestore,storage \"node rules-test.mjs ..\"",
     "test": "npm run ui && npm run rules && npm run login",
     "login": "firebase emulators:exec --config ../firebase.json --project demo-sih --only auth,firestore \"node login-test.mjs .. shots/login\""

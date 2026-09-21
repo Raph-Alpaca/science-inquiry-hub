@@ -52,6 +52,7 @@ async function openTeacher(ctx, tag) {
   page.on("pageerror", (e) => errors.push(`[pageerror] ${e.message}`));
   await page.goto(`${BASE}/teacher.html?emu=1`, { waitUntil: "networkidle" });
   await page.waitForSelector("#loginBtn", { timeout: 15000 });
+  if (tag === "teacher") check("첫 화면: '로그인 없이 둘러보기' 단추가 있음", (await page.getAttribute("#tourBtn", "href")) === "teacher.html?demo=1&tour=1");
   page.tag = tag;
   return { page, errors };
 }
@@ -164,6 +165,65 @@ let adminCtx, adminPage;
   await ctx.close();
 }
 
+/* 3-2) 사용 신청: 미승인 선생님이 신청서를 내면 관리자 화면에 뜨고, [승인]을 누르면 저절로 넘어간다 */
+{
+  const reqRows = () => adminPage.evaluate(() => [...document.querySelectorAll("#reqTable tbody tr")].map((tr) => tr.textContent.replace(/\s+/g, " ").trim()));
+  const waitRows = async (test, ms = 10000) => { const t0 = Date.now(); let rows = []; while (Date.now() - t0 < ms) { rows = await reqRows(); if (test(rows)) break; await sleep(150); } return rows; };
+  const ctx = await browser.newContext({ viewport: { width: 1200, height: 860 } });
+  const { page, errors } = await openTeacher(ctx, "applicant");
+  const APPLICANT = "apply@school.kr";
+  await loginAs(page, APPLICANT, "최선생");
+  await waitState(page, "pending", 10000);
+  await page.waitForSelector("#reqForm", { timeout: 10000 }).catch(() => {});
+  check("미승인 선생님: 사용 신청서가 뜸", !!(await page.$("#reqForm")) && (await page.textContent("#myMail")).trim() === APPLICANT);
+  await page.click("#rq-send"); await sleep(300);
+  check("신청서: 빈 칸이면 보내지 않음", !!(await page.$("#reqForm")));
+  await page.fill("#rq-school", "부산○○중학교"); await page.fill("#rq-name", "최선생"); await page.fill("#rq-phone", "010-1234-5678");
+  await page.click("#rq-send"); await sleep(300);
+  check("신청서: 동의하지 않으면 보내지 않음", !!(await page.$("#reqForm")));
+  await page.check("#rq-agree");
+  await page.click("#rq-send");
+  await page.waitForSelector("#reqCancel", { timeout: 10000 }).catch(() => {});
+  await page.screenshot({ path: `${OUT}/applicant-sent.png`, fullPage: true });
+  check("신청 뒤 '접수되었습니다' 화면", (await page.textContent("#main")).includes("접수되었습니다") && (await page.textContent("#main")).includes("부산○○중학교"));
+  let rows = await waitRows((r) => r.some((x) => x.includes(APPLICANT)));
+  await adminPage.screenshot({ path: `${OUT}/admin-request.png`, fullPage: true });
+  check("관리자: 새 신청이 목록에 뜸 (새로고침 없이)", rows.some((x) => x.includes(APPLICANT) && x.includes("부산○○중학교") && x.includes("010-1234-5678")), JSON.stringify(rows));
+  check("관리자: 신청 건수 표시", (await adminPage.textContent("#reqHead")).includes("1건"));
+  // 새로고침해도 접수 화면 그대로
+  await page.reload({ waitUntil: "load" });
+  await page.waitForSelector("#reqCancel", { timeout: 10000 }).catch(() => {});
+  check("신청자: 새로고침해도 접수 화면", !!(await page.$("#reqCancel")));
+  await adminPage.click(`[data-rq-ok="${APPLICANT}"]`);
+  const r2 = await waitState(page, ["firstrun", "shelves"], 12000);
+  check("관리자가 [승인]을 누르면 신청자 화면이 책장 만들기로 넘어감", r2.s === "firstrun" || r2.s === "shelves", `state=${r2.s} after ${r2.took}ms`);
+  rows = await waitRows((r) => !r.some((x) => x.includes(APPLICANT)));
+  check("관리자: 승인한 신청은 목록에서 빠짐", !rows.some((x) => x.includes(APPLICANT)), JSON.stringify(rows));
+  const names = await adminPage.evaluate(() => [...document.querySelectorAll("#adminCard table:not(#reqTable) tbody tr")].map((tr) => tr.textContent.replace(/\s+/g, " ").trim()));
+  check("관리자: 승인 명단에 학교·성함과 함께 들어감", names.some((x) => x.includes(APPLICANT) && x.includes("부산○○중학교") && x.includes("최선생")), JSON.stringify(names).slice(0, 300));
+  const left = await fetch(`http://127.0.0.1:8080/v1/projects/demo-sih/databases/(default)/documents/requests/${APPLICANT}`, { headers: { Authorization: "Bearer owner" } });
+  check("승인 뒤 신청서(연락처)는 지워짐", left.status === 404, String(left.status));
+  check("신청자 흐름 콘솔 오류 없음", !errors.length, errors.join(" | ").slice(0, 300));
+  await ctx.close();
+
+  // 거절
+  const ctx2 = await browser.newContext({ viewport: { width: 1200, height: 860 } });
+  const { page: p2 } = await openTeacher(ctx2, "rejected");
+  const REJECTED = "nope@school.kr";
+  await loginAs(p2, REJECTED, "한선생");
+  await p2.waitForSelector("#reqForm", { timeout: 10000 }).catch(() => {});
+  await p2.fill("#rq-school", "어느 학교"); await p2.fill("#rq-name", "한선생"); await p2.check("#rq-agree"); await p2.click("#rq-send");
+  await waitRows((r) => r.some((x) => x.includes(REJECTED)));
+  await adminPage.click(`[data-rq-no="${REJECTED}"]`);
+  await adminPage.waitForSelector("#dangerDlg[open]");
+  await adminPage.click("#dg-ok");
+  rows = await waitRows((r) => !r.some((x) => x.includes(REJECTED)));
+  check("관리자: 거절하면 목록에서 빠짐", !rows.some((x) => x.includes(REJECTED)), JSON.stringify(rows));
+  await p2.waitForSelector("#reqForm", { timeout: 10000 }).catch(() => {});
+  check("거절된 선생님: 신청서 화면으로 돌아감 (다시 신청 가능)", !!(await p2.$("#reqForm")));
+  await ctx2.close();
+}
+
 /* 4) 관리자: 승인 취소도 바로 명단에서 빠져야 한다 */
 {
   const page = adminPage;
@@ -228,7 +288,7 @@ let adminCtx, adminPage;
   const { page } = await openTeacher(ctx, "admin-flaky");
   await loginAs(page, ADMIN, "관리자");
   await waitState(page, ["firstrun", "shelves"], 10000);
-  await page.waitForFunction(() => !/불러오는 중/.test(document.querySelector("#adminCard tbody")?.textContent || ""), null, { timeout: 10000 }).catch(() => {});
+  await page.waitForFunction(() => !/불러오는 중/.test(document.querySelector("#adminCard")?.textContent || ""), null, { timeout: 10000 }).catch(() => {});
   let block = true;
   await page.route("**/Listen/**", (route) => (block ? route.abort() : route.continue()));
   await sleep(500);

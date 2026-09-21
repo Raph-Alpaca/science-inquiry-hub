@@ -1,0 +1,32 @@
+{
+  "id": "/sih-teacher",
+  "name": "선생님 책장 관리",
+  "short_name": "책장 관리",
+  "description": "학교 책장을 만들고 학생이 제출한 책을 승인하는 선생님 화면",
+  "start_url": "teacher.html",
+  "scope": "./",
+  "display": "standalone",
+  "lang": "ko",
+  "background_color": "#E2E4DE",
+  "theme_color": "#6B4325",
+  "icons": [
+    {
+      "src": "assets/icons/teacher-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "assets/icons/teacher-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "assets/icons/teacher-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}

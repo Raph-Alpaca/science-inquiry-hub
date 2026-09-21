@@ -10,6 +10,7 @@ rules_version = '2';
 //  관리자와 승인 명단은 이메일을 소문자로 바꾼 값을 문서 이름으로 쓴다.
 //   admins/{이메일}   ← Firebase 콘솔에서 직접 만든다 (규칙으로는 못 바꾼다)
 //   allowed/{이메일}  ← 관리자가 선생님 화면에서 추가·삭제한다
+//   requests/{이메일} ← 로그인한 선생님이 직접 내는 사용 신청. 승인·거절하면 지운다(연락처를 남기지 않는다)
 //
 //  모둠원 이름(private)은 그 책장을 만든 선생님만 읽는다. 관리자도 읽지 않는다.
 service cloud.firestore {
@@ -58,6 +59,21 @@ service cloud.firestore {
                             && str(request.resource.data.school, 40)
                             && str(request.resource.data.note, 120);
       allow delete: if isAdmin();
+    }
+
+    // 사용 신청: 구글로 로그인한 본인이 자기 이메일로 한 건만 낸다. 관리자가 승인·거절하며 지운다.
+    match /requests/{mail} {
+      allow get: if signedIn() && (mail == em() || isAdmin());
+      allow list: if isAdmin();
+      allow create, update: if signedIn() && mail == em()
+                            && request.resource.data.keys().hasOnly(['email', 'name', 'school', 'phone', 'createdAt'])
+                            && str(request.resource.data.email, 120)
+                            && request.resource.data.email.lower() == mail
+                            && str(request.resource.data.name, 20) && request.resource.data.name.size() > 0
+                            && str(request.resource.data.school, 40) && request.resource.data.school.size() > 0
+                            && str(request.resource.data.phone, 20)
+                            && request.resource.data.createdAt == request.time;
+      allow delete: if isAdmin() || (signedIn() && mail == em());
     }
 
     match /shelves/{shelfId} {

@@ -4,6 +4,10 @@
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>선생님 책장 관리 — 과학탐구 앱 허브</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%97%84%EF%B8%8F%3C/text%3E%3C/svg%3E">
+<link rel="manifest" href="manifest-teacher.webmanifest">
+<meta name="theme-color" content="#6B4325">
+<link rel="apple-touch-icon" href="assets/icons/teacher-180.png">
+<meta name="apple-mobile-web-app-title" content="책장 관리">
 <link rel="stylesheet" href="assets/shelf.css">
 <style>
   @media print {
@@ -117,7 +121,7 @@ import {
   DEMO, CONFIGURED, onUser, login, logout, myShelves, createShelf, regenerateCode,
   listBooks, loadMembers, setStatus, updateBook, deleteBook, clearShelfCache,
   checkAccess, watchAccess, addAllowed, removeAllowed, watchAllowed, watchAllShelves, renameShelf, deleteShelf,
-  watchShelfBooks,
+  watchShelfBooks, submitRequest, watchMyRequest, watchRequests, approveRequest, removeRequest,
 } from "./assets/shelf-data.js";
 import { SITE } from "./assets/site-config.js";
 
@@ -135,9 +139,12 @@ const shelfUrl = (code) => (!DEMO && SITE.studentLink && SITE.studentLink.includ
 const peekUrl = (codes) => `${here}shelf.html?code=${encodeURIComponent([].concat(codes).join(","))}${suffix}`;
 let user = null, shelves = [], data = {}, tab = {};
 const mergeSel = new Set(), mergeKnown = new Set();   // 함께 볼 책장 (새 책장은 처음엔 골라 둔다)
-let access = { admin: false, approved: false }, allowed = [], allShelves = [], adminLoaded = false;
+let access = { admin: false, approved: false }, allowed = [], allShelves = [], requests = [], adminLoaded = false;
+// 둘러보기: 로그인 없이 예시 책장으로 선생님 화면을 눌러 본다 (데모 모드 + 관리자 카드 숨김)
+const TOUR = DEMO && new URLSearchParams(location.search).get("tour") === "1";
 
 if (DEMO) $("demoBar").hidden = false;
+if (TOUR) $("demoBar").innerHTML = `<b>둘러보기</b>입니다. 여기서 바꾼 것은 이 기기에만 남고 학생에게 보이지 않습니다. <a href="teacher.html" id="tourExit">내 책장 만들기 →</a>`;
 
 function toast(msg) {
   const el = document.createElement("div");
@@ -227,9 +234,13 @@ function redraw() { if (user && access.approved) render(); }
  *    대기 화면을 보거나 새로고침해야 하는 일이 없다.
  *  - 관리자가 승인(취소)하면 그 순간 화면이 넘어간다. */
 let stopAccess = null;
+let myReq, stopReq = null, pendingKey = "";   // myReq: undefined = 아직 모름, null = 신청 전
+function stopMyRequest() { if (stopReq) { stopReq(); stopReq = null; } myReq = undefined; pendingKey = ""; }
 onUser((u) => {
   user = u;
   $("logout").hidden = !u;
+  if (TOUR) $("logout").textContent = "둘러보기 끝내기";
+  stopMyRequest();
   if (stopAccess) { stopAccess(); stopAccess = null; }
   if (!u) { renderSignedOut(); return; }
   $("who").textContent = `${u.displayName || "선생님"}${u.email ? ` (${u.email})` : ""}`;
@@ -237,14 +248,18 @@ onUser((u) => {
   renderChecking();
   let approvedBefore = false;
   stopAccess = watchAccess(u, async (next) => {
-    access = next;
+    access = TOUR ? { ...next, admin: false } : next;
+    if (next.approved) stopMyRequest();
     if (!next.approved) { approvedBefore = false; stopAdmin(); renderPending(u); return; }
     if (approvedBefore) return;            // 이미 책장 화면이면 그대로 둔다
     approvedBefore = true;
     await reload();
   });
 });
-$("logout").onclick = async () => { await flushDeletes(); await logout(); location.reload(); };
+$("logout").onclick = async () => {
+  if (TOUR) { location.href = "teacher.html"; return; }
+  await flushDeletes(); await logout(); location.reload();
+};
 
 function renderChecking() {
   $("main").innerHTML = `
@@ -260,17 +275,18 @@ function renderChecking() {
 }
 
 function renderSignedOut() {
-  $("who").textContent = "로그인하면 우리 학교 책장을 만들 수 있어요";
+  $("who").textContent = "학생이 만든 과학 시뮬레이션을 학교 책장에 모으는 곳";
   $("main").innerHTML = `
     <div class="notice">
-      <h2>구글 계정으로 로그인하세요</h2>
-      <p>선생님이 하실 일은 네 가지뿐입니다. 로그인 → 학교 책장 만들기 → 학생에게 코드 알려 주기 → 제출된 책 승인하기.</p>
-      <p class="upload-note">미리 사용 승인을 받은 계정만 책장을 만들 수 있습니다. 아직 신청 전이라면 관리자에게 쓰실 구글 계정 주소를 알려 주세요.</p>
-      <p><button class="btn primary" id="loginBtn">구글로 로그인</button></p>
+      <h2>처음이신가요? 먼저 둘러보세요</h2>
+      <p>학생 모둠이 만든 시뮬레이션 링크를 제출하면, 선생님이 확인해 <b>우리 학교 책장</b>에 꽂아 주는 곳입니다. 로그인 없이 예시 책장으로 모든 기능을 눌러 볼 수 있습니다.</p>
+      <p class="start-acts"><a class="btn primary" id="tourBtn" href="teacher.html?demo=1&tour=1">로그인 없이 둘러보기</a>
+        <button class="btn" id="loginBtn">구글로 로그인</button></p>
+      <p class="upload-note">내 책장을 만들려면 구글로 로그인한 뒤 <b>사용 신청</b>을 해 주세요. 관리자가 승인하면 바로 책장을 만들 수 있습니다.</p>
       ${CONFIGURED ? "" : `<p class="link" style="color:var(--amber-ink)">아직 Firebase 설정이 들어오지 않아 미리보기(데모)로 열립니다. 설정을 넣으면 실제 저장이 됩니다.</p>`}
     </div>
     <div class="steps3" style="margin-top:20px">
-      <div class="step"><span class="n">1</span><div><b>로그인해요</b><small>구글 계정</small></div></div>
+      <div class="step"><span class="n">1</span><div><b>로그인하고 사용 신청해요</b><small>구글 계정 · 학교와 성함</small></div></div>
       <div class="step"><span class="n">2</span><div><b>학생에게 책장 코드를 알려 주세요</b><small>칠판에 적거나 QR을 띄우면 됩니다</small></div></div>
       <div class="step"><span class="n">3</span><div><b>제출된 책을 승인하면 책장에 꽂혀요</b><small>승인 전에는 공개되지 않습니다</small></div></div>
     </div>`;
@@ -279,34 +295,73 @@ function renderSignedOut() {
   };
 }
 
-/* ---------- 승인 대기 ---------- */
+/* ---------- 승인 대기: 사용 신청서 ----------
+ * 내 신청(requests/{이메일})을 지켜보며 "신청서" 또는 "접수됨" 화면을 그린다.
+ * 승인되면 watchAccess 가 책장 화면으로 넘겨 준다. */
 function renderPending(u) {
+  if (!stopReq) stopReq = watchMyRequest(u, (r) => { myReq = r; if (user && !access.approved) renderPending(u); });
+  // 적던 글자가 지워지지 않게, 상태가 그대로면 다시 그리지 않는다
+  const key = JSON.stringify([myReq === undefined ? "?" : myReq && myReq.id, !!access.denied]);
+  if (key === pendingKey && $("pendingBox")) return;
+  pendingKey = key;
+  const when = myReq && myReq.createdAt ? new Date(myReq.createdAt).toLocaleDateString("ko-KR") : "";
   $("main").innerHTML = `
-    <div class="notice">
-      <h2>아직 사용 승인이 되지 않은 계정입니다</h2>
-      <p>관리자에게 아래 주소를 알려 주시면 승인해 드립니다. 승인되면 이 화면이 저절로 넘어갑니다.</p>
-      <div class="qr-box" style="gap:12px">
-        <b style="font-size:18px" id="myMail">${esc(u.email || "")}</b>
-        <button class="btn small" id="copyMail">주소 복사</button>
-      </div>
-      <p class="upload-note" style="margin-top:14px">다른 계정으로 신청하셨다면 로그아웃한 뒤 그 계정으로 다시 로그인해 주세요.</p>
-      <p><button class="btn" id="recheck">승인됐는지 다시 확인</button></p>
+    <div class="notice" id="pendingBox">${myReq === undefined ? `
+      <h2>신청 내용을 확인하는 중입니다…</h2>` : myReq ? `
+      <h2>사용 신청이 접수되었습니다</h2>
+      <p><b>${esc(myReq.school)}</b> · ${esc(myReq.name)} 선생님 (${esc(u.email || "")})${when ? ` · ${when} 신청` : ""}</p>
+      <p>관리자가 승인하면 이 화면이 저절로 책장 만들기로 넘어갑니다.</p>
+      <p><button class="btn" id="recheck">승인됐는지 다시 확인</button> <button class="btn" id="reqCancel">신청 취소</button></p>` : `
+      <h2>사용 신청</h2>
+      <p>아직 사용 승인이 되지 않은 계정입니다. 아래를 적어 신청하면 관리자가 확인한 뒤 승인해 드립니다.</p>
+      <form id="reqForm" novalidate>
+        <div class="field"><span class="lab">구글 계정</span><b id="myMail">${esc(u.email || "")}</b></div>
+        <div class="field"><label for="rq-school">학교 이름</label><input type="text" id="rq-school" maxlength="40" placeholder="예: 서울○○중학교" required></div>
+        <div class="field"><label for="rq-name">성함</label><input type="text" id="rq-name" maxlength="20" placeholder="예: 김선생" required></div>
+        <div class="field"><label for="rq-phone">연락처 (선택)</label><input type="tel" id="rq-phone" maxlength="20" placeholder="예: 010-0000-0000" autocomplete="tel"></div>
+        <label class="consent"><input type="checkbox" id="rq-agree"><span>적은 내용은 사용 승인을 확인하는 데만 쓰이며, 승인·거절 뒤 연락처는 바로 지워지는 것에 동의합니다.</span></label>
+        <button type="submit" class="btn primary" id="rq-send">사용 신청</button>
+      </form>
+      <p class="upload-note" style="margin-top:14px">다른 계정으로 쓰시려면 로그아웃한 뒤 그 계정으로 다시 로그인해 주세요.</p>
+      <p><button class="btn" id="recheck">승인됐는지 다시 확인</button></p>`}
     </div>
     ${access.denied ? `
     <div class="notice bad" style="margin-top:16px">
       <h2>저장소 규칙이 아직 옛 버전입니다</h2>
       <p>승인 명단을 읽으려다 거부되었습니다. 관리자 문서를 만들어도 규칙이 옛 버전이면 이 화면이 계속 뜹니다.
       Firebase 콘솔 → Firestore → 규칙 탭에 저장소의 <b>firestore.rules</b> 내용을 붙여 넣고 <b>게시</b>한 뒤,
-      위의 "승인됐는지 다시 확인"을 누르세요.</p>
+      "승인됐는지 다시 확인"을 누르세요.</p>
       <p class="link">npx firebase deploy --only firestore:rules</p>
     </div>` : ""}`;
-  $("copyMail").onclick = () => copy(u.email || "", "주소를");
+  const form = $("reqForm");
+  if (form) form.onsubmit = async (ev) => {
+    ev.preventDefault();
+    const school = $("rq-school").value.trim(), name = $("rq-name").value.trim(), phone = $("rq-phone").value.trim();
+    if (!school || !name) { toast("학교 이름과 성함을 적어 주세요"); (school ? $("rq-name") : $("rq-school")).focus(); return; }
+    if (!$("rq-agree").checked) { toast("동의에 체크해 주세요"); return; }
+    const btn = $("rq-send"); btn.disabled = true; btn.textContent = "보내는 중…";
+    try {
+      await submitRequest(u, { school, name, phone });
+      // 구독이 곧 같은 내용을 보내 주지만, 연결이 느릴 때도 바로 넘어가도록 먼저 그린다
+      myReq = { id: (u.email || "").toLowerCase(), school, name, phone, createdAt: Date.now() };
+      toast("신청했습니다"); renderPending(u);
+    } catch (e) {
+      btn.disabled = false; btn.textContent = "사용 신청";
+      toast("신청하지 못했어요: " + (e.code || e.message));
+    }
+  };
+  if ($("reqCancel")) $("reqCancel").onclick = async () => {
+    const yes = await askDanger({ title: "사용 신청 취소", what: u.email || "", note: "신청서를 지웁니다. 나중에 다시 신청할 수 있습니다.", ok: "신청 취소" });
+    if (!yes) return;
+    try { await removeRequest((u.email || "").toLowerCase()); myReq = null; renderPending(u); toast("신청을 취소했습니다"); }
+    catch (e) { toast("취소하지 못했어요: " + (e.code || e.message)); }
+  };
   // 승인되면 watchAccess 가 저절로 넘겨 준다. 이 단추는 서버에서 한 번 더 읽어 확인해 주는 용도.
-  $("recheck").onclick = async () => {
+  if ($("recheck")) $("recheck").onclick = async () => {
     const btn = $("recheck"); btn.disabled = true;
     const next = await checkAccess(u).catch(() => ({ approved: false, offline: true }));
     btn.disabled = false;
-    if (next.approved) { access = next; toast("승인됐습니다"); await reload(); }
+    if (next.approved) { access = next; stopMyRequest(); toast("승인됐습니다"); await reload(); }
     else if (next.offline) toast("서버에 연결되지 않아요. 잠시 뒤 다시 눌러 보세요");
     else toast("아직 승인 전입니다");
   };
@@ -318,20 +373,34 @@ function adminCard() {
   return `
   <section class="card shelf-card" id="adminCard">
     <h2 style="margin-top:0">관리자 · 선생님 승인</h2>
-    <p class="upload-note" style="margin-bottom:14px">승인한 이메일의 구글 계정만 학교 책장을 만들 수 있습니다. 선생님이 알려 준 주소를 그대로 넣으세요.</p>
+    <h3 id="reqHead">사용 신청 ${requests.length}건</h3>
+    <table class="books" id="reqTable" style="margin-bottom:22px">
+      <thead><tr><th>이메일</th><th>학교</th><th>성함</th><th>연락처</th><th>신청일</th><th></th></tr></thead>
+      <tbody>${requests.length ? requests.map((r) => `
+        <tr><td data-l="이메일">${esc(r.email || r.id)}</td>
+            <td data-l="학교">${esc(r.school || "-")}</td>
+            <td data-l="성함">${esc(r.name || "-")}</td>
+            <td data-l="연락처">${esc(r.phone || "-")}</td>
+            <td data-l="신청일">${r.createdAt ? new Date(r.createdAt).toLocaleDateString("ko-KR") : "-"}</td>
+            <td><span class="row-acts"><button class="btn small go" data-rq-ok="${esc(r.id)}">승인</button><button class="btn small" data-rq-no="${esc(r.id)}">거절</button></span></td></tr>`).join("")
+        : `<tr><td colspan="6" class="upload-note">기다리는 신청이 없습니다.</td></tr>`}</tbody>
+    </table>
+    <h3>이메일로 직접 승인</h3>
+    <p class="upload-note" style="margin-bottom:14px">승인한 이메일의 구글 계정만 학교 책장을 만들 수 있습니다. 신청 없이 바로 승인하려면 주소를 그대로 넣으세요.</p>
     <div class="two field">
       <div><label for="ad-mail">선생님 이메일</label><input type="email" id="ad-mail" placeholder="teacher@school.kr"></div>
       <div><label for="ad-school">학교 (메모, 선택)</label><input type="text" id="ad-school" maxlength="40" placeholder="예: 서울○○중학교"></div>
     </div>
     <button class="btn primary" id="ad-add">승인 명단에 추가</button>
     <table class="books" style="margin-top:18px">
-      <thead><tr><th>이메일</th><th>학교</th><th>추가한 날</th><th></th></tr></thead>
-      <tbody>${!adminLoaded ? `<tr><td colspan="4" class="upload-note">명단을 불러오는 중…</td></tr>` : liveAllowed().length ? liveAllowed().map((a) => `
+      <thead><tr><th>이메일</th><th>학교</th><th>성함·메모</th><th>추가한 날</th><th></th></tr></thead>
+      <tbody>${!adminLoaded ? `<tr><td colspan="5" class="upload-note">명단을 불러오는 중…</td></tr>` : liveAllowed().length ? liveAllowed().map((a) => `
         <tr><td data-l="이메일">${esc(a.email || a.id)}</td>
             <td data-l="학교">${esc(a.school || "-")}</td>
+            <td data-l="성함">${esc(a.note || "-")}</td>
             <td data-l="추가">${a.addedAt ? new Date(a.addedAt).toLocaleDateString("ko-KR") : "-"}</td>
             <td><span class="row-acts"><button class="btn small" data-ad="${esc(a.id)}">승인 취소</button></span></td></tr>`).join("")
-        : `<tr><td colspan="4" class="upload-note">아직 승인한 선생님이 없습니다.</td></tr>`}</tbody>
+        : `<tr><td colspan="5" class="upload-note">아직 승인한 선생님이 없습니다.</td></tr>`}</tbody>
     </table>
     <h3 style="margin-top:22px">전체 책장 ${allShelves.length}개</h3>
     <table class="books">
@@ -365,6 +434,29 @@ function wireAdmin() {
     } catch (e) { toast("추가하지 못했어요: " + (e.code || e.message)); }
     add.disabled = false;
   };
+  document.querySelectorAll("[data-rq-ok]").forEach((b) => (b.onclick = async () => {
+    const r = requests.find((x) => x.id === b.dataset.rqOk);
+    if (!r) return;
+    b.disabled = true;
+    try {
+      await approveRequest(r, user.email || "");
+      requests = requests.filter((x) => x.id !== r.id);
+      allowed = allowed.filter((a) => a.id !== r.id).concat({ id: r.id, email: r.id, school: r.school, note: r.name, addedAt: Date.now() })
+        .sort((a, b2) => (a.email || "").localeCompare(b2.email || ""));
+      renderAdminCard(); toast("승인했습니다");
+    } catch (e) { b.disabled = false; toast("승인하지 못했어요: " + (e.code || e.message)); }
+  }));
+  document.querySelectorAll("[data-rq-no]").forEach((b) => (b.onclick = async () => {
+    const r = requests.find((x) => x.id === b.dataset.rqNo);
+    if (!r) return;
+    const yes = await askDanger({
+      title: "사용 신청 거절", what: `${r.email || r.id} (${r.school} · ${r.name})`,
+      note: "신청서와 연락처를 지웁니다. 그 선생님은 다시 신청할 수 있습니다.", ok: "거절",
+    });
+    if (!yes) return;
+    try { await removeRequest(r.id); requests = requests.filter((x) => x.id !== r.id); renderAdminCard(); toast("거절했습니다"); }
+    catch (e) { toast("지우지 못했어요: " + (e.code || e.message)); }
+  }));
   document.querySelectorAll("[data-ad]").forEach((b) => (b.onclick = async () => {
     const mail = b.dataset.ad, row = allowed.find((a) => a.id === mail);
     const yes = await askDanger({
@@ -391,11 +483,18 @@ function watchAdmin() {
   const warn = (e) => console.warn("관리자 명단 실시간 반영 오류:", e.code || e.message);
   const unA = watchAllowed((list) => { allowed = list; adminLoaded = true; renderAdminCard(); }, warn);
   const unS = watchAllShelves((list) => { allShelves = list; renderAdminCard(); }, warn);
-  stopAdminWatch = () => { unA(); unS(); };
+  let reqLoaded = false;
+  const unR = watchRequests((list) => {
+    const more = list.length - requests.length;
+    requests = list; renderAdminCard();
+    if (reqLoaded && more > 0) toast(more === 1 ? "새 사용 신청이 들어왔어요" : `새 사용 신청 ${more}건`);
+    reqLoaded = true;
+  }, warn);
+  stopAdminWatch = () => { unA(); unS(); unR(); };
 }
 function stopAdmin() {
   if (stopAdminWatch) { stopAdminWatch(); stopAdminWatch = null; }
-  allowed = []; allShelves = []; adminLoaded = false;
+  allowed = []; allShelves = []; requests = []; adminLoaded = false;
 }
 // 관리자 카드만 다시 그린다 (적던 글자와 커서는 그대로)
 function renderAdminCard() {
@@ -479,9 +578,23 @@ function render() {
     ${mergeBar()}
     ${shown.map(shelfCard).join("")}
     <button class="add-shelf" id="addShelf">+ 책장 하나 더 만들기 (예: 3학년 책장)</button>
+    ${TOUR ? tourCard() : ""}
     ${access.admin ? adminCard() : ""}`;
   wire();
   wireAdmin();
+}
+function tourCard() {
+  return `
+  <section class="card shelf-card" id="tourCard">
+    <h2 style="margin-top:0">이제 내 책장을 만들어 볼까요?</h2>
+    <p>위에서 제출된 책을 승인해 보고, 학생에게 보이는 책장도 열어 보세요. 실제로 쓰시려면:</p>
+    <ol class="tour-steps">
+      <li><b>구글로 로그인</b>하고 학교·성함을 적어 <b>사용 신청</b>을 합니다.</li>
+      <li>관리자가 승인하면 <b>학교 책장</b>을 만듭니다. 책장 코드가 자동으로 나옵니다.</li>
+      <li>그 <b>책장 코드</b>(또는 QR)를 학생에게 알려 주면, 학생이 시뮬레이션을 제출합니다.</li>
+    </ol>
+    <a class="btn primary" href="teacher.html">내 책장 만들기</a>
+  </section>`;
 }
 // 책장이 둘 이상일 때만: 고른 책장들을 미리보기 창에 이어서 본다
 function mergeBar() {
