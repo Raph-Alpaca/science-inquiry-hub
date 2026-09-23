@@ -124,7 +124,12 @@ const code = (params.get("code") || "").trim().toUpperCase();
 const suffix = DEMO ? "&demo=1" : "";
 let shelf = null, cover = "heat", color = COVER_COLORS[0], file = null;
 
-if (DEMO) $("demoBar").hidden = false;
+if (DEMO) {
+  $("demoBar").hidden = false;
+  // 미리보기로 들어왔으면 보던 책장으로 되돌아갈 길을 띠에 붙인다
+  if (code) $("demoBar").insertAdjacentHTML("beforeend",
+    ` <a href="shelf.html?code=${encodeURIComponent(code)}${suffix}">책장으로 →</a>`);
+}
 if (!CAN_UPLOAD) { $("uploadBox").hidden = true; $("capture").disabled = true; }
 for (let i = 1; i <= 15; i++) $("classNo").insertAdjacentHTML("beforeend", `<option value="${i}"${i === 3 ? " selected" : ""}>${i}반</option>`);
 

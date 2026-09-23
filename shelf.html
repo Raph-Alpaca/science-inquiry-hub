@@ -107,18 +107,25 @@ const params = new URLSearchParams(location.search);
 const codes = [...new Set((params.get("code") || "").split(",").map((s) => s.trim().toUpperCase()).filter(Boolean))];
 const code = codes[0] || "";
 const merged = codes.length > 1;
+const DEMO_CODE = "DEMO-2026-BOOK";   // 첫 화면에서 열어 보는 미리보기 책장
 let flat = [];            // 펼쳐 보기용 순서
 let openIndex = -1, animating = false, lastFocus = null;
 let examples = null, rendered = false, seen = null, waiting = null;
 
-if (DEMO) $("demoBar").hidden = false;
+if (DEMO) {
+  $("demoBar").hidden = false;
+  // 미리보기 책장 안에서는 코드 넣는 첫 화면으로 되돌아갈 길을 띠에 붙인다
+  if (code) $("demoBar").insertAdjacentHTML("beforeend", ` <a href="shelf.html">미리보기 끝내기 →</a>`);
+}
 
 /* ---------- 불러오기 (실시간) ---------- */
 (async function start() {
   if (!code) {
-    // 홈 화면 앱 아이콘으로 열었으면(manifest 의 start_url) 지난번에 본 책장을 바로 연다
-    if (params.get("source") === "pwa" && lastCode()) {
-      location.replace(`shelf.html?code=${encodeURIComponent(lastCode())}${DEMO ? "&demo=1" : ""}`);
+    // 홈 화면 앱 아이콘으로 열었으면(manifest 의 start_url) 지난번에 본 책장을 바로 연다.
+    // 다만 미리보기 책장은 진짜 책장이 아니므로, 미리보기가 아닐 때는 기억해 두지 않은 것처럼 넘긴다.
+    const last = lastCode();
+    if (params.get("source") === "pwa" && last && (DEMO || last !== DEMO_CODE)) {
+      location.replace(`shelf.html?code=${encodeURIComponent(last)}${DEMO ? "&demo=1" : ""}`);
       return;
     }
     $("bookcase").parentElement.hidden = true;
@@ -127,7 +134,7 @@ if (DEMO) $("demoBar").hidden = false;
       <h2>선생님께 책장 코드를 받으세요</h2>
       <p>선생님이 알려 준 코드를 넣어 주세요. QR 코드나 주소로 들어오면 바로 열립니다.</p>
       ${codeEntryHtml({ value: lastCode(), page: "shelf" })}
-      <p class="links"><a href="shelf.html?code=DEMO-2026-BOOK&demo=1">미리보기 책장 열어 보기</a></p>
+      <p class="links"><a href="shelf.html?code=${DEMO_CODE}&demo=1">미리보기 책장 열어 보기</a></p>
     </div>`;
     bindCodeEntry(DEMO);
     return;
