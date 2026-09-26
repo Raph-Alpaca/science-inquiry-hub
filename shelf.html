@@ -24,6 +24,7 @@
     </div>
     <span class="grow"></span>
     <span class="code-chip" id="codeChip" hidden><small>책장 코드</small><b id="codeText"></b></span>
+    <a class="btn" id="wsLink" href="#" hidden>✎ 학생 활동지</a>
   </header>
 
   <main>
@@ -142,6 +143,7 @@ if (DEMO) {
   if (!merged) {
     $("fab").href = `submit.html?code=${encodeURIComponent(code)}${DEMO ? "&demo=1" : ""}`;
     $("fab").hidden = false;
+    $("wsLink").href = `worksheet.html?code=${encodeURIComponent(code)}${DEMO ? "&demo=1" : ""}`;
   }
   examples = await loadTeacherExamples().catch(() => null);
   // 선생님이 승인·숨김하면 새로고침 없이 책장이 바뀐다. 책을 펼쳐 보는 중이면 덮은 뒤에 반영한다.
@@ -206,6 +208,7 @@ function render(list) {
     $("codeText").textContent = shelf.code;
     rememberCode(shelf.code);
     $("codeChip").hidden = false;
+    $("wsLink").hidden = false;
     $("sub").textContent = `${shelf.school} · 맨 윗줄은 선생님 예시, 아래는 학년·반별 서가입니다`;
     document.title = `${shelf.school} 산출물 책장`;
     $("foot").hidden = false;

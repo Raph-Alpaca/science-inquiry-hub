@@ -3,8 +3,10 @@
 // 환경 변수 SITE_ROLE 에 따라 첫 화면(/)만 달라지고, 짧은 주소는 모든 사이트에 똑같이 생긴다.
 //   /shelf      → shelf.html          /teacher → teacher.html
 //   /submit     → submit.html         /hub     → index.html
+//   /worksheet  → worksheet.html (학생 활동지)
 //   /c/책장코드  → shelf.html?code=책장코드   (QR·칠판용 짧은 주소)
 //   /s/책장코드  → submit.html?code=책장코드
+//   /w/책장코드  → worksheet.html?code=책장코드
 //
 // 저장소에서 직접 실행해 볼 수도 있다:  node deploy/netlify-redirects.mjs
 // 만들어진 _redirects 는 저장소에 넣지 않는다 (.gitignore).
@@ -20,8 +22,10 @@ const rules = [
   `/teacher    /teacher.html   200!`,
   `/submit     /submit.html    200!`,
   `/hub        /index.html     200!`,
+  `/worksheet  /worksheet.html 200!`,
   `/c/:code    /shelf.html?code=:code    302`,
   `/s/:code    /submit.html?code=:code   302`,
+  `/w/:code    /worksheet.html?code=:code   302`,
 ];
 
 writeFileSync("_redirects", rules.join("\n") + "\n");

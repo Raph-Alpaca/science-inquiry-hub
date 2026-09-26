@@ -24,6 +24,9 @@
 index.html                  허브(메인) — 학년별 카드 11개 + 산출물 책장 입구
 shelf.html                  공개 책장 (?code=책장코드)
 submit.html                 학생 제출 폼 (?code=책장코드)
+worksheet.html              학생 활동지 5차시 (?code=책장코드&n=차시). 이 기기에 자동 저장, 이미지 저장·인쇄
+worksheet/lessons.js        활동지 문항 데이터 (문항이 바뀌면 이 파일만 고침)
+assets/worksheet.js, .css   활동지 틀 (그리기·저장·이미지·인쇄)
 teacher.html                선생님 화면 (구글 로그인, 승인, QR, CSV, 학생 화면 보기)
 shelf/teacher.json          모든 학교에 공통으로 보이는 "선생님 예시" 11권
 assets/hub.css, hub.js      탐구 앱 11개의 공통 틀
@@ -62,6 +65,17 @@ reference/                  무선 센서 연결 참고 코드 (저장소에 올
 2. 학생은 로그인 없이 `shelf.html?code=…` 로 들어오거나 첫 화면에서 코드를 넣고, `submit.html` 에서 제출 (상태: 대기)
 3. 선생님이 승인하면 공개 책장에 꽂힘
 4. 학생 앱은 이 저장소에 올리지 않습니다. 제미나이·캔바·러버블 등의 **공유 링크만** 받습니다
+
+### 학생 활동지 (worksheet.html)
+
+책장 머리글의 **학생 활동지** 또는 `sci-shelf.netlify.app/w/책장코드` 로 엽니다. 5차시 구성이며 4차시는 현장 활동이라 활동지가 없습니다.
+
+- 문항은 `worksheet/lessons.js` 한 파일에 데이터로 있습니다. 내용이 확정되면 이 파일만 바꿉니다.
+- 입력은 로그인 없이 `localStorage`(`sih-ws-{책장코드}`)에 한 덩어리로 저장됩니다. 그 기기·그 브라우저에만 남습니다.
+  저장 모양 `{ v, code, meta:{team,name}, answers:{key:value}, updatedAt }` 은 나중에 Firestore 에 올릴 문서 형태와 같고,
+  서버 저장을 붙일 때는 `assets/worksheet.js` 의 `persist()` 하나만 고치면 됩니다.
+- **이미지로 저장**은 단추를 누를 때만 html2canvas 를 CDN 에서 받아 현재 차시 종이만 PNG 로 내려받습니다. **인쇄**는 A4 세로 한 장씩 나옵니다.
+- 1차시의 "선생님 예시 책"은 책장 맨 윗줄, 3·5차시의 "책장에 올리기"는 제출 폼으로 이어지며 제목·주소·모둠명을 미리 채워 줍니다.
 
 ### 개인정보
 
@@ -128,6 +142,7 @@ cd tests && npm install && npm test
 - `shelf-test.mjs` 책장·제출·선생님 화면 (1920·1200·380) 143항목
 - `peek-test.mjs` 선생님 화면 옆 패널 39항목
 - `code-entry-test.mjs` 책장 코드 입력 칸 22항목
+- `worksheet-test.mjs` 학생 활동지 (1280·380) — 코드 입력 안내, 자동 저장·되살리기, 진행률, 차시 이동, 지우기, 제출 폼 미리 채우기, 이미지 저장, 인쇄 화면
 - `rules-test.mjs` 보안 규칙 61항목 (승인 전 책 비공개, 모둠원 이름 차단, 틀린 코드 제출 차단, 관리자 판별 등)
 
 ## 탐구 앱의 뼈대
@@ -235,7 +250,7 @@ GitHub 에 push 하면 두 사이트가 함께 다시 배포됩니다. 빌드 �
    "학생 화면 보기" 옆 패널은 일부러 자기 사이트의 shelf.html 을 띄웁니다. 파일이 같아 보이는 것도 같습니다.
 
 Netlify 에서만 생기는 짧은 주소: `/shelf` `/teacher` `/submit` `/hub`,
-`/c/책장코드` → 공개 책장, `/s/책장코드` → 제출 폼. (`deploy/netlify-redirects.mjs` 가 만듭니다)
+`/worksheet`, `/c/책장코드` → 공개 책장, `/s/책장코드` → 제출 폼, `/w/책장코드` → 학생 활동지. (`deploy/netlify-redirects.mjs` 가 만듭니다)
 
 ## 주의
 

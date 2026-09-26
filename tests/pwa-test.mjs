@@ -17,7 +17,7 @@ const browser = await chromium.launch();
 {
   const ctx = await browser.newContext(); const page = await ctx.newPage();
   await page.goto(BASE + "/index.html");
-  for (const [role, pages, start] of [["student", ["shelf.html", "submit.html"], "shelf.html?source=pwa"], ["teacher", ["teacher.html"], "teacher.html"]]) {
+  for (const [role, pages, start] of [["student", ["shelf.html", "submit.html", "worksheet.html"], "shelf.html?source=pwa"], ["teacher", ["teacher.html"], "teacher.html"]]) {
     const file = `manifest-${role}.webmanifest`;
     let m = null; try { m = JSON.parse(fs.readFileSync(path.join(ROOT, file), "utf8")); } catch (e) { /* 아래에서 실패로 기록 */ }
     check(`${role}: manifest 가 JSON 으로 읽힘`, !!m);

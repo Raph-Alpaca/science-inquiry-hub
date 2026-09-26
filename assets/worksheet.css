@@ -1,0 +1,175 @@
+/* 학생 활동지 — 화면과 인쇄 (shelf.css 위에 얹음)
+   책장과 같은 벽·종이·잉크 톤. 활동지는 책상 위에 놓인 A4 종이 한 장처럼 보인다. */
+
+.ws-main { display: grid; gap: 22px; }
+
+/* ---------- 여정 띠: 5단계 ---------- */
+.journey {
+  display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px;
+  background: var(--paper); border: 1px solid var(--line); border-radius: var(--r); padding: 12px; box-shadow: var(--shadow-card);
+}
+.journey .step {
+  display: grid; gap: 2px; text-decoration: none; color: var(--ink-2);
+  padding: 12px 12px 10px; border-radius: var(--r-s); border: 1px solid transparent; position: relative;
+}
+.journey .step:hover { background: var(--paper-2); color: var(--ink); }
+.journey .step.cur { background: var(--ink); color: var(--paper); border-color: var(--ink); }
+.journey .step.cur .step-pct { background: rgba(251, 247, 238, .18); color: var(--paper); }
+.journey .step-no { font-size: 11.5px; letter-spacing: .08em; font-weight: 700; text-transform: uppercase; }
+.journey .step-name { font-family: var(--serif); font-size: 18px; font-weight: 700; color: inherit; line-height: 1.25; }
+.journey .step.cur .step-name { color: var(--paper); }
+.journey .step-short { font-size: 12.5px; }
+.journey .step-pct { justify-self: start; margin-top: 6px; font-size: 12px; font-weight: 700; background: var(--paper-2); color: var(--ink-2); border-radius: var(--r-pill); padding: 2px 9px; font-variant-numeric: tabular-nums; }
+.journey .step.field .step-pct { background: transparent; border: 1px dashed var(--line-2); }
+
+/* ---------- 종이 한 장 ---------- */
+.sheet {
+  --sheet-paper: #FFFDF8;
+  background: var(--sheet-paper); color: var(--ink);
+  border: 1px solid var(--line); border-radius: 4px;
+  max-width: 860px; margin: 0 auto; width: 100%;
+  padding: 44px 56px 36px;
+  box-shadow: 0 1px 0 rgba(36, 32, 27, .05), 0 18px 40px -18px rgba(36, 32, 27, .35);
+}
+.sheet-head { position: relative; border-bottom: 2px solid var(--ink); padding-bottom: 16px; margin-bottom: 22px; }
+.sheet-kicker { display: block; font-size: 12.5px; letter-spacing: .06em; color: var(--ink-2); margin-bottom: 8px; }
+.sheet-head h2 { margin: 0; font-family: var(--serif); font-size: 26px; line-height: 1.3; font-weight: 700; padding-right: 72px; }
+.sheet-step { display: block; font-family: var(--font); font-size: 13px; letter-spacing: .06em; color: var(--ink-2); font-weight: 700; margin-bottom: 4px; }
+.sheet-goal { margin: 10px 0 0; color: var(--ink-2); font-size: 14.5px; }
+.sheet-pct {
+  position: absolute; right: 0; top: 0; font-size: 22px; font-weight: 800; font-variant-numeric: tabular-nums;
+  color: var(--ink); background: var(--paper-2); border-radius: var(--r-s); padding: 6px 12px; line-height: 1;
+}
+
+.meta-row { display: grid; grid-template-columns: 1fr 1.4fr 0.8fr; gap: 14px; margin-bottom: 22px; }
+.meta-row label { font-size: 13px; font-weight: 700; display: grid; gap: 4px; }
+.meta-row input {
+  width: 100%; border: 0; border-bottom: 1.5px solid var(--line-2); background: transparent; border-radius: 0;
+  padding: 6px 2px; font-size: 15px; font-weight: 500;
+}
+.meta-row input:focus { outline: 0; border-bottom-color: var(--ink); }
+
+.sec { margin: 0 0 26px; break-inside: avoid; }
+.sec h3 {
+  font-family: var(--serif); font-size: 18px; margin: 0 0 12px; padding: 6px 12px;
+  background: var(--paper-2); border-left: 4px solid var(--ink); border-radius: 0 var(--r-s) var(--r-s) 0;
+}
+.sec-intro { margin: -4px 0 12px; color: var(--ink-2); font-size: 13.5px; }
+.sec.rep + .sec.rep { margin-top: 6px; }
+
+.q { margin: 0 0 14px; break-inside: avoid; }
+.q-label { display: block; font-size: 14.5px; font-weight: 600; margin-bottom: 6px; line-height: 1.5; }
+.q-no {
+  display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: 50%;
+  background: var(--ink); color: var(--paper); font-size: 12px; font-weight: 800; margin-right: 8px; vertical-align: 1px;
+}
+.q-hint { display: block; font-weight: 500; color: var(--ink-2); font-size: 12.5px; margin-top: 2px; }
+.q-note { margin: 0 0 12px; padding: 8px 12px; background: var(--paper-2); border-radius: var(--r-s); color: var(--ink-2); font-size: 13.5px; }
+.sheet-note { margin: 0 0 18px; padding: 14px 16px; background: var(--paper-2); border-radius: var(--r-s); font-size: 15px; text-align: center; }
+
+.sheet input[type=text], .sheet input[type=url], .sheet textarea {
+  width: 100%; background: var(--white); border: 1px solid var(--line-2); border-radius: var(--r-s);
+  padding: 9px 12px; font-size: 15px; line-height: 1.6;
+}
+.sheet textarea { resize: vertical; min-height: 48px; overflow: hidden; display: block; field-sizing: content; }
+.sheet input:focus, .sheet textarea:focus { outline: 2px solid var(--ink); outline-offset: 0; border-color: var(--ink); }
+.sheet input::placeholder, .sheet textarea::placeholder { color: var(--ink-3); }
+.copy-row { display: flex; align-items: center; gap: 10px; margin-top: 6px; }
+.copy-row .count { font-size: 12.5px; color: var(--ink-2); font-variant-numeric: tabular-nums; }
+
+/* 3단 고르기: 잘 돼요 · 조금 아쉬워요 · 안 돼요 */
+.seg { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.seg-opt { position: relative; }
+.seg-opt input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.seg-opt span {
+  display: flex; align-items: center; justify-content: center; gap: 6px; min-height: 40px;
+  border: 1px solid var(--line-2); border-radius: var(--r-s); background: var(--white); font-size: 14px; font-weight: 600; cursor: pointer; color: var(--ink-2);
+}
+.seg-opt span b { font-size: 15px; }
+.seg-opt input:focus-visible + span { outline: 3px solid var(--ink); outline-offset: 2px; }
+.seg-opt input:checked + span { background: var(--ink); color: var(--paper); border-color: var(--ink); }
+.seg-opt.s0 input:checked + span { background: var(--ok); border-color: var(--ok); color: #fff; }
+.seg-opt.s2 input:checked + span { background: var(--bad); border-color: var(--bad); color: #fff; }
+.q-check .memo { margin-top: 8px; font-size: 14px; }
+
+/* 하나·여러 개 고르기 */
+.chips { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.chip-opt { position: relative; }
+.chip-opt input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.chip-opt span { display: inline-flex; align-items: center; min-height: 36px; padding: 0 14px; border: 1px solid var(--line-2); border-radius: var(--r-pill); background: var(--white); font-size: 14px; font-weight: 600; cursor: pointer; color: var(--ink-2); }
+.chip-opt input:focus-visible + span { outline: 3px solid var(--ink); outline-offset: 2px; }
+.chip-opt input:checked + span { background: var(--ink); color: var(--paper); border-color: var(--ink); }
+.chips .other-in { width: auto; flex: 1 1 160px; min-height: 36px; padding: 6px 12px; font-size: 14px; }
+
+.linkrow { margin: 6px 0 22px; padding: 14px 16px; background: var(--paper-2); border-radius: var(--r-s); display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+.linkrow p { margin: 0; flex: 1 1 240px; color: var(--ink-2); font-size: 13.5px; }
+
+.sheet-foot { margin-top: 22px; padding-top: 10px; border-top: 1px solid var(--line); color: var(--ink-2); font-size: 12.5px; text-align: center; }
+.sheet.field .sheet-body { padding: 10px 0; }
+
+/* 이미지 캡처 때 입력 칸을 글자로 바꾼 것 */
+.as-text { width: 100%; background: var(--white); border: 1px solid var(--line-2); border-radius: var(--r-s); padding: 9px 12px; font-size: 15px; line-height: 1.6; white-space: pre-wrap; word-break: break-word; box-sizing: border-box; }
+.meta-row .as-text { border: 0; border-bottom: 1.5px solid var(--line-2); border-radius: 0; background: transparent; padding: 6px 2px; font-weight: 500; }
+.q-check .as-text { margin-top: 8px; font-size: 14px; }
+
+/* ---------- 아래 고정 바 ---------- */
+.ws-bar {
+  position: sticky; bottom: 0; z-index: 20; margin-top: 18px;
+  background: rgba(251, 247, 238, .96); backdrop-filter: blur(6px); border: 1px solid var(--line); border-radius: var(--r);
+  padding: 10px 14px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; box-shadow: 0 -8px 24px -14px rgba(36, 32, 27, .4);
+}
+.ws-bar .state { font-size: 13px; color: var(--ink-2); flex: 1 1 160px; }
+.ws-bar .nav-btn { color: var(--ink-2); font-weight: 600; text-decoration: none; font-size: 14px; padding: 8px 6px; }
+.ws-bar .nav-btn:hover { color: var(--ink); }
+.confirm { margin-top: 10px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 14px; }
+
+@media (max-width: 860px) {
+  .journey { grid-template-columns: repeat(5, minmax(120px, 1fr)); overflow-x: auto; scrollbar-width: none; }
+  .journey::-webkit-scrollbar { display: none; }
+  .sheet { padding: 28px 22px 24px; }
+}
+@media (max-width: 640px) {
+  .journey { grid-template-columns: repeat(5, minmax(108px, 1fr)); padding: 8px; gap: 6px; }
+  .journey .step { padding: 10px 10px 8px; }
+  .journey .step-name { font-size: 16px; }
+  .sheet { padding: 22px 16px 20px; border-radius: 4px; }
+  .sheet-head h2 { font-size: 21px; padding-right: 0; }
+  .sheet-pct { position: static; display: inline-block; margin-top: 10px; font-size: 16px; }
+  .meta-row { grid-template-columns: 1fr 1fr; }
+  .meta-row label:nth-child(2) { grid-column: 1 / -1; }
+  .seg { grid-template-columns: 1fr; }
+  .ws-bar { padding: 8px 10px; gap: 6px; }
+  .ws-bar .state { flex-basis: 100%; order: 9; text-align: center; }
+  .ws-bar .btn { flex: 1 1 auto; }
+}
+
+/* ---------- 인쇄: 종이 한 장만 A4 세로 ---------- */
+@page { size: A4 portrait; margin: 12mm 12mm 14mm; }
+@media print {
+  * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  html, body { background: #fff !important; }
+  .demo-bar, .head, .journey, .ws-bar, .no-print, .fab { display: none !important; }
+  .wrap, .wrap.narrow { max-width: none; padding: 0; }
+  .ws-main { display: block; }
+  .sheet { max-width: none; border: 0; border-radius: 0; box-shadow: none; padding: 0; background: #fff; }
+  .sheet-head { margin-bottom: 14px; padding-bottom: 10px; }
+  .sheet-head h2 { font-size: 21px; padding-right: 0; }
+  .sheet-goal { font-size: 12.5px; }
+  .sec { margin-bottom: 14px; }
+  .sec h3 { font-size: 15px; padding: 4px 10px; margin-bottom: 8px; }
+  .q { margin-bottom: 9px; }
+  .q-label { font-size: 12.5px; margin-bottom: 4px; }
+  .q-no { width: 18px; height: 18px; font-size: 10.5px; }
+  .q-note, .sheet-note, .sec-intro { font-size: 11.5px; }
+  .sheet input[type=text], .sheet input[type=url], .sheet textarea, .as-text { font-size: 12.5px; padding: 6px 9px; background: #fff; border-color: #9C958A; }
+  .sheet textarea { min-height: 52px; resize: none; overflow: visible; }
+  .q-check .memo { min-height: 30px; }
+  .seg { gap: 6px; }
+  .seg-opt span { min-height: 28px; font-size: 12px; }
+  .chip-opt span { min-height: 26px; font-size: 12px; padding: 0 10px; }
+  .meta-row { margin-bottom: 12px; gap: 10px; }
+  .meta-row input { font-size: 13px; min-height: 26px; }
+  .sheet-foot { margin-top: 14px; font-size: 11px; }
+  .sec, .q, .meta-row, .linkrow, .sheet-head { break-inside: avoid; }
+  .sec h3 { break-after: avoid; }
+}

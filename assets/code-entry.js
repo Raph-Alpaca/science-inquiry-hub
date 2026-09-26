@@ -10,14 +10,14 @@ export function rememberCode(code) { try { localStorage.setItem(LAST, code); } c
 export function lastCode() { try { return localStorage.getItem(LAST) || ""; } catch (e) { return ""; } }
 export function normalizeCode(v) { return String(v || "").toUpperCase().replace(/[^A-Z0-9-]/g, ""); }
 
-/* page: "shelf" | "submit"   wrong: 없는 코드로 들어와서 다시 넣게 할 때 */
+/* page: "shelf" | "submit" | "worksheet"   wrong: 없는 코드로 들어와서 다시 넣게 할 때 */
 export function codeEntryHtml({ value = "", wrong = false, page = "shelf" } = {}) {
   return `<form class="code-form" id="codeForm" data-page="${page}" novalidate>
     <label for="codeInput">책장 코드</label>
     <div class="row">
       <input type="text" id="codeInput" value="${esc(value)}" placeholder="예: SEO-2026-4K7Q" maxlength="24"
         autocomplete="off" autocapitalize="characters" spellcheck="false"${wrong ? ' aria-invalid="true" aria-describedby="codeErr"' : ""}>
-      <button type="submit" class="btn primary">${page === "submit" ? "제출하러 가기" : "책장 열기"}</button>
+      <button type="submit" class="btn primary">${{ submit: "제출하러 가기", worksheet: "활동지 열기" }[page] || "책장 열기"}</button>
     </div>
     <p class="err" id="codeErr" role="alert"${wrong ? "" : " hidden"}>${wrong ? "이 코드로 된 책장이 없어요. 선생님께 다시 확인해 주세요." : ""}</p>
   </form>`;

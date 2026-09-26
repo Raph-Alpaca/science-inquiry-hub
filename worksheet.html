@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>우리가 만드는 디지털 과학 교과서 — 학생 활동지</title>
+<meta name="description" content="5차시 학생 활동지. 입력하면 이 기기에 저장되고, 이미지로 저장하거나 인쇄할 수 있습니다">
+<link rel="icon" type="image/png" sizes="48x48" href="assets/icons/student-48.png">
+<link rel="icon" type="image/png" sizes="32x32" href="assets/icons/student-32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="assets/icons/student-16.png">
+<link rel="manifest" href="manifest-student.webmanifest">
+<meta name="theme-color" content="#6B4325">
+<link rel="apple-touch-icon" href="assets/icons/student-180.png">
+<meta name="apple-mobile-web-app-title" content="과학 책장">
+<link rel="stylesheet" href="assets/shelf.css">
+<link rel="stylesheet" href="assets/worksheet.css">
+</head>
+<body>
+<div id="demoBar" class="demo-bar" hidden>미리보기(데모) 모드입니다. 활동지는 어느 모드에서나 이 브라우저에만 저장됩니다.</div>
+
+<div class="wrap narrow">
+  <header class="head">
+    <div>
+      <h1>우리가 만드는 디지털 과학 교과서</h1>
+      <p class="sub" id="sub">학생 활동지를 여는 중…</p>
+    </div>
+    <span class="grow"></span>
+    <span class="code-chip" id="codeChip" hidden><small>책장 코드</small><b id="codeText"></b></span>
+  </header>
+
+  <main>
+    <div id="notice"></div>
+
+    <div class="ws-main" id="wsMain" hidden>
+      <nav class="journey no-print" id="journey" aria-label="차시 고르기"></nav>
+      <article class="sheet" id="sheet" aria-live="polite"></article>
+    </div>
+
+    <div class="ws-bar no-print" id="wsBar" hidden>
+      <span class="state" id="saveState">입력하면 자동 저장돼요</span>
+      <a class="nav-btn" id="prev" href="#" hidden>‹ 이전 차시</a>
+      <button class="btn" id="clear" type="button">입력 지우기</button>
+      <button class="btn" id="print" type="button">🖨 인쇄하기</button>
+      <button class="btn primary" id="saveImg" type="button">🖼 이미지로 저장</button>
+      <a class="nav-btn" id="next" href="#" hidden>다음 차시 ›</a>
+      <div class="confirm" id="confirmClear" hidden role="alertdialog" aria-label="입력 지우기 확인">
+        <span>이 차시에 적은 내용을 모두 지울까요? 되돌릴 수 없어요.</span>
+        <button class="btn small" id="clearYes" type="button">지우기</button>
+        <button class="btn small" id="clearNo" type="button">취소</button>
+      </div>
+    </div>
+  </main>
+</div>
+
+<script type="module" src="assets/worksheet.js"></script>
+</body>
+</html>
