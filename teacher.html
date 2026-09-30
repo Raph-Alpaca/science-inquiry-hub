@@ -54,7 +54,7 @@
     <div class="qr-box"><div id="qrHere"></div>
       <div><p style="margin:0 0 6px"><b id="qrCode" style="font-size:22px"></b></p>
         <p class="link" id="qrUrl" style="font-size:13px;color:var(--ink-2);word-break:break-all"></p>
-        <p style="font-size:13.5px;color:var(--ink-2);margin:8px 0 0">학생은 이 QR을 찍거나 주소로 들어와 산출물을 제출합니다.</p></div>
+        <p style="font-size:13.5px;color:var(--ink-2);margin:8px 0 0">학생은 이 QR을 찍거나 주소로 들어와 출판 의뢰를 합니다.</p></div>
     </div>
   </div>
   <div class="ft"><button class="btn" id="qrPrint">인쇄하기</button><button class="btn dark" id="qrClose">닫기</button></div>
@@ -104,7 +104,7 @@
       <div><label for="ed-grade">학년</label><select id="ed-grade"><option value="1">1학년</option><option value="2">2학년</option><option value="3">3학년</option></select></div>
       <div><label for="ed-class">반</label><input type="number" id="ed-class" min="1" max="20"></div>
     </div>
-    <div class="field"><label for="ed-team">모둠명</label><input type="text" id="ed-team" maxlength="30"></div>
+    <div class="field"><label for="ed-team">공동작가 필명</label><input type="text" id="ed-team" maxlength="30"></div>
     <div class="field"><label for="ed-intent">개발자의 의도</label><textarea id="ed-intent" maxlength="600"></textarea></div>
     <div class="field"><label for="ed-howto">사용 방법</label><textarea id="ed-howto" maxlength="600"></textarea></div>
     <div class="field"><label for="ed-concepts">관련 과학 개념 (쉼표로 구분)</label><input type="text" id="ed-concepts" maxlength="120"></div>
@@ -851,7 +851,7 @@ function exportCsv(s) {
   const blob = new Blob(["﻿" + lines.join("\r\n")], { type: "text/csv;charset=utf-8" });
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob);
-  a.download = `${s.title}-산출물.csv`;
+  a.download = `${s.title}-과학책.csv`;
   document.body.appendChild(a); a.click(); a.remove();
   setTimeout(() => URL.revokeObjectURL(a.href), 1000);
   toast("CSV를 내려받았어요");

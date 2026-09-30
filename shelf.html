@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>우리가 만드는 디지털 과학 교과서 — 산출물 책장</title>
+<title>우리가 만드는 디지털 과학책 — 과학 책장</title>
 <meta name="description" content="학생 모둠이 만든 과학 시뮬레이션을 모아 둔 책장">
 <link rel="icon" type="image/png" sizes="48x48" href="assets/icons/student-48.png">
 <link rel="icon" type="image/png" sizes="32x32" href="assets/icons/student-32.png">
@@ -19,7 +19,7 @@
 <div class="wrap">
   <header class="head">
     <div>
-      <h1>우리가 만드는 디지털 과학 교과서</h1>
+      <h1>우리가 만드는 디지털 과학책</h1>
       <p class="sub" id="sub">책장을 불러오는 중…</p>
     </div>
     <span class="grow"></span>
@@ -41,11 +41,11 @@
         </section>
       </div>
     </div>
-    <p class="shelf-foot" id="foot" hidden>제출하신 산출물은 선생님 확인 후 책장에 꽂힙니다. 승인되면 새로고침하지 않아도 저절로 나타나요.</p>
+    <p class="shelf-foot" id="foot" hidden>출판 의뢰한 책은 선생님 확인 후 책장에 꽂힙니다. 승인되면 새로고침하지 않아도 저절로 나타나요.</p>
   </main>
 </div>
 
-<a class="fab" id="fab" href="#" hidden>+ 산출물 제출하기</a>
+<a class="fab" id="fab" href="#" hidden>+ 출판 의뢰하기</a>
 
 <!-- 책 펼침 -->
 <div class="reader" id="reader" hidden role="dialog" aria-modal="true" aria-labelledby="bkTitle">
@@ -201,7 +201,7 @@ function render(list) {
     const schools = [...new Set(found.map((x) => x.shelf.school))].join(" · ");
     const titles = found.map((x) => x.shelf.title).join(" + ");
     $("sub").textContent = `${schools} · ${titles}${missing.length ? ` (못 찾은 코드: ${missing.join(", ")})` : ""}`;
-    document.title = `${schools} 산출물 책장 (함께 보기)`;
+    document.title = `${schools} 과학 책장 (함께 보기)`;
   } else {
     const { shelf } = found[0];
     $("fab").hidden = false;
@@ -210,7 +210,7 @@ function render(list) {
     $("codeChip").hidden = false;
     $("wsLink").hidden = false;
     $("sub").textContent = `${shelf.school} · 맨 윗줄은 선생님 예시, 아래는 학년·반별 서가입니다`;
-    document.title = `${shelf.school} 산출물 책장`;
+    document.title = `${shelf.school} 과학 책장`;
     $("foot").hidden = false;
   }
 
@@ -290,7 +290,7 @@ function rowsOf(sec, fresh) {
       <div class="bay">
         <button class="row-nav prev" type="button" aria-label="${esc(sec.label)} 왼쪽 책 보기" hidden>‹</button>
         <div class="row-inner" data-key="${esc(sec.key)}" tabindex="0" role="group" aria-label="${esc(sec.label)} 책들 (좌우 화살표로 넘기기)">
-          ${books.length ? books.map((b) => bookHtml(b, fresh.has(b.id))).join("") : `<p class="row-empty">아직 꽂힌 책이 없어요. 첫 산출물을 제출해 보세요!</p>`}
+          ${books.length ? books.map((b) => bookHtml(b, fresh.has(b.id))).join("") : `<p class="row-empty">아직 꽂힌 책이 없어요. 첫 책을 출판 의뢰해 보세요!</p>`}
         </div>
         <button class="row-nav next" type="button" aria-label="${esc(sec.label)} 오른쪽 책 보기" hidden>›</button>
       </div>

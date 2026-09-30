@@ -1,6 +1,6 @@
 {
   "id": "/sih-student",
-  "name": "우리가 만드는 디지털 과학 교과서",
+  "name": "우리가 만드는 디지털 과학책",
   "short_name": "과학 책장",
   "description": "학생 모둠이 만든 과학 시뮬레이션을 모아 둔 책장",
   "start_url": "shelf.html?source=pwa",

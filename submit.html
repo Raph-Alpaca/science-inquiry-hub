@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>산출물 제출하기 — 과학탐구 앱 허브</title>
+<title>출판 의뢰하기 — 과학탐구 앱 허브</title>
 <link rel="icon" type="image/png" sizes="48x48" href="assets/icons/student-48.png">
 <link rel="icon" type="image/png" sizes="32x32" href="assets/icons/student-32.png">
 <link rel="icon" type="image/png" sizes="16x16" href="assets/icons/student-16.png">
@@ -18,7 +18,7 @@
 <div class="wrap narrow">
   <header class="head">
     <div>
-      <h1>산출물 제출하기</h1>
+      <h1>출판 의뢰하기</h1>
       <p class="sub" id="sub">책장을 확인하는 중…</p>
     </div>
   </header>
@@ -39,13 +39,13 @@
       </div>
 
       <div class="field">
-        <label for="team">모둠명</label>
-        <input type="text" id="team" maxlength="30" placeholder="예: 1모둠" required>
-        <p class="err" id="e-team" hidden>모둠명을 적어 주세요.</p>
+        <label for="team">공동작가 필명</label>
+        <input type="text" id="team" maxlength="30" placeholder="예: 별빛탐험대" required>
+        <p class="err" id="e-team" hidden>공동작가 필명을 적어 주세요.</p>
       </div>
 
       <div class="field">
-        <label for="title">책 제목 (모둠 산출물명)</label>
+        <label for="title">책 제목</label>
         <input type="text" id="title" maxlength="60" placeholder="예: 산불 확산 시뮬레이션" required>
         <p class="err" id="e-title" hidden>책 제목을 적어 주세요.</p>
       </div>
@@ -105,7 +105,7 @@
       <label class="consent"><input type="checkbox" id="agree" required><span>우리 모둠의 작품을 책장에 공개하는 데 동의해요</span></label>
       <p class="err" id="e-agree" hidden>공개 동의에 체크해 주세요.</p>
 
-      <button class="btn primary block" id="send" type="submit">책장에 꽂기</button>
+      <button class="btn primary block" id="send" type="submit">출판 의뢰하기</button>
       <p class="upload-note" style="text-align:center;margin-top:10px">선생님 확인 후 책장에 꽂혀요</p>
     </form>
 
@@ -150,7 +150,7 @@ function paint() {
   $("liveBook").style.setProperty("--tone", tone);
   $("liveArt").src = coverSrc(cover);
   $("liveTitle").textContent = $("title").value.trim() || "책 제목";
-  $("liveWho").textContent = `${$("grade").value}-${$("classNo").value} · ${$("team").value.trim() || "모둠명"}`;
+  $("liveWho").textContent = `${$("grade").value}-${$("classNo").value} · ${$("team").value.trim() || "필명"}`;
 }
 $("coverPick").onclick = (e) => { const b = e.target.closest("button"); if (b) { cover = b.dataset.k; paint(); save(); } };
 $("colorPick").onclick = (e) => { const b = e.target.closest("button"); if (b) { color = b.dataset.c; paint(); save(); } };
@@ -186,7 +186,7 @@ FIELDS.forEach((f) => $(f).addEventListener("input", save));
 
 (async function start() {
   if (!code) {
-    $("sub").textContent = "책장 코드를 넣으면 제출할 수 있습니다";
+    $("sub").textContent = "책장 코드를 넣으면 출판 의뢰를 할 수 있습니다";
     $("notice").innerHTML = `<div class="notice"><h2>선생님께 책장 코드를 받으세요</h2>
       <p>어느 학교 책장에 꽂을지 알아야 해요. 선생님이 알려 준 코드를 넣어 주세요.</p>
       ${codeEntryHtml({ value: lastCode(), page: "submit" })}</div>`;
@@ -213,7 +213,7 @@ FIELDS.forEach((f) => $(f).addEventListener("input", save));
     const deny = err && (err.code === "permission-denied" || /insufficient permissions/i.test(err.message || ""));
     $("notice").innerHTML = deny
       ? `<div class="notice bad"><h2>아직 책장이 열리지 않았어요</h2>
-          <p>선생님께 알려 주세요. 저장소 보안 규칙을 올려야 제출할 수 있습니다.</p></div>`
+          <p>선생님께 알려 주세요. 저장소 보안 규칙을 올려야 출판 의뢰를 할 수 있습니다.</p></div>`
       : `<div class="notice bad"><h2>연결에 문제가 있어요</h2><p>잠시 뒤 다시 시도해 주세요.</p>
           <p class="link">${esc(err.message || err)}</p></div>`;
   }
@@ -254,14 +254,14 @@ $("form").addEventListener("submit", async (e) => {
     $("form").hidden = true;
     $("done").hidden = false;
     $("done").innerHTML = `<div class="notice">
-      <h2>보냈어요. 선생님 확인 후 책장에 꽂혀요</h2>
+      <h2>출판 의뢰를 보냈어요. 선생님 확인 후 책장에 꽂혀요</h2>
       <p>선생님이 승인하면 우리 학교 책장에 저절로 나타납니다. 모둠원 이름은 공개되지 않습니다.</p>
       <p><a class="btn primary" href="shelf.html?code=${encodeURIComponent(code)}${suffix}">책장 보러 가기</a>
-      <a class="btn" href="submit.html?code=${encodeURIComponent(code)}${suffix}">하나 더 제출하기</a></p></div>`;
+      <a class="btn" href="submit.html?code=${encodeURIComponent(code)}${suffix}">하나 더 출판 의뢰하기</a></p></div>`;
     window.scrollTo({ top: 0, behavior: "smooth" });
   } catch (err) {
     $("send").disabled = false;
-    $("send").textContent = "책장에 꽂기";
+    $("send").textContent = "출판 의뢰하기";
     $("notice").innerHTML = `<div class="notice bad"><h2>보내지 못했어요</h2>
       <p>잠시 뒤 다시 눌러 보세요. 계속 안 되면 선생님께 알려 주세요.</p>
       <p class="link">${esc(err.message || err)}</p></div>`;

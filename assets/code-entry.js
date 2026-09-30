@@ -17,7 +17,7 @@ export function codeEntryHtml({ value = "", wrong = false, page = "shelf" } = {}
     <div class="row">
       <input type="text" id="codeInput" value="${esc(value)}" placeholder="예: SEO-2026-4K7Q" maxlength="24"
         autocomplete="off" autocapitalize="characters" spellcheck="false"${wrong ? ' aria-invalid="true" aria-describedby="codeErr"' : ""}>
-      <button type="submit" class="btn primary">${{ submit: "제출하러 가기", worksheet: "활동지 열기" }[page] || "책장 열기"}</button>
+      <button type="submit" class="btn primary">${{ submit: "출판 의뢰하러 가기", worksheet: "활동지 열기" }[page] || "책장 열기"}</button>
     </div>
     <p class="err" id="codeErr" role="alert"${wrong ? "" : " hidden"}>${wrong ? "이 코드로 된 책장이 없어요. 선생님께 다시 확인해 주세요." : ""}</p>
   </form>`;

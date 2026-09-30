@@ -19,7 +19,8 @@ for (const [vn, vp] of [["넓은 화면", { width: 1280, height: 900 }], ["휴�
   const ctx = await browser.newContext({ viewport: vp, deviceScaleFactor: 1, acceptDownloads: true });
   const page = await ctx.newPage();
   const errors = []; page.on("pageerror", (e) => errors.push(String(e.message).slice(0, 120)));
-  page.on("console", (m) => { if (m.type() === "error" && !/html2canvas|cdnjs|ERR_|favicon/.test(m.text())) errors.push(m.text().slice(0, 120)); });
+  // 안내 그림(worksheet/img/)은 파일을 넣기 전에는 없는 것이 정상이라 404 를 오류로 세지 않는다
+  page.on("console", (m) => { if (m.type() === "error" && !/html2canvas|cdnjs|ERR_|favicon/.test(m.text()) && !/\/worksheet\/img\//.test(m.location().url || "")) errors.push(m.text().slice(0, 120)); });
 
   /* 1) 코드 없이 → 코드 입력 안내 */
   await page.goto(URL_("demo=1"), { waitUntil: "networkidle" });
@@ -30,9 +31,11 @@ for (const [vn, vp] of [["넓은 화면", { width: 1280, height: 900 }], ["휴�
 
   /* 2) 1차시 화면 */
   check(`${vn}: 코드 칩 표시`, (await page.textContent("#codeText")).trim() === CODE);
-  check(`${vn}: 여정 띠 5단계`, (await page.$$("#journey .step")).length === 5);
-  check(`${vn}: 4단계는 현장 활동`, (await page.textContent('[data-pct="4"]')).includes("현장 활동"));
-  check(`${vn}: 1차시 제목`, /STEP 1/.test(await page.textContent("#sheet h2")));
+  check(`${vn}: 여정 띠 5단계 + 나의 여정`, (await page.$$("#journey .step:not(.jn)")).length === 5 && (await page.$$("#journey .step.jn")).length === 1);
+  check(`${vn}: 4단계는 입력 없는 출판 의뢰 안내`, (await page.textContent('[data-pct="4"]')).includes("출판 의뢰"));
+  check(`${vn}: 1차시 제목`, /STEP\. 1 기획/.test(await page.textContent("#sheet h2")) && (await page.textContent("#sheet .sheet-kicker")).includes("디지털 과학책"));
+  check(`${vn}: 1차시 My pick 3묶음, 분석 하기 아래 작은 문항 3개`, (await page.$$("#sheet .sec.rep.pick")).length === 3 && (await page.$$("#sheet .sec.rep.pick:first-child .group-box textarea")).length === 3);
+  check(`${vn}: 필명 칸 이름`, (await page.textContent("#sheet .meta-row label")).includes("공동작가 필명"));
   const fields1 = await page.$$eval("#sheet [data-key]", (els) => els.length);
   check(`${vn}: 1차시에 입력 칸이 있음`, fields1 > 20, String(fields1));
   check(`${vn}: 진행률 0%`, (await page.textContent("#sheetPct")).trim() === "0%");
@@ -54,50 +57,83 @@ for (const [vn, vp] of [["넓은 화면", { width: 1280, height: 900 }], ["휴�
   check(`${vn}: 여러 줄 칸이 내용만큼 늘어남`, taH > 70, String(taH));
   await page.reload({ waitUntil: "networkidle" });
   check(`${vn}: 새로고침 후 되살아남`, await page.inputValue('[data-key="n1.b1.title"]') === "이슬점·구름 실험실" && await page.inputValue('[data-key="meta.team"]') === "3모둠");
-  check(`${vn}: 발자국(모둠·이름)이 종이 아래에`, (await page.textContent("#sheet .sheet-foot")).includes("3모둠"));
+  check(`${vn}: 발자국(필명·이름)이 종이 아래에`, (await page.textContent("#sheet .sheet-foot")).includes("3모둠"));
   check(`${vn}: 다른 코드에서는 비어 있음`, await (async () => {
     const p2 = await ctx.newPage(); await p2.goto(URL_("code=OTHER-2026-X1Y2&demo=1"), { waitUntil: "networkidle" });
     const v = await p2.inputValue('[data-key="n1.b1.title"]'); await p2.close(); return v === "";
   })());
 
   /* 4) 차시 이동 (띠·아래 단추·주소) */
-  await page.click('#journey .step[data-n="3"]'); await page.waitForTimeout(150);
-  check(`${vn}: 3차시로 이동, 주소에 n=3`, /n=3/.test(page.url()) && /STEP 3/.test(await page.textContent("#sheet h2")));
-  check(`${vn}: 모둠 이름은 차시가 바뀌어도 그대로`, await page.inputValue('[data-key="meta.team"]') === "3모둠");
-  await page.click('.seg-opt input[name="n3.v1"][value="조금 아쉬워요"]', { force: true });
-  await page.fill('[data-key="n3.v1.memo"]', "슬라이더 단위가 없음");
+  await page.click('#journey .step[data-n="2"]'); await page.waitForTimeout(150);
+  check(`${vn}: 2차시로 이동, 주소에 n=2`, /n=2/.test(page.url()) && /STEP\. 2 집필/.test(await page.textContent("#sheet h2")));
+  check(`${vn}: 필명은 차시가 바뀌어도 그대로`, await page.inputValue('[data-key="meta.team"]') === "3모둠");
+  const parts = await page.$$eval("#sheet .part", (els) => els.map((e) => e.textContent.trim()));
+  check(`${vn}: 2차시는 개별 작성·모둠별 작성으로 나뉨`, parts.join("|") === "개별 작성|모둠별 작성", parts.join("|"));
+  check(`${vn}: IDEA 의견 4묶음과 그림 안내 2칸`, (await page.$$("#sheet .reps.c4 .sec.rep")).length === 4 && (await page.$$("#sheet .guide .fig")).length === 2);
+  check(`${vn}: 그림이 없으면 '이미지 추가하세요' 칸`, (await page.textContent("#sheet .guide .fig figcaption")).includes("이미지 추가하세요"));
+  await page.fill('[data-key="n2.plan.name"]', "빗면 위의 레이서");
+  // 고르기 칸의 input 은 숨겨 두고 글자(span)를 누르게 되어 있다
+  await page.click('label:has(input[name="n2.plan.audience"][value="중학교 2학년"]) span');
+  await page.fill('[data-key="n2.idea1.name"]', "이서준");
+  await page.fill('[data-key="n2.prompt"]', "너는 중학교 과학 시뮬레이션 전문가야. 경사각 슬라이더를 넣어 줘");
+  await page.click('label:has(input[name="n2.promptCheck"][value="[역할] 역할이 명확한가요?"]) span');
+  await page.waitForTimeout(400);
+  check(`${vn}: 고르기가 저장·표시됨`, await page.$eval('input[name="n2.plan.audience"][value="중학교 2학년"]', (r) => r.checked && r.hasAttribute("checked")));
+  check(`${vn}: 글자 수 표시`, /\d+자/.test(await page.textContent('[data-count="n2.prompt"]')));
+  await page.reload({ waitUntil: "networkidle" });
+  check(`${vn}: 새로고침해도 2차시(n=2)와 고른 값·이름 유지`, /STEP\. 2/.test(await page.textContent("#sheet h2")) && await page.$eval('input[name="n2.plan.audience"][value="중학교 2학년"]', (r) => r.checked)
+    && await page.$eval('input[name="n2.promptCheck"]', (r) => r.checked) && await page.inputValue('[data-key="n2.idea1.name"]') === "이서준");
+  await page.screenshot({ path: path.join(OUT, `ws-2-${vp.width}.png`), fullPage: vp.width > 600 });
+
+  await page.click("#next"); await page.waitForTimeout(150);
+  check(`${vn}: 다음 단추 → 3차시`, /n=3/.test(page.url()) && /STEP\. 3/.test(await page.textContent("#sheet h2")));
+  check(`${vn}: 3차시 점검 기준 2묶음(4개·3개), 말풍선 8칸`, (await page.$$eval("#sheet .criteria", (els) => els.map((e) => e.children.length).join(","))) === "4,3" && (await page.$$("#sheet .say")).length === 8);
+  await page.fill('[data-key="n3.sci.m1.name"]', "김하늘");
+  await page.fill('[data-key="n3.sci.m1"]', "슬라이더 단위가 없음");
   await page.fill('[data-key="n3.talk1"]', "단위를 붙이고 범위를 0~60°로 고쳐 줘");
   await page.fill('[data-key="n3.url"]', "https://example.com/our-book");
   await page.waitForTimeout(400);
-  check(`${vn}: 3단 고르기가 저장·표시됨`, await page.$eval('input[name="n3.v1"][value="조금 아쉬워요"]', (r) => r.checked && r.hasAttribute("checked")));
-  check(`${vn}: 글자 수 표시`, /\d+자/.test(await page.textContent('[data-count="n3.talk1"]')));
-  await page.reload({ waitUntil: "networkidle" });
-  check(`${vn}: 새로고침해도 3차시(n=3)와 고른 값 유지`, /STEP 3/.test(await page.textContent("#sheet h2")) && await page.$eval('input[name="n3.v1"][value="조금 아쉬워요"]', (r) => r.checked));
-  await page.click("#next"); await page.waitForTimeout(150);
-  check(`${vn}: 다음 단추 → 4차시 현장 활동`, /n=4/.test(page.url()) && await page.$("#sheet.field") !== null && await page.$eval("#saveImg", (b) => b.hidden));
-  await page.goBack(); await page.waitForTimeout(200);
-  check(`${vn}: 뒤로 가기 → 3차시`, /n=3/.test(page.url()) && /STEP 3/.test(await page.textContent("#sheet h2")));
   await page.screenshot({ path: path.join(OUT, `ws-3-${vp.width}.png`), fullPage: vp.width > 600 });
+  await page.click("#next"); await page.waitForTimeout(150);
+  check(`${vn}: 다음 단추 → 4차시 출판 의뢰 안내 (입력·저장 단추 없음)`, /n=4/.test(page.url()) && await page.$("#sheet.field") !== null && await page.$eval("#saveImg", (b) => b.hidden) && (await page.$$("#sheet .guide .fig")).length === 3);
+  await page.screenshot({ path: path.join(OUT, `ws-4-${vp.width}.png`), fullPage: vp.width > 600 });
+  await page.goBack(); await page.waitForTimeout(200);
+  check(`${vn}: 뒤로 가기 → 3차시, 말풍선 이름·내용 유지`, /n=3/.test(page.url()) && /STEP\. 3/.test(await page.textContent("#sheet h2")) && await page.inputValue('[data-key="n3.sci.m1.name"]') === "김하늘" && await page.inputValue('[data-key="n3.sci.m1"]') === "슬라이더 단위가 없음");
 
-  /* 5) 제출 폼 미리 채우기 */
+  /* 5) 4차시 출판 의뢰하기 → 출판 의뢰서 미리 채우기 */
+  await page.click('#journey .step[data-n="4"]'); await page.waitForTimeout(150);
   await page.evaluate((k) => localStorage.removeItem(k), "sih-submit-" + CODE);
+  check(`${vn}: 4차시 단추 이름이 '출판 의뢰하기'`, (await page.textContent('#sheet a[data-prefill]')).includes("출판 의뢰하기"));
   await page.click('#sheet a[data-prefill]'); await page.waitForLoadState("networkidle");
-  check(`${vn}: 책장에 제출하러 가기 → 제출 폼`, /submit\.html\?code=/.test(page.url()), page.url());
-  check(`${vn}: 제출 폼에 모둠명·주소가 미리 채워짐`, await page.inputValue("#team") === "3모둠" && await page.inputValue("#url") === "https://example.com/our-book");
+  check(`${vn}: 출판 의뢰하기 → 출판 의뢰서`, /submit\.html\?code=/.test(page.url()), page.url());
+  check(`${vn}: 출판 의뢰서에 필명·책 제목·주소가 미리 채워짐`, await page.inputValue("#team") === "3모둠" && await page.inputValue("#title") === "빗면 위의 레이서" && await page.inputValue("#url") === "https://example.com/our-book");
   await page.goBack(); await page.waitForLoadState("networkidle");
+
+  /* 5-2) 나의 여정: 표시해 둔 문항만 모아 보기 */
+  await page.click('#sheet a[data-go="j"]'); await page.waitForTimeout(150);
+  const jn = await page.textContent("#sheet");
+  check(`${vn}: 4차시 단추 → 나의 여정 (주소에 n=journey)`, /n=journey/.test(page.url()) && await page.$("#sheet.jn") !== null);
+  check(`${vn}: 나의 여정에 1~3차시 답이 모임`, jn.includes("이슬점·구름 실험실") && jn.includes("빗면 위의 레이서") && jn.includes("경사각 슬라이더를 넣어 줘") && jn.includes("단위를 붙이고 범위를 0~60°로 고쳐 줘"));
+  check(`${vn}: 표시하지 않은 문항은 빠지고, 빈 문항은 안내`, !jn.includes("슬라이더 단위가 없음") && !jn.includes("첫 줄") && jn.includes("아직 쓰지 않았어요"));
+  check(`${vn}: 나의 여정에는 입력 칸·지우기 없음, 이미지·인쇄는 있음`, (await page.$$("#sheet [data-key]")).length === 0 && await page.$eval("#clear", (b) => b.hidden) && !(await page.$eval("#saveImg", (b) => b.hidden)) && await page.$("#jnCopy") !== null);
+  await page.screenshot({ path: path.join(OUT, `ws-journey-${vp.width}.png`), fullPage: vp.width > 600 });
+  await page.reload({ waitUntil: "networkidle" });
+  check(`${vn}: 새로고침해도 나의 여정`, await page.$("#sheet.jn") !== null && await page.$eval("#journey .step.jn", (a) => a.classList.contains("cur")));
+  await page.click('#sheet a[data-go="3"]'); await page.waitForTimeout(150);
+  check(`${vn}: 여정에서 3차시 활동지로 돌아감`, /n=3/.test(page.url()) && /STEP\. 3/.test(await page.textContent("#sheet h2")));
 
   /* 6) 지우기 (확인 후 현재 차시만) */
   await page.click("#clear"); check(`${vn}: 지우기 확인이 뜸`, !(await page.$eval("#confirmClear", (e) => e.hidden)));
   await page.click("#clearNo"); check(`${vn}: 취소하면 그대로`, await page.inputValue('[data-key="n3.url"]') === "https://example.com/our-book");
   await page.click("#clear"); await page.click("#clearYes"); await page.waitForTimeout(200);
-  check(`${vn}: 지우면 3차시만 비고 모둠 이름은 남음`, await page.inputValue('[data-key="n3.url"]') === "" && await page.inputValue('[data-key="meta.team"]') === "3모둠");
+  check(`${vn}: 지우면 3차시만 비고(말풍선 이름까지) 필명은 남음`, await page.inputValue('[data-key="n3.url"]') === "" && await page.inputValue('[data-key="n3.sci.m1.name"]') === "" && await page.inputValue('[data-key="meta.team"]') === "3모둠");
   await page.click('#journey .step[data-n="1"]'); await page.waitForTimeout(150);
   check(`${vn}: 1차시 입력은 남아 있음`, await page.inputValue('[data-key="n1.b1.title"]') === "이슬점·구름 실험실");
 
   /* 7) 5차시 */
   await page.click('#journey .step[data-n="5"]'); await page.waitForTimeout(150);
   check(`${vn}: 5차시 리뷰 3개`, (await page.$$("#sheet .sec.rep")).length === 3);
-  check(`${vn}: 5차시에 책장 올리기 단추`, (await page.$$('#sheet a[href^="submit.html"]')).length === 1);
+  check(`${vn}: 5차시에 출판 의뢰하기 단추`, (await page.$$('#sheet a[href^="submit.html"]')).length === 1);
 
   /* 8) 이미지로 저장 (html2canvas 는 CDN 에서 받는다) */
   await page.click('#journey .step[data-n="1"]'); await page.waitForTimeout(150);
