@@ -210,9 +210,9 @@ function repeatHtml(b) {
 function guideHtml(b) {
   const many = b.steps.length > 1;
   return `<section class="sec frame guide"><h3>${esc(b.title)}</h3>
-    <ol class="steps c${b.cols || 1}">${b.steps.map((s, i) => `<li>
+    <ol class="steps c${b.cols || 1}">${b.steps.map((s, i) => `<li${s.wide ? ' class="wide"' : ""}>
       <p class="cap">${many ? `<span class="cap-no">${i + 1}</span>` : ""}${esc(s.text)}</p>
-      ${s.img ? `<figure class="fig no-print"><img alt="${esc(s.name || s.text)}" data-img="${esc(s.img)}"><figcaption>${esc(s.name || s.text)} 이미지 추가하세요</figcaption></figure>` : ""}</li>`).join("")}
+      ${s.img ? `<figure class="fig no-print"><img alt="${esc(s.name || s.text)}" data-img="${esc(s.img)}" title="누르면 크게 보여요"><figcaption>${esc(s.name || s.text)} 이미지 추가하세요</figcaption></figure>` : ""}</li>`).join("")}
     </ol>${b.note ? `<p class="guide-note">${esc(b.note)}</p>` : ""}</section>`;
 }
 function blockHtml(b, les) {
@@ -521,6 +521,7 @@ async function saveImage() {
     if (c) return copyText(String(get(c.dataset.copy)), c, document.querySelector(`textarea[data-key="${CSS.escape(c.dataset.copy)}"]`));
     if (e.target.closest("#jnCopy")) return copyText(journeyText(), e.target.closest("#jnCopy"));
     const g = e.target.closest("a[data-go]"); if (g) { e.preventDefault(); return go(g.dataset.go); }
+    const fig = e.target.closest(".fig.has-img img"); if (fig) return window.open(fig.src, "_blank", "noopener");   // 안내 그림은 누르면 새 창에서 크게
     const a = e.target.closest("a[data-prefill]"); if (a) { flush(); try { prefillSubmit(JSON.parse(a.dataset.prefill)); } catch (e2) { /* 무시 */ } }
   });
   $("journey").addEventListener("click", (e) => { const a = e.target.closest("a.step"); if (a) { e.preventDefault(); go(a.dataset.n); } });

@@ -70,7 +70,9 @@ for (const [vn, vp] of [["넓은 화면", { width: 1280, height: 900 }], ["휴�
   const parts = await page.$$eval("#sheet .part", (els) => els.map((e) => e.textContent.trim()));
   check(`${vn}: 2차시는 개별 작성·모둠별 작성으로 나뉨`, parts.join("|") === "개별 작성|모둠별 작성", parts.join("|"));
   check(`${vn}: IDEA 의견 4묶음과 그림 안내 2칸`, (await page.$$("#sheet .reps.c4 .sec.rep")).length === 4 && (await page.$$("#sheet .guide .fig")).length === 2);
-  check(`${vn}: 그림이 없으면 '이미지 추가하세요' 칸`, (await page.textContent("#sheet .guide .fig figcaption")).includes("이미지 추가하세요"));
+  check(`${vn}: 그림 칸마다 '이미지 추가하세요' 글이 준비됨`, (await page.textContent("#sheet .guide .fig figcaption")).includes("이미지 추가하세요"));
+  await page.waitForFunction(() => document.querySelectorAll("#sheet .guide .fig.has-img").length === 2, null, { timeout: 5000 }).catch(() => {});
+  check(`${vn}: worksheet/img 에 파일이 있으면 그림으로 채워지고 글은 숨음`, await page.$$eval("#sheet .guide .fig", (els) => els.every((e) => e.classList.contains("has-img") && e.querySelector("img").naturalWidth > 600 && getComputedStyle(e.querySelector("figcaption")).display === "none")));
   await page.fill('[data-key="n2.plan.name"]', "빗면 위의 레이서");
   // 고르기 칸의 input 은 숨겨 두고 글자(span)를 누르게 되어 있다
   await page.click('label:has(input[name="n2.plan.audience"][value="중학교 2학년"]) span');

@@ -18,7 +18,7 @@
  *                                                     need:2 면 진행률은 앞의 2묶음만 셈
  *   { type:"row", blocks:[a, b], arrow? }             두 묶음을 나란히. arrow:true 면 사이에 화살표
  *   { type:"flow" }                                   아래로 이어지는 화살표
- *   { type:"guide", title, cols?, steps[], note? }    그림 안내. steps: { text, img?, name? }
+ *   { type:"guide", title, cols?, steps[], note? }    그림 안내. steps: { text, img?, name?, wide? }  wide:true 면 한 줄을 다 써서 크게
  *                                                     img 는 worksheet/img/ 안의 파일 이름(확장자 빼고). 파일이 있으면 그림이, 없으면 "name 이미지 추가하세요" 가 보임
  *   { type:"note", text }                             안내문
  *   { type:"link", label, href, desc?, prefill? }     단추. href 의 {code} 는 책장 코드로 바뀜.
@@ -210,11 +210,11 @@ export const LESSONS = [
         note: "시뮬레이션이 생성된 채팅방에 추가 프롬프트를 계속 입력하며 수정과 확인을 반복해요.\n더 이상 수정이나 보완할 사항이 없으면, 추가 프롬프트 입력을 멈춥니다.",
       },
       {
-        type: "guide", title: "완성한 콘텐츠의 공유용 링크 생성하기", cols: 3,
+        type: "guide", title: "완성한 콘텐츠의 공유용 링크 생성하기", cols: 2,
         steps: [
           { text: "공유 클릭", img: "n3-2", name: "공유 단추" },
           { text: "공유 클릭", img: "n3-3", name: "공유 메뉴" },
-          { text: "링크 복사", img: "n3-4", name: "링크 복사" },
+          { text: "링크 복사", img: "n3-4", name: "링크 복사", wide: true },
         ],
       },
       { type: "flow" },
@@ -234,9 +234,9 @@ export const LESSONS = [
     blocks: [
       { type: "note", text: "완성한 우리 책을 책장에 꽂을 차례예요. 모둠 친구들과 함께 출판 의뢰서를 써서 보내면, 선생님이 확인한 뒤 책장에 꽂아 줍니다." },
       {
-        type: "guide", title: "출판 의뢰하는 방법", cols: 3,
+        type: "guide", title: "출판 의뢰하는 방법", cols: 2,
         steps: [
-          { text: "책장에서 '출판 의뢰하기' 클릭!", img: "n4-1", name: "책장의 출판 의뢰하기 단추" },
+          { text: "책장에서 '출판 의뢰하기' 클릭!", img: "n4-1", name: "책장의 출판 의뢰하기 단추", wide: true },
           { text: "모둠 친구들과 함께 출판 의뢰서 작성", img: "n4-2", name: "출판 의뢰서" },
           { text: "책 표지의 그림과 색을 고르고 출판 의뢰", img: "n4-3", name: "책 표지 고르기" },
         ],

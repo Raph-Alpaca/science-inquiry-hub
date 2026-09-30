@@ -211,7 +211,7 @@
 }
 .fig img { display: none; }
 .fig.has-img { aspect-ratio: auto; padding: 0; border: 1px solid var(--line); background: var(--white); }
-.fig.has-img img { display: block; width: 100%; height: auto; }
+.fig.has-img img { display: block; width: 100%; height: auto; cursor: zoom-in; }
 .fig.has-img figcaption { display: none; }
 .guide-note { margin: 16px 0 0; color: var(--cap); font-weight: 700; text-align: center; white-space: pre-line; }
 
@@ -267,6 +267,7 @@
 @media (min-width: 760px) {
   .steps.c2 { grid-template-columns: repeat(2, 1fr); }
   .steps.c3 { grid-template-columns: repeat(3, 1fr); }
+  .steps > li.wide { grid-column: 1 / -1; width: 100%; max-width: 760px; margin: 0 auto; }
 }
 @media (min-width: 860px) {
   .cols { grid-template-columns: 1fr 1.45fr; }

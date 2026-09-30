@@ -9,3 +9,7 @@ firebase-debug.log
 
 # Netlify 빌드 때 deploy/netlify-redirects.mjs 가 만드는 파일
 _redirects
+
+# 활동지 원본(캔바에서 내려받은 PDF·SVG): 안내 그림을 잘라 내는 재료. 가리지 않은 원본 화면이 들어 있어 사이트에 올리지 않음
+활동지 version*.pdf
+worksheet/img/*.svg
