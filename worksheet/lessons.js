@@ -81,8 +81,7 @@ export const LESSONS = [
               { key: "n1.b{i}.cv", type: "long", rows: 2, label: "[통제] 시뮬레이션이 수행될 때 변하지 않는 변인(같게 해야 하는 조건)은 무엇인가요?", journey: "같게 한 조건" },
             ],
           },
-          { key: "n1.b{i}.principle", type: "long", rows: 7, label: "[원리 발견] 이 책에서 알게 된 핵심 과학 원리는 무엇인가요?", placeholder: "알게 된 원리를 글로 정리해 보세요!
-예) ○○이(가) 커질수록 △△은(는) 커진다(작아진다)." },
+          { key: "n1.b{i}.principle", type: "long", rows: 7, label: "[원리 발견] 이 책에서 알게 된 핵심 과학 원리는 무엇인가요?", placeholder: "알게 된 원리를 글로 정리해 보세요! 예) ○○이(가) 커질수록 △△은(는) 커진다(작아진다)." },
           { key: "n1.b{i}.idea", type: "long", rows: 3, label: "[생각 더하기] 업그레이드 아이디어! 어떤 기능을 추가하면 좋을까요?", journey: "업그레이드 아이디어" },
         ],
       },
