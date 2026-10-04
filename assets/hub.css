@@ -69,6 +69,7 @@ canvas { max-width: 100%; }
 .ask { margin-bottom: 22px; }
 .ask .std { margin: 0 0 8px; display: flex; flex-wrap: wrap; gap: 6px; font-size: .8em; color: var(--muted); font-variant-numeric: tabular-nums; }
 .ask .std span { border: 1px solid var(--line); border-radius: 999px; padding: 1px 9px; background: var(--card); }
+.ask .std span.cur { border-color: transparent; background: none; padding-left: 0; font-weight: 700; }
 .ask h1 { font-size: 1.9em; line-height: 1.25; margin: 0 0 10px; letter-spacing: -0.015em; font-weight: 800; }
 .ask .q { margin: 0; font-size: 1.15em; font-weight: 600; padding-left: 14px; border-left: 4px solid var(--g); }
 .ask .how { margin: 10px 0 0; color: var(--ink-2); font-size: .95em; max-width: 72ch; }

@@ -23,7 +23,7 @@
         <canvas id="p" role="img" aria-label="물 입자 모형 상자"></canvas>
         <span class="state" id="state">고체(얼음)</span>
         <b class="tnow" id="tnow">-20.0 ℃</b>
-        <small>입자 색은 바뀌지 않아요. 같은 물 입자입니다.</small>
+        <small id="pnote">입자 색은 바뀌지 않아요. 같은 물 입자입니다.</small>
       </div>
     </div>
     <p class="cap" id="plateau">평평한 구간의 길이가 여기에 기록됩니다.</p>
@@ -210,6 +210,8 @@ function render(dt) {
   const sensor = src === "sensor", st = sensor ? stateFromT(liveT) : stateOf(Q);
   drawGraph(); drawParts(st, dt);
   $("state").textContent = sensor && liveT == null ? "센서를 연결하세요" : LABEL[st.s];
+  // 상자가 작아 기체 입자 사이를 실제처럼 멀리 그릴 수 없으므로 글로 알려 준다
+  $("pnote").textContent = st.s === "gas" || st.s === "boiling" ? "실제 수증기는 입자 사이가 이 그림보다 훨씬 멀어요. 입자 색은 그대로, 같은 물 입자입니다." : "입자 색은 바뀌지 않아요. 같은 물 입자입니다.";
   $("tnow").textContent = sensor && liveT == null ? "– ℃" : st.T.toFixed(1) + " ℃";
   if (sensor) {
     $("time").textContent = Math.round(t) + " s"; $("q").textContent = (P * t / 1000).toFixed(1) + " kJ"; $("melt").textContent = $("boil").textContent = "–";

@@ -79,7 +79,7 @@ window.APP = {
   question: "달의 모양은 왜 날마다 달라질까? 일식과 월식은 왜 매달 일어나지 않을까?",
   how: "달의 위상: 시간 슬라이더를 움직이며 태양·지구·달의 위치와 지구에서 보이는 달 모양을 함께 보세요. 일식·월식: 삭 또는 망을 고르고 옆에서 본 그림을 보며 무엇이 일어날지 예측한 뒤 확인하고, 13번을 표에 적어 몇 번이나 일어나는지 세어 보세요.",
   notes: ["삭에서 7일 뒤 달은 어떤 모양일까요? 삭마다 일식이 일어날까요? 그렇게 생각한 까닭도 적어 보세요.", "위에서 본 달의 위치와 지구에서 본 모양을 짝지어 적고, 표에 적은 13번 가운데 일식과 월식이 각각 몇 번이었는지 적어 보세요.", "달의 위상 변화를 햇빛·달의 공전·관측 위치로, 일식과 월식이 매달 일어나지 않는 까닭을 달 궤도의 기울기로 설명해 보세요."],
-  prompt: "중학교 2학년 '태양계' 단원용 웹앱을 만들어 줘. 화면은 셋이야. 달의 위상: 위에서 내려다본 태양–지구–달 배치와 지구에서 본 달의 모양을 나란히 그리고, 삭 이후 경과일(0~29.5일) 슬라이더로 둘이 동시에 바뀌게 해 줘. 재생 버튼과 '이 날짜의 위상은?' 문제 내기도 넣어 줘. 일식·월식: 달의 궤도가 약 5° 기울어 있다는 것을 옆에서 본 그림으로 보여 주고(기울기는 과장), 몇 번째 삭·망인지 고르면 달이 공전면에서 벗어난 정도가 달라져 그림자가 지구나 달을 비껴가게 해 줘. 개기·부분·일어나지 않음을 먼저 예측한 뒤 확인하면 지구에서 본 모습(태양이 가려지는 모습, 붉게 어두워지는 달)을 움직여서 보여 줘. 일식은 보는 곳(본그림자·반그림자·그림자 밖)에 따라 다르게, 월식은 밤인 곳 어디서나 같게 보이게 하고, 13번을 표에 적어 몇 번 일어나는지 세게 해 줘. 광선 작도는 하지 말고 모형 그림으로 설명해 줘. 행성 공전: 수성·금성·지구·화성이 각자의 공전 주기로 태양 둘레를 도는 모습과 몇 바퀴 돌았는지 보여 줘. 센서는 필요 없어.",
+  prompt: "중학교 1학년 '태양계' 단원용 웹앱을 만들어 줘. 화면은 셋이야. 달의 위상: 위에서 내려다본 태양–지구–달 배치와 지구에서 본 달의 모양을 나란히 그리고, 삭 이후 경과일(0~29.5일) 슬라이더로 둘이 동시에 바뀌게 해 줘. 재생 버튼과 '이 날짜의 위상은?' 문제 내기도 넣어 줘. 일식·월식: 달의 궤도가 약 5° 기울어 있다는 것을 옆에서 본 그림으로 보여 주고(기울기는 과장), 몇 번째 삭·망인지 고르면 달이 공전면에서 벗어난 정도가 달라져 그림자가 지구나 달을 비껴가게 해 줘. 개기·부분·일어나지 않음을 먼저 예측한 뒤 확인하면 지구에서 본 모습(태양이 가려지는 모습, 붉게 어두워지는 달)을 움직여서 보여 줘. 일식은 보는 곳(본그림자·반그림자·그림자 밖)에 따라 다르게, 월식은 밤인 곳 어디서나 같게 보이게 하고, 13번을 표에 적어 몇 번 일어나는지 세게 해 줘. 광선 작도는 하지 말고 모형 그림으로 설명해 줘. 행성 공전: 수성·금성·지구·화성이 각자의 공전 주기로 태양 둘레를 도는 모습과 몇 바퀴 돌았는지 보여 줘. 센서는 필요 없어.",
   next: "일식을 볼 수 있는 지역은 왜 그렇게 좁을까? 우리 지역에서 볼 수 있는 다음 일식과 월식은 언제인지 천체 관측 프로그램으로 찾아보자."
 };
 SIH.shell();
@@ -151,7 +151,9 @@ function phaseName(d) {
 // ---------- 일식·월식 ----------
 // 달의 궤도면은 지구가 태양을 도는 면에 대해 약 5° 기울어 있다. 기울어진 방향은 그대로인데 지구가 공전하므로
 // 삭·망마다 달이 공전면에서 벗어난 정도가 달라지고, 그림자가 비껴가면 일식·월식이 일어나지 않는다.
-const LAM0 = -26, STEP = 30.67, EXAG = 20;            // EXAG: 약 5°인 기울기를 20°로 과장해 그린다
+// EXAG: 약 5°인 기울기를 26°로 과장해 그린다. 이 값이면 식이 일어나는 범위(교점에서 일식 약 18°, 개기일식 약 11°,
+// 월식 약 12°, 개기월식 약 4°)가 실제와 비슷해져, 13번 가운데 일식 3번·월식 3번이 일어난다.
+const LAM0 = -22, STEP = 30.67, EXAG = 26;
 const D = 256, RE = 22, RM = 8, PEN = 35, UMB = 16;   // 옆에서 본 그림의 px 크기 (실제 비율이 아님)
 const rad = d => d * Math.PI / 180;
 const nodeAng = (n, kd) => LAM0 + STEP * (n - 1) + (kd === "lunar" ? 15.33 : 0);
@@ -168,7 +170,7 @@ const WHERE = {
   solar: { total: "본그림자가 지나는 좁은 지역", partial: "반그림자가 덮는 지역 (부분일식만)", none: "어디에서도 볼 수 없음" },
   lunar: { total: "밤인 곳이면 어디서나", partial: "밤인 곳이면 어디서나", none: "어디에서도 볼 수 없음" },
 };
-function hideEcl() { shown = false; $("resE").hidden = true; $("eclNow").textContent = "?"; $("eclWhere").textContent = "?"; }
+function hideEcl() { shown = false; $("resE").hidden = true; if (kind === "solar") $("obsA").disabled = false; $("eclNow").textContent = "?"; $("eclWhere").textContent = "?"; }
 function pickKind(k) {
   kind = k; hideEcl();
   $("kindS").setAttribute("aria-pressed", k === "solar" ? "true" : "false");
@@ -198,7 +200,7 @@ function drawEcl() {
   c.strokeStyle = "rgba(190,205,220,.4)"; c.setLineDash([7, 6]); c.lineWidth = 1.2;
   c.beginPath(); c.moveTo(54, ey); c.lineTo(456, ey); c.stroke(); c.setLineDash([]);
   c.fillStyle = "#8fa3b8"; c.font = F(c, 11);
-  if (kind === "solar") { c.textAlign = "left"; c.fillText("지구가 태양을 도는 면", 128, ey + 22); }
+  if (kind === "solar") { c.textAlign = "left"; c.fillText("지구가 태양을 도는 면", 128, h < 0 ? ey - 9 : ey + 22); }   // 달·그림자와 겹치지 않는 쪽에
   else { c.textAlign = "left"; c.fillText("공전면", 56, ey - 9); }
   const shade = (pts, a) => {
     c.beginPath(); pts.forEach(([x, y], i) => (i ? c.lineTo(x, y) : c.moveTo(x, y))); c.closePath();
@@ -206,7 +208,7 @@ function drawEcl() {
   };
   if (kind === "solar") {
     const pw = PEN - RE;                                   // 지구 자리에서 반그림자가 퍼진 폭
-    shade([[mx, my - RM], [mx, my + RM], [ex + 10, my - pw], [ex + 10, my + pw]], 0.45);   // 반그림자 (퍼짐)
+    shade([[mx, my - RM], [mx, my + RM], [ex + 10, my + pw], [ex + 10, my - pw]], 0.45);   // 반그림자 (달 가장자리에서 퍼짐)
     shade([[mx, my - RM], [mx, my + RM], [ex, my]], 0.85);                                  // 본그림자 (모여서 한 점)
   } else {
     const wAt = x => RE - (x - ex) * (RE - UMB) / D;        // 지구의 본그림자는 천천히 좁아진다
@@ -227,9 +229,10 @@ function drawEcl() {
   // 보는 곳 (일식) · 밤인 쪽 (월식)
   c.font = F(c, 11, 600);
   if (kind === "solar") {
-    const lim = RE - 5, cl = v => Math.max(-lim, Math.min(lim, v)), s = h >= 0 ? 1 : -1;
-    const near = -s * lim, deep = Math.abs(h) < RE;           // deep: 본그림자가 지구에 닿는 날
-    const spots = { A: deep ? cl(-h) : near, B: deep ? cl(-h + s * 14) : cl(near + s * 12), C: s * lim };
+    // 지구 위에서 그림자 중심은 -h 이고, 반그림자는 그 둘레 PEN-RE 안이다. 나는 반그림자 안, 다는 반그림자 밖에 놓는다
+    const lim = RE - 2, cl = v => Math.max(-lim, Math.min(lim, v)), s = h >= 0 ? 1 : -1;
+    const near = -s * (RE - 1), deep = Math.abs(h) < RE;      // deep: 본그림자가 지구에 닿는 날, near: 그림자 쪽 지구 가장자리
+    const spots = { A: deep ? cl(-h) : near, B: deep ? cl(-h + s * 8) : near + s * 5, C: s * lim };
     ["A", "B", "C"].forEach(o => {
       const dy = spots[o], x = ex - Math.sqrt(Math.max(1, RE * RE - dy * dy)), y = ey + dy;
       c.beginPath(); c.arc(x, y, 4.5, 0, Math.PI * 2);
@@ -265,7 +268,8 @@ function drawSky() {
   if (kind === "solar") {
     // 보는 곳에 따라 태양과 달이 어긋나 보이는 정도가 달라진다 (달은 서쪽에서 동쪽으로 지나간다)
     const sep = res === "none" ? 3 * R : obs === "C" ? 2.2 * R : obs === "B" ? R : res === "total" ? 0 : R * 0.9;
-    const mxs = cx - ph * 1.6, mys = cy - sep;
+    // 옆 그림에서 달이 공전면 위쪽(h>0)이면 보는 곳(나·다)은 그림자 중심보다 아래라, 달이 태양 위쪽으로 지나가 보인다
+    const mxs = cx - ph * 1.6, mys = cy - (h >= 0 ? 1 : -1) * sep;
     const f = overlap(R, Math.hypot(mxs - cx, mys - cy)), sky = 150 - 132 * f;
     c.fillStyle = `rgb(${Math.round(sky * 0.62)},${Math.round(sky * 0.78)},${Math.round(sky * 0.95)})`; c.fillRect(0, 0, 300, 380);
     if (f > 0.985) {
@@ -283,17 +287,20 @@ function drawSky() {
     c.fillStyle = "rgba(255,255,255,.6)";
     [[34, 60], [262, 92], [70, 300], [250, 318], [150, 52], [212, 272]].forEach(([x, y]) => { c.beginPath(); c.arc(x, y, 1.6, 0, Math.PI * 2); c.fill(); });
     // 달은 지구 그림자 속으로 동쪽(그림에서 왼쪽)부터 들어간다
-    const ux = cx + ph * 2.1, uy = cy - h * (R / RM), UR = R * (UMB / RM), gap = Math.hypot(ux - cx, uy - cy);
+    // 옆 그림에서 달이 공전면 위쪽(h>0)이면 지구의 그림자는 달보다 아래쪽에 있다
+    const ux = cx + ph * 2.1, uy = cy + h * (R / RM), UR = R * (UMB / RM), gap = Math.hypot(ux - cx, uy - cy);
+    const whole = gap + R <= UR;                              // 달 전체가 본그림자 안 (개기)
     c.save(); c.beginPath(); c.arc(cx, cy, R, 0, Math.PI * 2); c.clip();
     c.fillStyle = "#f2efe2"; c.beginPath(); c.arc(cx, cy, R, 0, Math.PI * 2); c.fill();
-    c.fillStyle = "rgba(18,24,38,.35)"; c.beginPath(); c.arc(ux, uy, UR * 1.7, 0, Math.PI * 2); c.fill();   // 반그림자
-    c.fillStyle = "#8a3b2a"; c.beginPath(); c.arc(ux, uy, UR, 0, Math.PI * 2); c.fill();                     // 본그림자 (붉은 구리색)
+    c.fillStyle = `rgba(18,24,38,${res === "none" ? 0.15 : 0.35})`; c.beginPath(); c.arc(ux, uy, UR * 1.7, 0, Math.PI * 2); c.fill();   // 반그림자 (살짝 어두워질 뿐)
+    // 본그림자: 부분월식 동안 가려진 부분은 어둡게 보이고, 달 전체가 들어가면(개기월식) 붉은 구리색으로 보인다
+    c.fillStyle = whole ? "#8a3b2a" : "#2e2a2c"; c.beginPath(); c.arc(ux, uy, UR, 0, Math.PI * 2); c.fill();
     c.restore();
     c.strokeStyle = "rgba(200,215,230,.3)"; c.lineWidth = 1; c.setLineDash([4, 5]);
     c.beginPath(); c.arc(ux, uy, UR, 0, Math.PI * 2); c.stroke(); c.setLineDash([]);
     c.fillStyle = "#dbe7f3"; c.font = F(c, 14, 700); c.textAlign = "center";
-    c.fillText(res === "none" ? "월식이 일어나지 않아요" : gap + R <= UR ? "개기월식: 달 전체가 본그림자 안" : gap - R >= UR ? "아직 그림자 밖" : "부분월식: 달의 일부가 가려짐", cx, 330);
-    if (res !== "none") { c.font = F(c, 12); c.fillStyle = "#d3a99e"; c.fillText("본그림자 안이 붉은 까닭: 지구 대기를 지나 휜 붉은 빛", cx, 352); }
+    c.fillText(res === "none" ? "월식이 일어나지 않아요" : whole ? "개기월식: 달 전체가 본그림자 안" : gap - R >= UR ? "아직 그림자 밖" : "부분월식: 달의 일부가 가려짐", cx, 330);
+    if (res !== "none") { c.font = F(c, 12); c.fillStyle = "#d3a99e"; c.fillText(whole ? "붉은 까닭: 지구 대기를 지나며 꺾인 햇빛 중 붉은빛이 남아서" : "달 전체가 본그림자에 들어가면 붉게 보여요", cx, 352); }
   }
 }
 $("checkE").onclick = () => {
@@ -308,7 +315,10 @@ $("checkE").onclick = () => {
   el.hidden = false;
   el.innerHTML = !pred ? `${head} 다음에는 확인 전에 먼저 예측해 보세요.`
     : `${head} 예측 "${PNAME[pred]}" — ${pred === res ? '<span class="ok">맞았어요.</span>' : '<span class="bad">다시 생각해 볼까요?</span>'}`;
-  if (kind === "solar" && res !== "total" && obs === "A") pickObs("B");   // 본그림자가 닿지 않는 날은 반그림자에서 본다
+  if (kind === "solar" && res !== "total") {   // 본그림자가 지구에 닿지 않는 날에는 '본그림자 안'인 곳이 없다
+    $("obsA").disabled = true;
+    if (obs === "A") pickObs("B");
+  }
   SIH.setRange("ph", -100); draw(); startEcl();
 };
 function startEcl() { playE = true; $("playE").textContent = "멈춤"; startLoop(); }
@@ -325,7 +335,7 @@ function renderSurvey() {
   const s = survey.filter(r => r.solar !== "none").length, l = survey.filter(r => r.lunar !== "none").length;
   $("surveySum").textContent = survey.length < 13
     ? `${survey.length}번 적었습니다 (지금까지 일식 ${s}번, 월식 ${l}번). 13번을 모두 적어 보세요.`
-    : `삭 13번 가운데 일식 ${s}번, 망 13번 가운데 월식 ${l}번이 일어났습니다. 매달 일어나지 않는 까닭을 옆 그림으로 설명해 보세요.`;
+    : `삭 13번 가운데 일식 ${s}번, 망 13번 가운데 월식 ${l}번이 일어났습니다. 매달 일어나지 않는 까닭을 옆 그림으로 설명해 보세요. (실제 횟수는 해마다 조금씩 달라요.)`;
   $("csvE").disabled = !survey.length;
 }
 $("addRow").onclick = () => {

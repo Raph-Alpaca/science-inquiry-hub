@@ -56,7 +56,7 @@ const ACT = {
   "g1-color": async pg => { await pg.selectOption("#target", "100,100,100"); await pg.selectOption("#pred", "흰색"); await pg.click("#measure");
     await pg.click("#tabObj"); await pg.selectOption("#obj", "banana"); await pg.click('#lampBtns [data-l="100,0,0"]'); await pg.selectOption("#pred", "노랑"); await pg.click("#measure"); },
   "g2-gas": async pg => { for (const v of [60, 30, 20]) { await pg.$eval("#vol", (el, v) => { el.value = v; el.dispatchEvent(new Event("input")); }, v); await pg.selectOption("#pred", "up"); await pg.click("#measure"); } await pg.check("#curve"); await pg.waitForTimeout(2100);
-    await pg.click("#tabTV"); for (const v of [0, 40, 80]) { await pg.$eval("#tmp", (el, v) => { el.value = v; el.dispatchEvent(new Event("input")); }, v); await pg.selectOption("#predV", "up"); await pg.click("#measureV"); } await pg.check("#line"); await pg.waitForTimeout(1500); },
+    await pg.click("#tabTV"); for (const v of [0, 40, 80]) { await pg.$eval("#tmp", (el, v) => { el.value = v; el.dispatchEvent(new Event("input")); }, v); await pg.waitForFunction(() => Math.abs(Tg - tmp) <= 0.3); await pg.selectOption("#predV", "up"); await pg.click("#measureV"); } await pg.check("#line"); await pg.waitForTimeout(1500); },
   "g2-photosynthesis": async pg => { await pg.click("#run"); await pg.waitForTimeout(2500); await pg.click("#slopeAll"); await pg.click("#save"); },
   "g2-solar": async pg => { await pg.$eval("#day", el => { el.value = 7.4; el.dispatchEvent(new Event("input")); });
     await pg.click("#tabEcl"); await pg.$eval("#lun", el => { el.value = 2; el.dispatchEvent(new Event("input")); }); await pg.selectOption("#predE", "total"); await pg.click("#checkE"); await pg.waitForTimeout(2600); await pg.click("#addRow"); },
@@ -122,6 +122,8 @@ await withPage("g1-color", async pg => {
   for (const [o, l, want] of cases) { const r = await look(o, l); got.push(r.name); allHidden = allHidden && r.hidden; }
   check("물체의 색: 사과×초록=검정, 사과×흰=빨강, 바나나×빨/초/파/빨+초=빨강/초록/검정/노랑, 흰 종이×빨+파=자홍, 검은 천×흰=검정, 잎×빨=검정, 파란 공×초+파=파랑, 흰 종이×흰=흰색", got.every((n, i) => n === cases[i][2]), got.join(","));
   check("물체의 색: 조명·물체를 바꿀 때마다 결과를 다시 가림", allHidden);
+  const dim = await pg.evaluate(() => ({ paper: objEst([0.36, 0.36, 0.36]).name, apple: objEst([0.3, 0, 0]).name, none: objEst([0, 0, 0]).name }));
+  check("물체의 색: 빛이 약해도 흰 종이는 흰색, 빨간 사과는 빨강 (색 이름은 빛의 비율로)", dim.paper === "흰색" && dim.apple === "빨강" && dim.none === "검정", JSON.stringify(dim));
   await pg.selectOption("#obj", "apple"); await pg.click('#lampBtns [data-l="0,100,0"]'); await pg.selectOption("#pred", "초록"); await pg.click("#measure");
   const why = await pg.textContent("#objWhy"), msg = await pg.textContent("#msg"), last = await pg.$$eval("#log tr", trs => [...trs.at(-1).children].map(td => td.textContent));
   check("물체의 색: 흡수되어 눈에 들어오는 빛이 없으면 검게 보인다고 설명, 틀린 예측 안내", why.includes("흡수되어 눈에 들어오는 빛이 없으므로 검게") && msg.includes("예측은 초록") && last[1] === "빨간 사과 + 초록 빛" && last[2] === "초록 → 검정", `${why} | ${msg} | ${last}`);
@@ -145,11 +147,14 @@ await withPage("g2-gas", async pg => {
   // 온도와 부피
   await pg.click("#tabTV");
   check("기체 온도–부피: 이 화면에서는 충돌 횟수를 감춤 (압력 일정)", (await pg.isHidden("#hitsRow")) && (await pg.isVisible("#tgRow")) && (await pg.isHidden("#pvCtl")));
-  const atT = async (t, pred) => { await pg.$eval("#tmp", (el, v) => { el.value = v; el.dispatchEvent(new Event("input")); }, t); if (pred) await pg.selectOption("#predV", pred); await pg.click("#measureV"); return pg.textContent("#cmpV"); };
+  const atT = async (t, pred) => { await pg.$eval("#tmp", (el, v) => { el.value = v; el.dispatchEvent(new Event("input")); }, t); await pg.waitForFunction(() => Math.abs(Tg - tmp) <= 0.3); if (pred) await pg.selectOption("#predV", pred); await pg.click("#measureV"); return pg.textContent("#cmpV"); };
   const u1 = await atT(40, "up"), u2 = await atT(10, "up"), u3 = await atT(10, "same");
   check("기체 온도–부피: 부피 예측을 직전 측정과 비교해 판정 (올리면 커짐, 내리면 작아짐, 같으면 그대로)", u1.includes("커졌어요") && u1.includes("맞았어요") && u2.includes("작아졌어요") && u2.includes("다시 생각") && u3.includes("변하지 않았어요") && u3.includes("맞았어요"), `${u1} | ${u2} | ${u3}`);
   const head = await pg.textContent("#tvCtl thead"), body = await pg.textContent("#tvCtl");
   check("기체 온도–부피: 표·화면에 절대 온도(K)·V/T 계산이 없음 (정성적)", !/K\b|÷|V\/T|273/.test(head + body) && (await pg.$$("#tbV tr")).length === 3, head);
+  await pg.$eval("#tmp", el => { el.value = 70; el.dispatchEvent(new Event("input")); }); await pg.click("#measureV");
+  const early = await pg.textContent("#cmpV"), nEarly = (await pg.$$("#tbV tr")).length;
+  check("기체 온도–부피: 피스톤이 움직이는 동안에는 기록하지 않고 멈춘 뒤 읽게 함", early.includes("아직 움직이고") && nEarly === 3, early);
   await atT(80);
   await pg.waitForTimeout(3000);
   const vNow = await pg.evaluate(() => V);
@@ -158,7 +163,7 @@ await withPage("g2-gas", async pg => {
   const csv = dl ? fs.readFileSync(await dl.path(), "utf8") : "";
   check("기체 온도–부피: 표를 CSV로 내려받기 (BOM·머리글·4행)", csv.startsWith("﻿") && csv.includes("온도(℃)") && csv.trim().split("\n").length === 5, csv.split("\n")[0]);
   // 성취기준 표시
-  check("기체: 제목 위에 성취기준 [9과06-01] [9과06-02] [9과06-03]", (await pg.textContent(".ask .std")).replace(/\s/g, "") === "[9과06-01][9과06-02][9과06-03]");
+  check("기체: 제목 위에 성취기준 [9과06-01] [9과06-02] [9과06-03]", (await pg.textContent(".ask .std")).replace(/\s/g, "") === "2022개정[9과06-01][9과06-02][9과06-03]");
 });
 await withPage("g2-solar", async pg => {
   const at = async d => { await pg.$eval("#day", (el, d) => { el.value = d; el.dispatchEvent(new Event("input")); }, d); return [await pg.textContent("#phaseNow"), await pg.textContent("#litSide")]; };
@@ -204,6 +209,11 @@ await withPage("g2-solar", async pg => {
   check("일식 그림: 그림자 밖(다)에서는 태양이 그대로 보임", out.mid[0] > 200 && out.mid[1] > 180, JSON.stringify(out.mid));
   const none = await eclAt(nSolarNone, "solar");
   check("일식: 달이 많이 벗어난 삭에는 일식이 일어나지 않는다고 설명", none.now === "일식 없음" && none.res.includes("비껴가요"), JSON.stringify(none));
+  const part = await eclAt(survey.solar.indexOf("partial") + 1, "solar");
+  await pg.click("#obsB");
+  check("부분일식: 본그림자가 지구에 닿지 않으므로 '가: 본그림자 안'은 고를 수 없고, 나(반그림자)에서는 일부만 가려짐", part.now === "부분일식" && (await pg.isDisabled("#obsA")) && (await pg.evaluate(() => obs)) === "B", JSON.stringify(part));
+  const seq = survey.solar.map((k, i) => (k === "partial" && survey.solar[i + 1] === "total" ? "PT" : "")).join("");
+  check("일식·월식: 부분일식 바로 다음 달에 개기일식이 이어지지 않음 (실제 식 범위와 비슷하게)", !seq.includes("PT") && cnt(survey.solar) <= 3 && cnt(survey.lunar) <= 3, `일식 ${survey.solar.join(",")} / 월식 ${survey.lunar.join(",")}`);
   const l1 = await eclAt(nLunarTotal, "lunar");
   check("월식: 개기월식이고 밤인 곳이면 어디서나 볼 수 있음, 보는 곳 버튼은 잠김", l1.now === "개기월식" && l1.where.includes("어디서나") && (await pg.isDisabled("#obsA")), JSON.stringify(l1));
   await pg.$eval("#ph", el => { el.value = 0; el.dispatchEvent(new Event("input")); });
@@ -224,6 +234,11 @@ await withPage("g3-energy", async pg => {
   for (let i = 0; i < 25; i++) { await pg.waitForTimeout(120); const s = await pg.evaluate(() => { const st = stateTrack(); return { x, E: m * g * st.h + 0.5 * m * st.v * st.v, E0: Etotal() }; }); maxX = Math.max(maxX, s.x); maxErr = Math.max(maxErr, Math.abs(s.E - s.E0) / s.E0); }
   check("트랙: 마찰 없을 때 역학적 에너지 보존 (오차 0.5% 미만)", maxErr < 0.005, `최대 오차 ${(maxErr * 100).toFixed(3)}%`);
   check("트랙: 출발 8 m < 언덕 9 m → 언덕 꼭대기(12 m)를 넘지 못함", maxX < 12, `최대 x = ${maxX.toFixed(2)} m`);
+  await pg.click("#reset"); await pg.$eval("#hh", el => { el.value = 8; el.dispatchEvent(new Event("input")); }); await pg.click("#go");
+  let maxEq = 0; for (let i = 0; i < 25; i++) { await pg.waitForTimeout(120); maxEq = Math.max(maxEq, await pg.evaluate(() => x)); }
+  check("트랙: 출발 8 m = 언덕 8 m → 꼭대기에서 속력이 0이 되어 넘지 못함", maxEq < 12 && maxEq > 9, `최대 x = ${maxEq.toFixed(2)} m`);
+  check("에너지: 안내에 가속도 단위(m/s²)를 쓰지 않음", !(await pg.textContent("body")).includes("m/s²"));
+  await pg.$eval("#hh", el => { el.value = 5; el.dispatchEvent(new Event("input")); });
   // 마찰: 멈추지 않고 출발, 에너지 합(역학적+열) 보존
   await pg.click("#reset"); await pg.check("#fric"); await pg.click("#go"); await pg.waitForTimeout(1500);
   const f = await pg.evaluate(() => { const st = stateTrack(); return { x, sum: m * g * st.h + 0.5 * m * st.v * st.v + st.heat, E0: Etotal(), heat: st.heat }; });
@@ -239,6 +254,7 @@ await withPage("g3-energy", async pg => {
   check("자유 낙하: 5 m → 1.01 s 뒤 바닥, 직전 속력 9.9 m/s", Math.abs(fr.t - 1.0102) < 0.01 && Math.abs(fr.v - 9.9) < 0.05 && fr.msg.includes("9.9"), JSON.stringify(fr));
   check("자유 낙하: 떨어지는 동안 위치+운동 에너지 = 처음 에너지, 속력·에너지 그래프 표시", fr.err < 1e-9 && fr.box, `${fr.err}`);
   check("자유 낙하: 1초마다 늘어나는 속력(그래프 기울기) 9.8 m/s 안내", (await pg.textContent("#fcap")).includes("9.8 m/s"));
+  check("자유 낙하: 중력이 한 일만큼 운동 에너지가 늘어난다고 안내 (1 kg, 5 m → 49.0 J)", (await pg.textContent("#fcap")).includes("중력이 공에 한 일") && (await pg.textContent("#fcap")).includes("49.0 J"));
 });
 await withPage("g3-equation", async pg => {
   const setC = async arr => { await pg.evaluate(a => { coef = a; render(); }, arr); return pg.textContent("#vd"); };
@@ -251,6 +267,9 @@ await withPage("g3-equation", async pg => {
   check("반응식: 5CH₄ + 5O₂ → 3CO₂ + 6H₂O 는 원자 수가 달라 완성으로 보지 않음", (await setC([5, 5, 3, 6])).includes("달라요"));
   await pg.selectOption("#rx", "2");
   check("반응식: N₂ + 3H₂ → 2NH₃ 균형", (await setC([1, 3, 2])).includes("균형이 맞았어요"));
+  check("반응식: 기체끼리의 반응이면 계수의 비 = 기체의 부피비 (N₂ : H₂ : NH₃ = 1 : 3 : 2)", (await pg.textContent("#vd")).includes("부피비도 1 : 3 : 2"));
+  await pg.selectOption("#rx", "1");
+  check("반응식: 고체 탄소가 들어간 반응에는 기체 부피비를 말하지 않음", (await setC([1, 1, 1])).includes("균형이 맞았어요") && !(await pg.textContent("#vd")).includes("부피비"));
   // 키보드로 계수 조작 (포커스 유지)
   await pg.selectOption("#rx", "0"); await pg.focus('.st button[data-i="0"][data-d="1"]'); await pg.keyboard.press("Enter"); await pg.keyboard.press("Enter");
   check("반응식: 키보드 Enter 연속 조작 시 포커스 유지", (await pg.evaluate(() => coef[0])) === 3);
@@ -356,7 +375,7 @@ await ctx.close();
   for (const p of PAGES.filter(p => p !== "index")) {
     const { page } = await openPage(rctx, p);
     const t = await page.$eval(".ask .std", el => el.textContent).catch(() => "");
-    check(`성취기준 표시: ${p}`, /^(\[9과\d{2}-\d{2}\])+$/.test(t.replace(/\s/g, "")), t);
+    check(`성취기준 표시: ${p}`, /^2022개정(\[9과\d{2}-\d{2}\])+$/.test(t.replace(/\s/g, "")), t);
     await page.close();
   }
   // 키보드 포커스 표시

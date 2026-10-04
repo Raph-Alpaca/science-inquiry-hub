@@ -123,7 +123,7 @@ window.APP = {
   question: "빨강·초록·파랑 빛을 섞으면 어떤 색으로 보일까? 색이 있는 물체는 어떤 빛을 반사할까?",
   how: "빛의 합성: 무엇을 잴지 고르고 색을 먼저 예측한 뒤 측정해 기록하세요. 물체의 색: 물체와 비추는 빛을 고르고 어떤 색으로 보일지 예측한 뒤 확인하세요. 색 화면은 다른 기기에서 띄우면 됩니다. 폰 카메라를 컴퓨터 화면에 아주 가까이 대면 화소 하나를 이루는 빨강·초록·파랑의 작은 점도 보입니다.",
   notes: ["빨강 빛과 초록 빛을 함께 비추면 무슨 색으로 보일까요? 빨간 사과에 초록 빛만 비추면 무슨 색으로 보일까요?", "측정한 색 이름과 빨강·초록·파랑 빛의 비율(%)을 표에서 옮겨 적어 보세요. 물체마다 어떤 빛을 반사하고 어떤 빛을 흡수했나요?", "영상 장치가 세 가지 빛만으로 여러 색을 만드는 원리를 빛의 합성으로, 물체가 색을 띠는 까닭을 빛의 반사로 설명해 보세요."],
-  prompt: "중학교 1학년 '빛과 파동' 단원의 빛의 합성과 물체의 색 탐구용 웹앱을 만들어 줘. 휴대폰 브라우저에서 뒷면 카메라를 켜고 화면 가운데 네모 안의 평균 색을 구해, 색 이름·색상·채도와 빨강·초록·파랑 빛의 비율 막대, 색상환 위의 점으로 보여 줘. '빨강+초록 빛' 같은 측정 대상을 고르고 색을 예측한 뒤 측정하면 표에 예측과 결과를 기록하고 CSV로 내려받게 해 줘. 다른 기기에서 화면 전체를 빨강·초록·파랑과 그 합성색으로 띄우는 색 화면 모드와, 카메라가 없을 때 세 빛의 세기를 슬라이더로 섞어 보는 시뮬레이션도 넣어 줘. 두 번째 화면은 물체의 색: 빨간 사과·초록 잎·파란 공·노란 바나나·흰 종이·검은 천 중 하나에 흰 빛이나 빨강·초록·파랑 빛(과 그 합성)을 비추면, 물체가 반사하는 빛만 눈으로 들어가고 나머지는 흡수되는 모습을 광선으로 그리고 보이는 색을 알려 줘. 학생이 먼저 예측한 뒤 확인하게 결과를 가려 두고, 카메라로 실제 물체를 잴 때는 같은 조건의 모형 결과를 함께 기록해 줘. 영상은 저장하거나 전송하지 마.",
+  prompt: "중학교 2학년 '빛과 파동' 단원의 빛의 합성과 물체의 색 탐구용 웹앱을 만들어 줘. 휴대폰 브라우저에서 뒷면 카메라를 켜고 화면 가운데 네모 안의 평균 색을 구해, 색 이름·색상·채도와 빨강·초록·파랑 빛의 비율 막대, 색상환 위의 점으로 보여 줘. '빨강+초록 빛' 같은 측정 대상을 고르고 색을 예측한 뒤 측정하면 표에 예측과 결과를 기록하고 CSV로 내려받게 해 줘. 다른 기기에서 화면 전체를 빨강·초록·파랑과 그 합성색으로 띄우는 색 화면 모드와, 카메라가 없을 때 세 빛의 세기를 슬라이더로 섞어 보는 시뮬레이션도 넣어 줘. 두 번째 화면은 물체의 색: 빨간 사과·초록 잎·파란 공·노란 바나나·흰 종이·검은 천 중 하나에 흰 빛이나 빨강·초록·파랑 빛(과 그 합성)을 비추면, 물체가 반사하는 빛만 눈으로 들어가고 나머지는 흡수되는 모습을 광선으로 그리고 보이는 색을 알려 줘. 학생이 먼저 예측한 뒤 확인하게 결과를 가려 두고, 카메라로 실제 물체를 잴 때는 같은 조건의 모형 결과를 함께 기록해 줘. 영상은 저장하거나 전송하지 마.",
   next: "빨강 셀로판을 댄 손전등으로 초록 색종이를 비추면 어떤 색으로 보일까? 측정으로 확인하려면 무엇을 같게 두어야 할까?"
 };
 SIH.shell();
@@ -268,7 +268,13 @@ function patchOf(s) {
   for (let i = 0; i < px.length; i += 4) { px[i] = unlin(s[0]); px[i + 1] = unlin(s[1]); px[i + 2] = unlin(s[2]); px[i + 3] = 255; }
   return analyzePixels(px);
 }
-const modelName = () => patchOf(seenOf()).name;
+// 색 이름은 빨강·초록·파랑 빛의 비율로 정한다. 흰 물체는 빛이 약해도 모든 빛을 반사하는 흰 물체로 본다(교과서 모형)
+function objEst(s = seenOf()) {
+  const e = patchOf(s), m = Math.max(...s);
+  if (m > 0) e.name = patchOf(s.map(v => v / m)).name;
+  return e;
+}
+const modelName = () => objEst().name;
 function whyText() {
   const o = curObj(), s = seenOf(o);
   const own = KNAME.filter((_, i) => o.rho[i] > 0), not = KNAME.filter((_, i) => o.rho[i] === 0);
@@ -276,9 +282,11 @@ function whyText() {
   const lit = KNAME.filter((_, i) => mix[KEYS[i]] > 0), back = KNAME.filter((_, i) => s[i] > 0);
   if (!lit.length) return `${first} 비추는 빛이 없으니 눈에 들어오는 빛도 없어 검게 보여요.`;
   if (!back.length) return `${first} 비춘 ${lit.join("·")} 빛이 모두 흡수되어 눈에 들어오는 빛이 없으므로 검게 보여요.`;
-  const n = patchOf(s).name;
+  const n = objEst(s).name;
   return `${first} 비춘 빛 가운데 ${back.join("·")} 빛이 반사되어 눈에 들어오므로 ${n}${ro(n)} 보여요.`;
 }
+// 물체 겉면 윗선의 높이 (가운데에서 왼쪽·오른쪽으로 40 px 떨어진 곳, objPath 모양에서 계산한 값)
+const TOPY = { round: [-50, -50], rect: [-62, -62], leaf: [-42, -60], banana: [-28, -28] };
 function objPath(c, shape, x, y) {
   c.beginPath();
   if (shape === "round") c.arc(x, y, 64, 0, Math.PI * 2);
@@ -301,7 +309,7 @@ function rays(c, [x1, y1], [x2, y2], amt, s0, s1) {
 }
 function drawObj() {
   const c = vctx, o = curObj(), s = seenOf(o), show = revealed || $("freeLook").checked;
-  const L = [70, 76], E = [410, 76], ox = 240, oy = 215, hitIn = [ox - 40, oy - 20], hitOut = [ox + 40, oy - 20];
+  const L = [70, 76], E = [410, 76], ox = 240, oy = 215, top = TOPY[o.shape], hitIn = [ox - 40, oy + top[0]], hitOut = [ox + 40, oy + top[1]];   // 빛은 물체 겉면에서 반사된다
   c.save();
   c.fillStyle = "#05090b"; c.fillRect(0, 0, VW, VH);
   objPath(c, o.shape, ox, oy);
@@ -333,7 +341,7 @@ function setLamp(v) { const [r, g, b] = v.split(",").map(Number); SIH.setRange("
 
 const refreshSim = () => {
   if (SIH.source === "sensor") return;
-  if (mode === "obj") { drawObj(); if (revealed || $("freeLook").checked) showEst(patchOf(seenOf())); else clearEst(); }
+  if (mode === "obj") { drawObj(); if (revealed || $("freeLook").checked) showEst(objEst()); else clearEst(); }
   else { drawSim(); simMeasure(); }
 };
 ["R", "G", "B"].forEach(k => SIH.bind("l" + k, v => { mix[k] = v; markLamp(); if (mode === "obj") hideResult(); refreshSim(); }, "%"));

@@ -21,7 +21,7 @@
      SIH.bySource(on)               .sensor-only / .sim-only 요소 전환
      SIH.csv(filename, rows)        표를 CSV 파일로 내려받기
      SIH.fmt(v)                     눈금 숫자 표기
-   APP.standards = ["9과06-03"] 을 주면 제목 위에 성취기준 코드를 표시한다.
+   APP.standards = ["9과06-03"] 을 주면 제목 위에 2022 개정 성취기준 코드를 표시한다.
 */
 (function () {
   const SIH = (window.SIH = {});
@@ -67,7 +67,7 @@
       </header>
       <section class="sensorbar" id="sensorBar" aria-label="실시간 센서" hidden></section>
       <section class="ask">
-        ${A.standards && A.standards.length ? `<p class="std" aria-label="성취기준">${A.standards.map((s) => `<span>[${esc(s)}]</span>`).join("")}</p>` : ""}
+        ${A.standards && A.standards.length ? `<p class="std" aria-label="2022 개정 교육과정 성취기준"><span class="cur">2022 개정</span>${A.standards.map((s) => `<span>[${esc(s)}]</span>`).join("")}</p>` : ""}
         <h1>${esc(A.title)}</h1>
         <p class="q">${esc(A.question)}</p>
         ${A.how ? `<p class="how">${esc(A.how)}</p>` : ""}
@@ -127,7 +127,7 @@
       }
     };
     $("noteDown").onclick = () => {
-      const std = A.standards && A.standards.length ? `성취기준: ${A.standards.map((s) => `[${s}]`).join(" ")}\n` : "";
+      const std = A.standards && A.standards.length ? `성취기준(2022 개정): ${A.standards.map((s) => `[${s}]`).join(" ")}\n` : "";
       const t = `[${A.title}] 탐구 기록\n${std}탐구 질문: ${A.question}\n\n■ 예측\n${$("n1").value}\n\n■ 관찰\n${$("n2").value}\n\n■ 설명\n${$("n3").value}\n`;
       const a = document.createElement("a");
       const url = URL.createObjectURL(new Blob([t], { type: "text/plain;charset=utf-8" }));
