@@ -186,7 +186,8 @@ function render(list) {
     $("foot").hidden = true;
     $("notice").innerHTML = `<div class="notice bad"><h2>이런 코드의 책장이 없어요</h2>
       <p><b>${esc(codes.join(", "))}</b> 로 된 책장을 찾지 못했습니다. 코드를 다시 확인하거나 선생님께 물어보세요.</p>
-      ${codeEntryHtml({ value: code, wrong: true, page: "shelf" })}</div>`;
+      ${codeEntryHtml({ value: code, wrong: true, page: "shelf" })}
+      <p class="links"><a href="shelf.html?code=${DEMO_CODE}&demo=1">미리보기 책장 열어 보기</a></p></div>`;
     bindCodeEntry(DEMO);
     rendered = false;
     return;
@@ -400,6 +401,15 @@ function fill(b) {
 function sameOrigin(url) {
   try { return new URL(url, location.href).origin === location.origin; } catch (e) { return false; }
 }
+// 다른 화면 안에 끼워 넣기를 막아 둔 것으로 알려진 곳 (Gemini·ChatGPT·Claude 공유 링크 등).
+// 이런 링크는 '여기에서 열어 보기'를 눌러도 빈 화면만 나오므로 단추 없이 바로 새 창 안내를 한다.
+const NO_FRAME_HOSTS = ["share.gemini.google", "gemini.google.com", "chatgpt.com", "chat.openai.com", "claude.ai"];
+function noFrame(url) {
+  try {
+    const h = new URL(url, location.href).hostname.toLowerCase();
+    return NO_FRAME_HOSTS.some((x) => h === x || h.endsWith("." + x));
+  } catch (e) { return false; }
+}
 function mountApp(b) {
   const box = $("bkPreview");
   if (sameOrigin(b.url)) {
@@ -407,20 +417,19 @@ function mountApp(b) {
     box.innerHTML = `<iframe src="${esc(b.url)}" title="${esc(b.title)} 미리보기" loading="lazy" allow="bluetooth; microphone; camera"></iframe>`;
     return;
   }
+  const blocked = noFrame(b.url);
   box.innerHTML = `<div style="text-align:center;padding:16px">
       <div class="cover-big"><img${b.coverPath ? ' class="photo"' : ""} src="${esc(b.coverPath || coverSrc(b.coverKind))}" alt=""></div>
-      <p>바깥 사이트의 작품이라 여기서 바로 열리지 않을 수 있어요.<br>아래 버튼을 누르면 새 창에서 열립니다.</p>
-      <button class="btn small" id="tryFrame">여기에서 열어 보기</button>
+      ${blocked
+        ? `<p>Gemini·ChatGPT 등에서 만든 작품은 이 안에서 열리지 않아요.<br>“시뮬레이션 열기”를 누르면 새 창에서 열립니다.</p>`
+        : `<p>바깥 사이트의 작품이라 여기서 바로 열리지 않을 수 있어요.<br>“시뮬레이션 열기”를 누르면 새 창에서 열립니다.</p>
+      <button class="btn small" id="tryFrame">여기에서 열어 보기</button>`}
     </div>`;
   const btn = document.getElementById("tryFrame");
+  // 막힌 페이지도 load 신호는 오므로 성공 여부를 알 수 없다. 그래서 아래에 늘 안내 한 줄을 붙인다
   if (btn) btn.onclick = () => {
-    box.innerHTML = `<iframe id="tryIf" src="${esc(b.url)}" title="${esc(b.title)} 미리보기"></iframe>`;
-    let ok = false;
-    const f = document.getElementById("tryIf");
-    f.addEventListener("load", () => (ok = true));
-    setTimeout(() => {
-      if (!ok) box.innerHTML = `<p>이 링크는 다른 화면 안에서 열리지 않도록 막혀 있어요.<br>“시뮬레이션 열기”로 새 창에서 보세요.</p>`;
-    }, 3500);
+    box.innerHTML = `<iframe id="tryIf" src="${esc(b.url)}" title="${esc(b.title)} 미리보기"></iframe>
+      <p class="frame-hint">화면이 비어 있으면 “시뮬레이션 열기”로 새 창에서 보세요.</p>`;
   };
 }
 // 지금 보이는(책장 모양 또는 목록 모양) 책 단추

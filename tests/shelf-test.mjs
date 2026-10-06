@@ -100,6 +100,7 @@ for (const [vn, vp] of Object.entries(VIEWS)) {
     check(`${vn}: 개념 칩 표시`, r.chips.length === 4, r.chips.join(","));
     check(`${vn}: URL 해시 #book=`, r.hash.startsWith("#book="), r.hash);
     check(`${vn}: 바깥 링크는 iframe 대신 안내`, !r.hasIframe && r.fallback);
+    check(`${vn}: 일반 바깥 링크는 '여기에서 열어 보기' 단추`, await page.$("#tryFrame") !== null);
     // 키보드
     await page.keyboard.press("ArrowRight");
     await page.waitForTimeout(1000);

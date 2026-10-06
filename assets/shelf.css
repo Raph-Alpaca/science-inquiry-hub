@@ -323,6 +323,7 @@ body.reading { overflow: hidden; }
 .preview { --tone: #2B8A7B; width: 100%; flex: 1; min-height: 200px; background: var(--paper-2); border: 1px solid var(--line); border-radius: var(--r-s); display: grid; place-items: center; overflow: hidden; position: relative; }
 .preview p { color: var(--ink-2); font-size: 14px; text-align: center; margin: 0; padding: 20px; }
 .preview iframe { width: 100%; height: 100%; border: 0; display: block; background: var(--white); }
+.preview .frame-hint { position: absolute; left: 0; right: 0; bottom: 0; padding: 6px 10px; font-size: 12.5px; background: color-mix(in srgb, var(--paper-2) 88%, transparent); border-top: 1px solid var(--line); }
 .preview .cover-big { width: 46%; max-width: 160px; aspect-ratio: 104 / 156; border-radius: 2px 6px 6px 2px; margin: 0 auto 14px;
   background: linear-gradient(90deg, rgba(0, 0, 0, .3) 0, rgba(0, 0, 0, .12) 6px, rgba(255, 255, 255, .1) 9px, transparent 14px), var(--tone); display: grid; place-items: center; box-shadow: 4px 8px 16px -6px rgba(0, 0, 0, .5); }
 .preview .cover-big img { width: 84%; mix-blend-mode: screen; opacity: .92; }
@@ -487,6 +488,18 @@ dialog.sheet::backdrop { background: rgba(30, 26, 22, .55); }
 dialog.sheet .bd { padding: 24px; }
 dialog.sheet h2 { margin: 0 0 14px; font-family: var(--serif); font-size: 22px; }
 dialog.sheet .ft { display: flex; gap: 8px; justify-content: flex-end; padding: 0 24px 22px; flex-wrap: wrap; }
+/* 활동지 명단 */
+dialog.sheet.wide { max-width: 860px; }
+.ws-tools { display: flex; align-items: center; gap: 8px; margin: 0 0 10px; font-size: 14px; }
+.ws-tools select { font: inherit; padding: 6px 10px; border: 1px solid var(--line-2); border-radius: var(--r-s); background: var(--white); }
+.ws-tools .note { color: var(--ink-2); font-size: 13px; }
+.ws-team { margin: 18px 0 0; }
+.ws-team h3 { margin: 0; font-size: 16px; }
+.ws-team h3 small { color: var(--ink-2); font-weight: 500; font-size: 13px; }
+.ws-table td { padding: 8px; }
+.ws-confirm { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: space-between; margin: 0 0 10px; padding: 10px 12px; border: 1px solid var(--line-2); border-radius: var(--r-s); background: var(--paper-2); font-size: 14px; }
+.ws-confirm p { margin: 0; flex: 1 1 260px; }
+.ws-confirm div { display: flex; gap: 6px; }
 .result { border-radius: var(--r-s); padding: 14px 16px; }
 
 /* ---------- 선생님 화면: 학생 화면 보기 (옆 패널) ---------- */

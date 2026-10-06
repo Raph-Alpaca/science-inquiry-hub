@@ -14,6 +14,16 @@ const CODE = "DEMO-2026-BOOK";
 const URL_ = (q) => `${BASE}/worksheet.html?${q}`;
 const checks = []; const check = (n, ok, d = "") => { checks.push({ n, ok: !!ok }); if (!ok) console.log("   ✗ " + n + (d ? " — " + d : "")); };
 const browser = await chromium.launch();
+// 학번·비밀번호로 활동지 열기 (처음이면 이름을 넣고, 모둠 번호를 고른다)
+async function login(page, { sid, pin, name, team }) {
+  await page.waitForSelector("#loginForm");
+  await page.fill("#sidIn", sid); await page.fill("#pinIn", pin); await page.click("#loginBtn");
+  await page.waitForFunction(() => !document.querySelector("#nameRow")?.hidden || document.querySelector(".team-pick") || !document.getElementById("wsMain").hidden || !document.getElementById("loginErr")?.hidden);
+  if (name && await page.$("#nameRow:not([hidden])")) { await page.fill("#nameIn", name); await page.click("#loginBtn"); }
+  if (team) { await page.waitForSelector(".team-pick"); await page.click(`[data-team="${team}"]`); }
+  await page.waitForFunction(() => !document.getElementById("wsMain").hidden);
+  await page.waitForTimeout(200);
+}
 
 for (const [vn, vp] of [["넓은 화면", { width: 1280, height: 900 }], ["휴대폰", { width: 380, height: 760 }]]) {
   const ctx = await browser.newContext({ viewport: vp, deviceScaleFactor: 1, acceptDownloads: true });
@@ -28,6 +38,15 @@ for (const [vn, vp] of [["넓은 화면", { width: 1280, height: 900 }], ["휴�
   check(`${vn}: 단추 글자가 '활동지 열기'`, (await page.textContent("#codeForm .btn")).includes("활동지 열기"));
   await page.fill("#codeInput", CODE.toLowerCase()); await page.click("#codeForm .btn"); await page.waitForLoadState("networkidle");
   check(`${vn}: 코드를 넣으면 활동지로`, new RegExp(`worksheet\\.html\\?code=${CODE}`).test(page.url()), page.url());
+  check(`${vn}: 책장이 있으면 학번·비밀번호 카드가 먼저`, await page.$("#loginForm") !== null && await page.$eval("#wsMain", (e) => e.hidden));
+  await page.fill("#sidIn", "123"); await page.fill("#pinIn", "1234"); await page.click("#loginBtn");
+  check(`${vn}: 학번이 5자리가 아니면 안내`, (await page.textContent("#loginErr")).includes("5자리"));
+  await page.fill("#sidIn", "20415");
+  check(`${vn}: 학번을 풀어서 보여 줌`, (await page.textContent("#sidHint")).includes("2학년 4반 15번"));
+  await page.fill("#pinIn", "0000"); await page.click("#loginBtn"); await page.waitForTimeout(200);
+  check(`${vn}: 처음 학생은 0000을 쓸 수 없음`, (await page.textContent("#loginErr")).includes("0000"));
+  await login(page, { sid: "20415", pin: "1234", name: "김하늘", team: 3 });
+  check(`${vn}: 로그인 뒤 이름·모둠 띠`, (await page.textContent(".who-bar")).includes("2학년 4반 15번 김하늘") && (await page.textContent(".who-bar")).includes("3모둠"));
 
   /* 2) 1차시 화면 */
   check(`${vn}: 코드 칩 표시`, (await page.textContent("#codeText")).trim() === CODE);
@@ -44,10 +63,10 @@ for (const [vn, vp] of [["넓은 화면", { width: 1280, height: 900 }], ["휴�
 
   /* 3) 입력 → 자동 저장 → 새로고침 후 되살아남 */
   await page.fill('[data-key="meta.team"]', "3모둠");
-  await page.fill('[data-key="meta.name"]', "20415 김하늘");
+  check(`${vn}: 학번·이름 칸은 로그인 정보로 채워지고 잠김`, await page.inputValue('[data-key="meta.name"]') === "20415 김하늘" && await page.$eval('[data-key="meta.name"]', (e) => e.readOnly));
   await page.fill('[data-key="n1.b1.title"]', "이슬점·구름 실험실");
   await page.fill('[data-key="n1.b1.topic"]', "첫 줄\n둘째 줄\n셋째 줄");
-  await page.waitForTimeout(400);
+  await page.waitForTimeout(900);   // 모둠 칸(필명)은 0.6초 쉬었다가 저장한다
   check(`${vn}: 저장 표시`, (await page.textContent("#saveState")).includes("자동 저장됨"));
   const pct1 = (await page.textContent("#sheetPct")).trim();
   check(`${vn}: 진행률이 올라감`, pct1 !== "0%", pct1);
@@ -69,6 +88,7 @@ for (const [vn, vp] of [["넓은 화면", { width: 1280, height: 900 }], ["휴�
   check(`${vn}: 필명은 차시가 바뀌어도 그대로`, await page.inputValue('[data-key="meta.team"]') === "3모둠");
   const parts = await page.$$eval("#sheet .part", (els) => els.map((e) => e.textContent.trim()));
   check(`${vn}: 2차시는 개별 작성·모둠별 작성으로 나뉨`, parts.join("|") === "개별 작성|모둠별 작성", parts.join("|"));
+  check(`${vn}: 모둠별 작성 아래에 '함께 써요' 안내`, (await page.textContent("#sheet .shared-note")).includes("3모둠"));
   check(`${vn}: IDEA 의견 4묶음과 그림 안내 2칸`, (await page.$$("#sheet .reps.c4 .sec.rep")).length === 4 && (await page.$$("#sheet .guide .fig")).length === 2);
   check(`${vn}: 그림 칸마다 '이미지 추가하세요' 글이 준비됨`, (await page.textContent("#sheet .guide .fig figcaption")).includes("이미지 추가하세요"));
   await page.waitForFunction(() => document.querySelectorAll("#sheet .guide .fig.has-img").length === 2, null, { timeout: 5000 }).catch(() => {});
@@ -158,6 +178,71 @@ for (const [vn, vp] of [["넓은 화면", { width: 1280, height: 900 }], ["휴�
   await page.emulateMedia({ media: "screen" });
 
   check(`${vn}: 콘솔 오류 없음`, !errors.length, errors.join(" | ").slice(0, 300));
+  await ctx.close();
+}
+
+/* 모둠 칸 함께 쓰기 · 선생님 활동지 명단 (데모: 같은 브라우저 안에서 학생을 바꿔 가며 확인) */
+{
+  const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+  const page = await ctx.newPage();
+  const errors = []; page.on("pageerror", (e) => errors.push(String(e.message).slice(0, 120)));
+  const W = (n) => URL_(`code=${CODE}&n=${n}&demo=1`);
+  await page.goto(W(2), { waitUntil: "networkidle" });
+  await login(page, { sid: "20415", pin: "1234", name: "김하늘", team: 3 });
+  await page.fill('[data-key="n2.plan.name"]', "하늘의 개인 책 이름");
+  await page.fill('[data-key="n2.prompt"]', "우리 모둠 프롬프트입니다");
+  await page.fill('[data-key="meta.team"]', "별빛탐험대");
+  await page.waitForTimeout(2200);   // 모둠 칸 0.6초, 개인 칸 백업 1.5초
+  await page.click("#logout"); await page.waitForSelector("#loginForm");
+  check("모둠: 다른 학생으로 열기 → 이 기기의 개인 기록을 지우고 로그인 카드", await page.evaluate((k) => localStorage.getItem(k), "sih-ws-" + CODE) === null);
+
+  await login(page, { sid: "20416", pin: "5678", name: "이서준", team: 3 });
+  check("모둠: 같은 모둠 친구 화면에 모둠 칸(프롬프트·필명)이 보임", await page.inputValue('[data-key="n2.prompt"]') === "우리 모둠 프롬프트입니다" && await page.inputValue('[data-key="meta.team"]') === "별빛탐험대");
+  check("모둠: 개인 칸은 보이지 않음", await page.inputValue('[data-key="n2.plan.name"]') === "");
+  await page.fill('[data-key="n2.team.role"]', "너는 물리 선생님이야");
+  await page.waitForTimeout(900);
+  await page.click('#journey .step[data-n="j"]'); await page.waitForTimeout(200);
+  const jn = await page.textContent("#sheet");
+  check("모둠: 나의 여정에 모둠 칸이 '우리 모둠' 표시와 함께", jn.includes("우리 모둠 프롬프트입니다") && jn.includes("너는 물리 선생님이야") && (await page.$$("#sheet .jn-team")).length > 0);
+
+  await page.click("#logout"); await page.waitForSelector("#loginForm");
+  await login(page, { sid: "20417", pin: "1111", name: "박지우", team: 4 });
+  await page.goto(W(2), { waitUntil: "networkidle" }); await page.waitForTimeout(300);
+  check("모둠: 다른 모둠에는 보이지 않음", await page.inputValue('[data-key="n2.prompt"]') === "");
+
+  // 처음 학생이 다시 들어오면 개인 칸이 서버 백업에서 되살아난다
+  await page.click("#logout"); await page.waitForSelector("#loginForm");
+  await page.fill("#sidIn", "20415"); await page.fill("#pinIn", "9999"); await page.click("#loginBtn"); await page.waitForTimeout(300);
+  check("모둠: 비밀번호가 틀리면 막고 선생님께 0000 요청 안내", (await page.textContent("#loginErr")).includes("0000"));
+  await login(page, { sid: "20415", pin: "1234" });
+  check("모둠: 다시 들어오면 개인 칸이 서버 백업에서 되살아나고 모둠 칸도 보임",
+    await page.inputValue('[data-key="n2.plan.name"]') === "하늘의 개인 책 이름" && await page.inputValue('[data-key="n2.team.role"]') === "너는 물리 선생님이야");
+
+  // 선생님: 활동지 명단 → 모둠에서 빼기, 비밀번호 0000
+  const t = await ctx.newPage();
+  await t.goto(`${BASE}/teacher.html?demo=1`, { waitUntil: "networkidle" }); await t.waitForTimeout(500);
+  await t.click('.shelf-card [data-a="worksheets"]'); await t.waitForSelector("#wsDlg[open]"); await t.waitForTimeout(1700);
+  const list = await t.textContent("#ws-list");
+  check("선생님: 활동지 명단에 반·모둠별로 학생이 보임", list.includes("3모둠") && list.includes("4모둠") && list.includes("김하늘") && list.includes("이서준") && list.includes("20417"));
+  await t.click('tr[data-sid="20415"] [data-w="kick"]'); await t.click('.ws-confirm [data-c="1"]');
+  await page.waitForSelector(".team-pick", { timeout: 6000 }).catch(() => {});
+  check("선생님이 모둠에서 빼면 학생 화면이 모둠을 다시 고르게 함", await page.$(".team-pick") !== null && (await page.textContent("#notice")).includes("선생님이 모둠에서 뺐어요"));
+  await page.click('[data-team="3"]'); await page.waitForFunction(() => !document.getElementById("wsMain").hidden);
+  await t.waitForTimeout(1700);
+  await t.click('tr[data-sid="20415"] [data-w="reset"]'); await t.click('.ws-confirm [data-c="1"]');
+  await page.waitForSelector("#loginForm", { timeout: 6000 }).catch(() => {});
+  check("선생님이 비밀번호를 0000으로 바꾸면 학생 화면이 로그인으로", await page.$("#loginForm") !== null);
+  await page.fill("#sidIn", "20415"); await page.fill("#pinIn", "0000"); await page.click("#loginBtn");
+  await page.waitForSelector("#pinForm");
+  check("0000으로 들어오면 새 비밀번호를 정하게 함", (await page.textContent("#notice")).includes("새 비밀번호"));
+  await page.fill("#pin1", "2468"); await page.fill("#pin2", "2468"); await page.click("#pinBtn");
+  await page.waitForFunction(() => !document.getElementById("wsMain").hidden);
+  check("새 비밀번호를 정하면 기록 그대로 활동지로", await page.inputValue('[data-key="n2.plan.name"]') === "하늘의 개인 책 이름");
+  await page.click("#logout"); await page.waitForSelector("#loginForm");
+  await login(page, { sid: "20415", pin: "2468" });
+  check("새 비밀번호로 다시 들어옴", (await page.textContent(".who-bar")).includes("김하늘"));
+  await t.screenshot({ path: path.join(OUT, "teacher-worksheets.png") });
+  check("모둠·명단: 콘솔 오류 없음", !errors.length, errors.join(" | "));
   await ctx.close();
 }
 

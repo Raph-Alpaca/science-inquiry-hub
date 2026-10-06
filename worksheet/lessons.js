@@ -8,7 +8,7 @@
  *
  * blocks[] 에 넣을 수 있는 것
  *   { type:"meta" }                                   공동작가 필명·이름·날짜 (필명·이름은 모든 차시가 같이 씀)
- *   { type:"part", label }                            큰 구분 띠 (개별 작성 / 모둠별 작성)
+ *   { type:"part", label, group? }                    큰 구분 띠 (개별 작성 / 모둠별 작성). group:true 면 다음 띠까지 모둠 칸
  *   { type:"section", title, intro?, items[] }        문항 묶음 (테두리 상자)
  *                                                     cols:2 면 items 의 { type:"break" } 에서 단을 나눔. grid:2 면 두 칸씩 나란히
  *                                                     plain:true 면 문항 번호를 붙이지 않음
@@ -114,7 +114,7 @@ export const LESSONS = [
           },
         ],
       },
-      { type: "part", label: "모둠별 작성" },
+      { type: "part", label: "모둠별 작성", group: true },   // group: 이 띠 아래 칸은 같은 모둠 학생들이 함께 쓴다 (서버의 모둠 문서)
       {
         type: "repeat", count: 4, cols: 4, need: 2, title: "[ {name} ]의 IDEA에 대한 의견", nameKey: "n2.idea{i}.name",
         items: [

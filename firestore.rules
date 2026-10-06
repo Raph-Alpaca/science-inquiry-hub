@@ -143,6 +143,69 @@ service cloud.firestore {
 
         allow update, delete: if isOwner(shelfId);
       }
+
+      // ----- 활동지 -----
+      // 학생은 로그인하지 않는다. 학번 + 비밀번호 4자리로 만든 해시가 자기 문서의 주소다(주소를 아는 사람 = 본인).
+      // 목록 보기(list)는 책장 주인 선생님만 한다. 그래서 학생은 남의 주소를 알아낼 수 없다.
+
+      // 학번 자리: 이 학번이 이미 쓰이는지만 알려 준다(이름 없음). 한 번 만들면 학생은 고칠 수 없다.
+      match /roster/{sid} {
+        allow get: if true;
+        allow list: if isOwner(shelfId);
+        allow create: if codeMatches(shelfId)
+                      && sid.matches('^[1-3][0-9]{4}$')
+                      && request.resource.data.keys().hasOnly(['code', 'createdAt'])
+                      && request.resource.data.createdAt == request.time;
+        allow update: if false;
+        allow delete: if isOwner(shelfId);
+      }
+
+      // 학생 활동지(개인 칸 백업·모둠 번호)
+      match /students/{key} {
+        function okStudent(d) {
+          return d.keys().hasOnly(['sid', 'name', 'grade', 'classNo', 'num', 'team', 'answers', 'reset', 'from', 'code', 'createdAt', 'updatedAt'])
+                 && d.sid is string && d.sid.matches('^[1-3][0-9]{4}$')
+                 && str(d.name, 20) && d.name.size() > 0
+                 && d.grade is int && d.classNo is int && d.num is int
+                 && d.team is int && d.team >= 0 && d.team <= 8
+                 && d.answers is map && d.answers.size() <= 400
+                 && d.reset is bool;
+        }
+        allow get: if true;
+        allow list: if isOwner(shelfId);
+        // 새로 만들기는 둘 중 하나일 때만: 처음 온 학생(학번 자리를 같은 묶음에서 처음 만든다)
+        // 또는 비밀번호 바꾸기(같은 학번의 옛 문서 from 을 같은 묶음에서 지운다). 그래서 남의 학번으로 문서를 하나 더 만들 수 없다.
+        allow create: if isOwner(shelfId)
+                      || (codeMatches(shelfId)
+                          && okStudent(request.resource.data)
+                          && request.resource.data.reset == false
+                          && request.resource.data.createdAt == request.time
+                          && ((!exists(/databases/$(database)/documents/shelves/$(shelfId)/roster/$(request.resource.data.sid))
+                               && existsAfter(/databases/$(database)/documents/shelves/$(shelfId)/roster/$(request.resource.data.sid)))
+                              || (request.resource.data.from is string
+                                  && exists(/databases/$(database)/documents/shelves/$(shelfId)/students/$(request.resource.data.from))
+                                  && get(/databases/$(database)/documents/shelves/$(shelfId)/students/$(request.resource.data.from)).data.sid == request.resource.data.sid
+                                  && !existsAfter(/databases/$(database)/documents/shelves/$(shelfId)/students/$(request.resource.data.from)))));
+        // 학생이 고칠 수 있는 것: 개인 칸, 모둠 번호, 비밀번호 새로 정함(reset → false). 학번·이름·만든 때는 그대로.
+        allow update: if isOwner(shelfId)
+                      || (codeMatches(shelfId)
+                          && okStudent(request.resource.data)
+                          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['answers', 'team', 'reset', 'code', 'updatedAt'])
+                          && (request.resource.data.reset == false || resource.data.reset == true));
+        allow delete: if true;
+      }
+
+      // 모둠 칸: 같은 학년·반·모둠 번호의 학생들이 함께 쓴다. 누가 들어왔는지는 선생님이 명단에서 확인한다.
+      match /groups/{gid} {
+        allow get: if true;
+        allow list: if isOwner(shelfId);
+        allow create, update: if gid.matches('^[1-3]-[0-9]{1,2}-[1-8]$')
+                              && codeMatches(shelfId)
+                              && request.resource.data.keys().hasOnly(['answers', 'code', 'updatedAt'])
+                              && request.resource.data.answers is map
+                              && request.resource.data.answers.size() <= 80;
+        allow delete: if isOwner(shelfId);
+      }
     }
   }
 }

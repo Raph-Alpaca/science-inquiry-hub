@@ -39,6 +39,7 @@ for (const [vn, vp] of Object.entries({ laptop: { width: 1200, height: 860 }, mo
   // 없는 코드
   await page.goto(BASE + "/shelf.html?code=NOPE-2026-XXXX&demo=1", { waitUntil: "networkidle" }); await page.waitForTimeout(400);
   check(`${vn}: 없는 코드면 안내 + 다시 입력 칸`, (await page.textContent("#notice")).includes("책장이 없어요") && (await page.getAttribute("#codeInput", "aria-invalid")) === "true");
+  check(`${vn}: 없는 코드 화면에도 '미리보기 책장 열어 보기'`, (await page.getAttribute("#notice .links a", "href")) === "shelf.html?code=DEMO-2026-BOOK&demo=1");
   await page.screenshot({ path: `${OUT}/${vn}-code-wrong.png` });
   // 제출 폼도 같은 흐름
   await page.goto(BASE + "/submit.html?demo=1", { waitUntil: "networkidle" }); await page.waitForTimeout(300);
@@ -48,6 +49,17 @@ for (const [vn, vp] of Object.entries({ laptop: { width: 1200, height: 860 }, mo
   await page.waitForTimeout(400);
   check(`${vn}: 제출 폼이 열림`, page.url().includes("submit.html?code=DEMO-2026-BOOK&demo=1") && !(await page.evaluate(() => document.getElementById("form").hidden)));
   check(`${vn}: 콘솔 오류 0`, errors.length === 0, errors.join(" | "));
+  // Gemini 공유 링크처럼 끼워 넣기를 막는 곳은 '여기에서 열어 보기' 없이 새 창 안내만
+  await page.goto(BASE + "/shelf.html?code=DEMO-2026-BOOK&demo=1", { waitUntil: "networkidle" });
+  await page.evaluate(async () => { const m = await import("/assets/shelf-data.js"); await m.updateBook("demo", "d1", { url: "https://share.gemini.google/2MAxEnnIsezJ" }); });
+  await page.reload({ waitUntil: "networkidle" }); await page.waitForTimeout(500);
+  await page.click(`${vn === "mobile" ? ".book-row" : ".book"}[data-i="11"]`); await page.waitForTimeout(1700);
+  const gm = await page.evaluate(() => ({ url: document.getElementById("bkOpen").href, btn: !!document.getElementById("tryFrame"), text: document.getElementById("bkPreview").textContent }));
+  check(`${vn}: Gemini 링크는 '여기에서 열어 보기' 없이 새 창 안내`, gm.url.includes("gemini") && !gm.btn && gm.text.includes("Gemini"), JSON.stringify(gm).slice(0, 200));
+  await page.screenshot({ path: `${OUT}/${vn}-gemini.png` });
+  await page.keyboard.press("ArrowRight"); await page.waitForTimeout(1000);
+  await page.click("#tryFrame").catch(() => {}); await page.waitForTimeout(300);
+  check(`${vn}: 일반 바깥 링크는 눌러 열면 '비어 있으면 새 창' 안내가 붙음`, (await page.textContent("#bkPreview")).includes("시뮬레이션 열기"));
   await ctx.close();
 }
 await browser.close(); server.close();

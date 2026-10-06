@@ -715,3 +715,232 @@ export async function deleteBook(shelfId, id) {
   await F.deleteDoc(F.doc(db, "shelves", shelfId, "books", id));
   await F.deleteDoc(F.doc(db, "shelves", shelfId, "private", id)).catch(() => {});
 }
+
+/* ---------- 활동지: 학생 확인·개인 칸 백업·모둠 칸 함께 쓰기 ----------
+ * 학생은 로그인 계정이 없다. 학번(5자리) + 비밀번호(4자리)로 자기 활동지를 찾는다.
+ *   shelves/{책장}/roster/{학번}        이 학번이 이미 쓰이고 있는지만 알려 준다 (이름 없음)
+ *   shelves/{책장}/students/{해시}      해시 = sha256(책장id|학번|비밀번호). 주소를 아는 사람 = 본인
+ *     { sid, name, grade, classNo, num, team(0 = 모둠 없음), answers(개인 칸), reset, code, createdAt, updatedAt }
+ *   shelves/{책장}/groups/{학년-반-모둠} { answers(모둠 칸), code, updatedAt }
+ * 선생님(책장 주인)은 students 를 모두 읽고, 비밀번호를 0000 으로 되돌리거나 모둠에서 뺄 수 있다.
+ */
+export const RESET_PIN = "0000";
+export const MAX_TEAM = 8;
+export function parseSid(sid) {
+  const m = /^([1-3])(\d{2})(\d{2})$/.exec(String(sid || "").trim());
+  if (!m) return null;
+  const grade = +m[1], classNo = +m[2], num = +m[3];
+  if (classNo < 1 || classNo > 20 || num < 1) return null;
+  return { sid: m[0], grade, classNo, num };
+}
+export const groupId = (s) => (s && s.team ? `${s.grade}-${s.classNo}-${s.team}` : "");
+export async function studentKey(shelfId, sid, pin) {
+  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(`${shelfId}|${sid}|${pin}`));
+  return [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+const wsOf = (d, shelfId) => {
+  d.ws = d.ws || {};
+  return (d.ws[shelfId] = d.ws[shelfId] || { roster: {}, students: {}, groups: {} });
+};
+const stuOf = (id, x) => ({ id, ...x, createdAt: ms(x.createdAt), updatedAt: ms(x.updatedAt) });
+const existsErr = () => Object.assign(new Error("이미 쓰이고 있는 학번이에요"), { code: "exists" });
+
+/* 학생 문서 찾기. { status: "ok", student } | { status: "wrong" } (학번은 있는데 비밀번호가 다름) | { status: "new" } */
+export async function findStudent(shelf, sid, pin) {
+  const key = await studentKey(shelf.id, sid, pin);
+  if (DEMO) {
+    const w = wsOf(demoRead(), shelf.id);
+    if (w.students[key]) return { status: "ok", student: stuOf(key, w.students[key]) };
+    return { status: w.roster[sid] ? "wrong" : "new" };
+  }
+  const { F, db } = await fb();
+  const s = await fromServer(() => F.getDocFromServer(F.doc(db, "shelves", shelf.id, "students", key)));
+  if (s.exists()) return { status: "ok", student: stuOf(key, s.data({ serverTimestamps: "estimate" })) };
+  const r = await fromServer(() => F.getDocFromServer(F.doc(db, "shelves", shelf.id, "roster", sid)));
+  return { status: r.exists() ? "wrong" : "new" };
+}
+/* 이 기기에 기억해 둔 열쇠로 다시 열 때. 학생 | null (선생님이 비밀번호를 되돌렸거나 지웠으면 null) */
+export async function getStudent(shelf, key) {
+  if (DEMO) { const s = wsOf(demoRead(), shelf.id).students[key]; return s ? stuOf(key, s) : null; }
+  const { F, db } = await fb();
+  const s = await fromServer(() => F.getDocFromServer(F.doc(db, "shelves", shelf.id, "students", key)));
+  return s.exists() ? stuOf(key, s.data({ serverTimestamps: "estimate" })) : null;
+}
+export async function createStudent(shelf, { sid, name, pin, answers = {} }) {
+  const p = parseSid(sid);
+  if (!p) throw new Error("학번은 5자리 숫자예요 (예: 20415)");
+  const key = await studentKey(shelf.id, p.sid, pin);
+  const base = { sid: p.sid, name: String(name).trim().slice(0, 20), grade: p.grade, classNo: p.classNo, num: p.num, team: 0, answers, reset: false };
+  if (DEMO) {
+    const d = demoRead(), w = wsOf(d, shelf.id);
+    if (w.roster[p.sid]) throw existsErr();
+    w.roster[p.sid] = { createdAt: Date.now() };
+    w.students[key] = { ...base, code: shelf.code, createdAt: Date.now(), updatedAt: Date.now() };
+    demoWrite(d);
+    return stuOf(key, w.students[key]);
+  }
+  const { F, db } = await fb();
+  // 학번 자리(roster)는 한 번만 만들 수 있다. 이미 있으면 규칙이 거부한다
+  const batch = F.writeBatch(db);
+  batch.set(F.doc(db, "shelves", shelf.id, "roster", p.sid), { code: shelf.code, createdAt: F.serverTimestamp() });
+  batch.set(F.doc(db, "shelves", shelf.id, "students", key), { ...base, code: shelf.code, createdAt: F.serverTimestamp(), updatedAt: F.serverTimestamp() });
+  try { await batch.commit(); } catch (e) { if (isDenied(e)) throw existsErr(); throw e; }
+  return stuOf(key, { ...base, createdAt: Date.now(), updatedAt: Date.now() });
+}
+/* 학생 문서 일부 고치기 (개인 칸 백업·모둠 고르기). answers 는 통째로 바꾼다 (지운 칸도 반영되게) */
+export async function updateStudent(shelf, key, patch) {
+  if (DEMO) {
+    const d = demoRead(), w = wsOf(d, shelf.id);
+    if (!w.students[key]) throw Object.assign(new Error("활동지를 찾지 못했어요"), { code: "not-found" });
+    Object.assign(w.students[key], patch, { updatedAt: Date.now() });
+    demoWrite(d);
+    return;
+  }
+  const { F, db } = await fb();
+  await F.updateDoc(F.doc(db, "shelves", shelf.id, "students", key), { ...patch, code: shelf.code, updatedAt: F.serverTimestamp() });
+}
+/* 비밀번호 바꾸기: 새 주소로 옮기고 옛 문서를 지운다. 새 열쇠를 돌려준다 */
+export async function changePin(shelf, student, newPin) {
+  const key = await studentKey(shelf.id, student.sid, newPin);
+  if (key === student.id) { await updateStudent(shelf, key, { reset: false }); return key; }
+  if (DEMO) {
+    const d = demoRead(), w = wsOf(d, shelf.id);
+    const cur = w.students[student.id];
+    if (!cur) throw Object.assign(new Error("활동지를 찾지 못했어요"), { code: "not-found" });
+    w.students[key] = { ...cur, reset: false, updatedAt: Date.now() };
+    delete w.students[student.id];
+    demoWrite(d);
+    return key;
+  }
+  const { F, db } = await fb();
+  const cur = await fromServer(() => F.getDocFromServer(F.doc(db, "shelves", shelf.id, "students", student.id)));
+  if (!cur.exists()) throw Object.assign(new Error("활동지를 찾지 못했어요"), { code: "not-found" });
+  const x = cur.data();
+  const batch = F.writeBatch(db);
+  batch.set(F.doc(db, "shelves", shelf.id, "students", key), {
+    sid: x.sid, name: x.name, grade: x.grade, classNo: x.classNo, num: x.num, team: x.team || 0,
+    answers: x.answers || {}, reset: false, from: student.id,   // 규칙이 같은 학번의 옛 문서를 지우는지 확인한다
+    code: shelf.code, createdAt: F.serverTimestamp(), updatedAt: F.serverTimestamp(),
+  });
+  batch.delete(F.doc(db, "shelves", shelf.id, "students", student.id));
+  await batch.commit();
+  return key;
+}
+/* 내 학생 문서를 지켜본다 (선생님이 모둠에서 빼거나 비밀번호를 되돌리면 알기 위해). cb(학생 | null) */
+export function watchStudent(shelf, key, cb, onError) {
+  if (DEMO) return demoWatch(() => { const s = wsOf(demoRead(), shelf.id).students[key]; return s ? stuOf(key, s) : null; }, cb);
+  let stop = () => {}, cancelled = false;
+  fb().then(({ F, db }) => {
+    if (cancelled) return;
+    stop = F.onSnapshot(F.doc(db, "shelves", shelf.id, "students", key), { includeMetadataChanges: true },
+      (snap) => { if (snap.metadata.fromCache) return; cb(snap.exists() ? stuOf(key, snap.data({ serverTimestamps: "estimate" })) : null); },
+      (e) => { if (onError) onError(e); });
+  }).catch((e) => { if (onError) onError(e); });
+  return () => { cancelled = true; stop(); };
+}
+/* 모둠 칸을 지켜본다. cb({ answers, pending, offline }) */
+export function watchGroup(shelf, gid, cb, onError) {
+  if (DEMO) return demoWatch(() => ({ answers: { ...((wsOf(demoRead(), shelf.id).groups[gid] || {}).answers || {}) }, pending: false, offline: false }), cb);
+  let stop = () => {}, cancelled = false;
+  fb().then(({ F, db }) => {
+    if (cancelled) return;
+    stop = F.onSnapshot(F.doc(db, "shelves", shelf.id, "groups", gid), { includeMetadataChanges: true },
+      (snap) => cb({ answers: (snap.exists() && snap.data().answers) || {}, pending: snap.metadata.hasPendingWrites, offline: snap.metadata.fromCache }),
+      (e) => { if (onError) onError(e); });
+  }).catch((e) => { if (onError) onError(e); });
+  return () => { cancelled = true; stop(); };
+}
+/* 모둠 칸 몇 개를 저장한다. 칸마다 따로 합쳐지므로 다른 모둠원이 쓴 칸을 덮지 않는다 */
+export async function saveGroup(shelf, gid, values) {
+  if (DEMO) {
+    const d = demoRead(), w = wsOf(d, shelf.id);
+    const g = (w.groups[gid] = w.groups[gid] || { answers: {} });
+    Object.assign(g.answers, values); g.updatedAt = Date.now();
+    demoWrite(d);
+    return;
+  }
+  const { F, db } = await fb();
+  await F.setDoc(F.doc(db, "shelves", shelf.id, "groups", gid), { answers: values, code: shelf.code, updatedAt: F.serverTimestamp() }, { merge: true });
+}
+
+/* 선생님 화면: 활동지를 연 학생 명단. cb(학생 목록) — 개인 칸 내용은 빼고 칸 수만 넘긴다 */
+const sortStudents = (list) => list.sort((a, b) => a.sid.localeCompare(b.sid));
+const rosterRow = (id, x) => {
+  const { answers, ...rest } = stuOf(id, x);
+  return { ...rest, filled: Object.values(answers || {}).filter((v) => String(v).trim()).length };
+};
+// 학번 자리만 있고 활동지가 없는 것(만들다 끊긴 경우 등)도 { orphan: true } 로 넣어, 선생님이 풀어 줄 수 있게 한다
+function mergeRoster(students, sids) {
+  const have = new Set(students.map((s) => s.sid));
+  const orphans = sids.filter((sid) => !have.has(sid)).map((sid) => ({ id: "", sid, ...parseSid(sid), name: "", team: 0, orphan: true, filled: 0 }));
+  return sortStudents([...students, ...orphans]);
+}
+export function watchStudents(shelfId, cb, onError) {
+  if (DEMO) return demoWatch(() => { const w = wsOf(demoRead(), shelfId); return mergeRoster(Object.entries(w.students).map(([k, s]) => rosterRow(k, s)), Object.keys(w.roster)); }, cb);
+  let stop = () => {}, cancelled = false;
+  fb().then(({ F, db }) => {
+    if (cancelled) return;
+    const col = (name) => F.collection(db, "shelves", shelfId, name);
+    const rows = (snap) => snap.docs.map((d) => rosterRow(d.id, d.data({ serverTimestamps: "estimate" })));
+    stop = liveOrPoll({
+      cb, onError,
+      fetchOnce: async () => {
+        const [s, r] = await Promise.all([fromServer(() => F.getDocsFromServer(col("students"))), fromServer(() => F.getDocsFromServer(col("roster")))]);
+        return mergeRoster(rows(s), r.docs.map((d) => d.id));
+      },
+      listen: (next, fail) => {
+        let st = null, ro = null;
+        const push = () => { if (st && ro) next(mergeRoster(st, ro)); };
+        const a = F.onSnapshot(col("students"), (snap) => { st = rows(snap); push(); }, fail);
+        const b = F.onSnapshot(col("roster"), (snap) => { ro = snap.docs.map((d) => d.id); push(); }, fail);
+        return () => { a(); b(); };
+      },
+    });
+  }).catch((e) => { if (onError) onError(e); });
+  return () => { cancelled = true; stop(); };
+}
+/* 선생님: 모둠에서 빼기 */
+export async function kickStudent(shelfId, key) {
+  if (DEMO) {
+    const d = demoRead(), s = wsOf(d, shelfId).students[key];
+    if (s) { s.team = 0; demoWrite(d); }
+    return;
+  }
+  const { F, db } = await fb();
+  await F.updateDoc(F.doc(db, "shelves", shelfId, "students", key), { team: 0 });
+}
+/* 선생님: 비밀번호를 0000 으로 되돌린다. 학생은 0000 으로 들어와 새 비밀번호를 정한다 */
+export async function resetStudentPin(shelfId, row) {
+  const key = await studentKey(shelfId, row.sid, RESET_PIN);
+  if (DEMO) {
+    const d = demoRead(), w = wsOf(d, shelfId), s = w.students[row.id];
+    if (!s) return;
+    delete w.students[row.id];
+    w.students[key] = { ...s, reset: true, updatedAt: Date.now() };
+    demoWrite(d);
+    return;
+  }
+  const { F, db } = await fb();
+  if (key === row.id) { await F.updateDoc(F.doc(db, "shelves", shelfId, "students", key), { reset: true }); return; }
+  const cur = await fromServer(() => F.getDocFromServer(F.doc(db, "shelves", shelfId, "students", row.id)));
+  if (!cur.exists()) return;
+  const batch = F.writeBatch(db);
+  batch.set(F.doc(db, "shelves", shelfId, "students", key), { ...cur.data(), reset: true });
+  batch.delete(F.doc(db, "shelves", shelfId, "students", row.id));
+  await batch.commit();
+}
+/* 선생님: 학번을 잘못 넣은 활동지를 지운다 (그 학번을 다시 쓸 수 있게 풀어 준다) */
+export async function deleteStudent(shelfId, row) {
+  if (DEMO) {
+    const d = demoRead(), w = wsOf(d, shelfId);
+    if (row.id) delete w.students[row.id];
+    delete w.roster[row.sid];
+    demoWrite(d);
+    return;
+  }
+  const { F, db } = await fb();
+  const batch = F.writeBatch(db);
+  if (row.id) batch.delete(F.doc(db, "shelves", shelfId, "students", row.id));
+  batch.delete(F.doc(db, "shelves", shelfId, "roster", row.sid));
+  await batch.commit();
+}

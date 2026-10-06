@@ -2,16 +2,22 @@
  *
  * 문항은 worksheet/lessons.js 에서 읽어 그립니다. 이 파일은 문항 내용을 모릅니다.
  *
- * - 저장: 책장 코드마다 localStorage 한 덩어리(sih-ws-{code}). 로그인·네트워크 없이 동작합니다.
- *   { v:1, code, meta:{team,name}, answers:{key:value}, updatedAt }
- *   이 모양 그대로가 나중에 Firestore 에 올릴 문서입니다. 서버 저장을 붙일 때는 persist() 하나만 고칩니다.
+ * - 저장: 책장 코드마다 localStorage 한 덩어리(sih-ws-{code})에 먼저 저장합니다.
+ *   { v:1, code, sid, meta:{team,name}, answers:{key:value}, groupSynced, updatedAt }
+ * - 학생 확인: 학번 + 비밀번호 4자리(shelf-data.js 의 활동지 부분). 이 기기에서는 기억해 둡니다(sih-ws-login-{code}).
+ *   · 개인 칸은 잠시 뒤 서버의 내 문서에도 백업합니다 (기기가 바뀌어도 이어 쓰기).
+ *   · 모둠 칸(lessons.js 에서 group:true 띠 아래 + 공동작가 필명)은 같은 학년·반·모둠 번호 학생들이 함께 씁니다.
+ *   책장을 못 찾거나 인터넷이 없으면 예전처럼 이 기기에만 저장합니다.
  * - 나의 여정(?n=journey): lessons.js 에서 journey 표시가 붙은 문항의 답만 모아 읽기 전용으로 보여 줍니다.
  * - 안내 그림: worksheet/img/ 에 정해진 이름의 파일이 있으면 그림이, 없으면 "○○ 이미지 추가하세요" 칸이 보입니다.
  * - 이미지 저장: 단추를 누를 때만 html2canvas 를 CDN 에서 받아 현재 종이만 캡처합니다.
  * - 인쇄: window.print() + assets/worksheet.css 의 @media print
  */
 import { codeEntryHtml, bindCodeEntry, rememberCode, lastCode } from "./code-entry.js";
-import { DEMO, loadShelf } from "./shelf-data.js";
+import {
+  DEMO, loadShelf, parseSid, groupId, RESET_PIN, MAX_TEAM,
+  findStudent, getStudent, createStudent, updateStudent, changePin, watchStudent, watchGroup, saveGroup,
+} from "./shelf-data.js";
 import { STEPS, LESSONS, JOURNEY } from "../worksheet/lessons.js";
 
 const $ = (id) => document.getElementById(id);
@@ -51,23 +57,148 @@ function load() {
   } catch (e) { /* 무시 */ }
   return { v: 1, code, meta: {}, answers: {}, updatedAt: null };
 }
-// 서버 저장을 붙일 때 고칠 곳은 여기 하나입니다.
+// 이 기기에 저장하고, 로그인했으면 잠시 뒤 서버의 내 문서에도 개인 칸을 백업한다
 function persist(d) {
   try { localStorage.setItem(KEY, JSON.stringify(d)); } catch (e) { /* 저장 공간이 없어도 화면은 계속 */ }
+  if (me) { clearTimeout(backupTimer); backupTimer = setTimeout(backup, 1500); }
 }
-function get(key) { return key.startsWith("meta.") ? (doc.meta[key.slice(5)] ?? "") : (doc.answers[key] ?? ""); }
+
+/* ---------- 학생 확인 · 서버 백업 · 모둠 칸 ---------- */
+const LOGIN_KEY = "sih-ws-login-" + code;
+let shelf = null;         // 책장 (찾지 못했거나 인터넷이 없으면 null → 이 기기에만 저장)
+let me = null;            // 로그인한 학생 { id, sid, name, grade, classNo, num, team, reset }
+let gid = "";             // 모둠 문서 이름 (학년-반-모둠)
+let groupVals = {};       // 서버에서 받은 모둠 칸
+let groupPending = {};    // 아직 서버가 받지 않은 내 모둠 칸 입력
+let groupTimer = null, backupTimer = null, groupSaving = false, groupOffline = false, groupReady = false;
+let stopGroup = () => {}, stopMe = () => {};
+
+// 모둠 칸 key 목록: lessons.js 에서 group:true 띠부터 그 차시 끝(또는 다음 띠)까지 + 공동작가 필명
+const GROUP_KEYS = (() => {
+  const keys = new Set(["meta.team"]);
+  LESSONS.forEach((les) => {
+    let on = false;
+    const span = [];
+    (les.blocks || []).forEach((b) => { if (b.type === "part") on = !!b.group; else if (on) span.push(b); });
+    eachGroup(span, ({ block, i, items }) => {
+      if (block.nameKey) keys.add(fill(block.nameKey, i));
+      eachItem(items, (it) => [it.key, it.key + ".memo", it.key + ".other", it.key + ".name"].forEach((k) => keys.add(k)));
+    });
+  });
+  return keys;
+})();
+const isGroup = (key) => !!gid && GROUP_KEYS.has(key);
+const myName = () => (me ? `${me.sid} ${me.name}` : "");
+
+function rawGet(key) { return key.startsWith("meta.") ? (doc.meta[key.slice(5)] ?? "") : (doc.answers[key] ?? ""); }
+function rawSet(key, value) { if (key.startsWith("meta.")) doc.meta[key.slice(5)] = value; else doc.answers[key] = value; }
+function get(key) {
+  if (key === "meta.name" && me) return myName();
+  if (isGroup(key)) return groupPending[key] ?? groupVals[key] ?? (groupReady ? "" : rawGet(key));
+  return rawGet(key);
+}
 function set(key, value) {
-  if (key.startsWith("meta.")) doc.meta[key.slice(5)] = value; else doc.answers[key] = value;
+  if (key === "meta.name" && me) return;
+  rawSet(key, value);     // 모둠 칸도 이 기기에 사본을 둔다 (인터넷이 끊겨도 보이게)
   doc.updatedAt = new Date().toISOString();
+  if (isGroup(key)) {
+    groupPending[key] = value;
+    clearTimeout(groupTimer);
+    groupTimer = setTimeout(sendGroup, 600);
+  }
   clearTimeout(saveTimer);
-  $("saveState").textContent = "저장 중…";
-  saveTimer = setTimeout(() => { saveTimer = null; persist(doc); $("saveState").textContent = "자동 저장됨"; refreshProgress(); }, 200);
+  showState("저장 중…");
+  saveTimer = setTimeout(() => { saveTimer = null; persist(doc); showState(); refreshProgress(); }, 200);
 }
 // 화면을 옮기거나 다른 쪽으로 나가기 전에, 기다리던 저장을 바로 끝낸다
 function flush() {
+  if (groupTimer) { clearTimeout(groupTimer); groupTimer = null; sendGroup(); }
   if (!saveTimer) return;
   clearTimeout(saveTimer); saveTimer = null;
-  persist(doc); $("saveState").textContent = "자동 저장됨";
+  persist(doc); showState();
+}
+function showState(text) {
+  const el = $("saveState");
+  if (!el) return;
+  if (text) { el.textContent = text; return; }
+  if (!gid) { el.textContent = me ? "자동 저장됨" : "자동 저장됨 (이 기기)"; return; }
+  const waiting = Object.keys(groupPending).length > 0 || groupSaving;
+  el.textContent = groupOffline && waiting ? "모둠 칸 연결 안 됨 · 다시 연결되면 저장돼요"
+    : waiting ? "모둠 칸 저장 중…" : "자동 저장됨 · 모둠 칸은 모둠원과 함께 써요";
+}
+async function sendGroup() {
+  groupTimer = null;
+  if (!gid || !shelf) return;
+  const vals = { ...groupPending };
+  if (!Object.keys(vals).length) return;
+  const at = gid;
+  groupSaving = true; showState();
+  try {
+    await saveGroup(shelf, at, vals);
+    if (at === gid) {
+      Object.assign(groupVals, vals);
+      Object.entries(vals).forEach(([k, v]) => { if (groupPending[k] === v) delete groupPending[k]; });
+    }
+  } catch (e) {
+    console.warn("모둠 칸을 저장하지 못했습니다:", e.code || e.message);
+    groupOffline = true;
+    if (at === gid && !groupTimer) groupTimer = setTimeout(sendGroup, 5000);   // 잠시 뒤 다시
+  } finally { groupSaving = false; showState(); }
+}
+// 개인 칸만 서버의 내 문서에 통째로 올린다 (모둠 칸·필명은 모둠 문서에 있다)
+async function backup() {
+  backupTimer = null;
+  if (!me || !shelf) return true;
+  const answers = {};
+  Object.entries(doc.answers).forEach(([k, v]) => { if (!GROUP_KEYS.has(k) && String(v ?? "") !== "") answers[k] = String(v); });
+  try { await updateStudent(shelf, me.id, { answers }); return true; }
+  catch (e) { console.warn("개인 칸을 서버에 백업하지 못했습니다:", e.code || e.message); return false; }
+}
+// 다른 모둠원이 바꾼 칸을 화면에 반영한다. 지금 내가 쓰고 있는 칸은 건드리지 않는다
+function applyRemote(key) {
+  if (n === J) return;
+  const v = String(get(key));
+  $("sheet").querySelectorAll(`[data-key="${CSS.escape(key)}"]`).forEach((el) => {
+    if (el === document.activeElement) return;
+    if (el.type === "radio") { el.checked = el.value === v; el.toggleAttribute("checked", el.checked); }
+    else if (el.type === "checkbox") { el.checked = v.split("\n").includes(el.value); el.toggleAttribute("checked", el.checked); }
+    else if (el.value !== v) {
+      el.value = v;
+      if (el.tagName === "TEXTAREA") { autosize(el); const c = document.querySelector(`[data-count="${CSS.escape(key)}"]`); if (c) c.textContent = v.length + "자"; }
+    }
+  });
+}
+function onGroup({ answers, pending, offline }) {
+  groupOffline = !!offline && !!pending;
+  const before = groupVals;
+  groupVals = { ...answers };
+  if (!offline) {
+    // 처음 모둠에 붙을 때: 이 기기에 먼저 적어 둔 모둠 칸이 있고 모둠 문서의 그 칸이 비어 있으면 올린다 (한 번만)
+    if (doc.groupSynced !== gid) {
+      if (!doc.groupSynced) GROUP_KEYS.forEach((k) => { const v = rawGet(k); if (String(v).trim() && !String(groupVals[k] ?? "").trim() && groupPending[k] == null) groupPending[k] = v; });
+      doc.groupSynced = gid;
+      if (Object.keys(groupPending).length) sendGroup();
+    }
+    groupReady = true;
+    // 이 기기의 사본도 맞춰 둔다
+    Object.entries(groupVals).forEach(([k, v]) => { if (groupPending[k] == null) rawSet(k, v); });
+    try { localStorage.setItem(KEY, JSON.stringify(doc)); } catch (e) { /* 무시 */ }
+  }
+  const changed = new Set([...Object.keys(before), ...Object.keys(groupVals)].filter((k) => before[k] !== groupVals[k]));
+  if (n === J) { if (changed.size) renderSheet(); }
+  else changed.forEach(applyRemote);
+  if (n !== J && changed.has("meta.team")) {
+    const f = $("sheet").querySelector(".sheet-foot");
+    if (f) f.textContent = footText();
+  }
+  refreshProgress(); showState();
+}
+function joinGroup() {
+  stopGroup();
+  groupVals = {}; groupPending = {}; groupReady = false;
+  gid = groupId(me);
+  if (!gid || !shelf) { gid = ""; return; }
+  stopGroup = watchGroup(shelf, gid, onGroup, (e) => { console.warn("모둠 칸을 읽지 못했습니다:", e.code || e.message); groupOffline = true; showState(); });
 }
 
 /* ---------- 문항 펼치기 (repeat 의 {i} {ord} {nth} 를 채운다) ---------- */
@@ -220,11 +351,11 @@ function blockHtml(b, les) {
     case "meta":
       return `<div class="meta-row">
         <label>공동작가 필명 <input type="text" data-key="meta.team" value="${esc(get("meta.team"))}" placeholder="예: 별빛탐험대" maxlength="30"></label>
-        <label>학번·이름 <input type="text" data-key="meta.name" value="${esc(get("meta.name"))}" placeholder="예: 20415 김하늘" maxlength="40"></label>
+        <label>학번·이름 <input type="text" data-key="meta.name" value="${esc(get("meta.name"))}" placeholder="예: 20415 김하늘" maxlength="40"${me ? ' readonly title="로그인한 학번·이름이에요"' : ""}></label>
         <label>날짜 <input type="text" data-key="n${les.n}.date" value="${esc(get(`n${les.n}.date`))}" placeholder="월 / 일" maxlength="20"></label>
       </div>`;
     case "part":
-      return `<p class="part"><span>${esc(b.label)}</span></p>`;
+      return `<p class="part${b.group && gid ? " shared" : ""}"><span>${esc(b.label)}</span></p>${b.group && gid ? `<p class="shared-note no-print">이 아래 칸은 <b>${me.team}모둠</b> 친구들과 함께 써요. 한 명이 적으면 모두의 활동지에 보여요.</p>` : ""}`;
     case "section": {
       const body = itemsHtml(b.items, { plain: b.plain });
       return `<section class="sec frame${b.narrow ? " narrow" : ""}"><h3>${esc(b.title)}</h3>${b.intro ? `<p class="sec-intro">${esc(b.intro)}</p>` : ""}${b.grid ? `<div class="grid${b.grid}">${body}</div>` : body}</section>`;
@@ -273,11 +404,11 @@ function journeyData() {
     eachGroup(les.blocks, ({ block, i, title, items }) => {
       const entries = [];
       eachItem(items, (it) => {
-        if (it.journey) entries.push({ key: it.key, label: typeof it.journey === "string" ? it.journey : it.label, value: shown(it), long: !!it.copy });
+        if (it.journey) entries.push({ key: it.key, label: typeof it.journey === "string" ? it.journey : it.label, value: shown(it), long: !!it.copy, group: isGroup(it.key) });
       });
       if (!entries.length) return;
       const name = block.nameKey ? String(get(fill(block.nameKey, i))).trim() || "이름" : "";
-      groups.push({ title: title.replace("{name}", name), entries, rep: block.type === "repeat" ? block : null, cols: block.cols || 1 });
+      groups.push({ title: title.replace("{name}", name), entries, rep: block.type === "repeat" ? block : null, cols: block.cols || 1, group: entries.some((e) => e.group) });
     });
     return { les, groups };
   }).filter((x) => x.groups.length);
@@ -299,7 +430,7 @@ function journeyText() {
   return lines.join("\n");
 }
 function journeyGroupHtml(g) {
-  return `<div class="jn-group${g.rep ? " jn-card" : ""}"><h4>${esc(g.title)}</h4><dl>${g.entries.map((e) => `
+  return `<div class="jn-group${g.rep ? " jn-card" : ""}"><h4>${esc(g.title)}${g.group ? ` <span class="jn-team">우리 모둠</span>` : ""}</h4><dl>${g.entries.map((e) => `
     <div class="jn-e${e.long ? " long" : ""}${e.value ? "" : " empty"}"><dt>${esc(e.label)}</dt><dd>${e.value ? esc(e.value) : "아직 쓰지 않았어요"}${e.long && e.value ? `<button type="button" class="btn small copy no-print" data-copy="${esc(e.key)}">복사</button>` : ""}</dd></div>`).join("")}</dl></div>`;
 }
 function journeySheetHtml() {
@@ -350,8 +481,8 @@ function refreshProgress() {
     const el = document.querySelector(`[data-pct="${les.n}"]`);
     if (el && !les.field) el.textContent = progressOf(les) + "%";
   });
-  const cur = lesson();
-  if (cur && !cur.field) $("sheetPct").textContent = progressOf(cur) + "%";
+  const cur = lesson(), pct = $("sheetPct");
+  if (cur && !cur.field && pct) pct.textContent = progressOf(cur) + "%";
 }
 
 function renderSheet() {
@@ -425,13 +556,16 @@ async function copyText(text, btn, from) {
   const was = btn.textContent; btn.textContent = ok ? "복사됨 ✓" : "복사 실패";
   setTimeout(() => (btn.textContent = was), 1400);
 }
+// 모둠 칸은 모둠원 모두의 것이므로 지우지 않는다 (내 개인 칸만 지운다)
 function clearLesson() {
   const les = lesson();
-  storedKeys(les).forEach((k) => { delete doc.answers[k]; });
+  const keys = storedKeys(les);
+  const kept = keys.some((k) => isGroup(k));
+  keys.forEach((k) => { if (!isGroup(k)) delete doc.answers[k]; });
   doc.updatedAt = new Date().toISOString();
   persist(doc);
   renderSheet(); refreshProgress();
-  $("saveState").textContent = `${les.n}차시 입력을 지웠어요`;
+  showState(`${les.n}차시 입력을 지웠어요${kept ? " (모둠 칸은 그대로 두었어요)" : ""}`);
 }
 // 출판 의뢰서(submit.html)가 되살리는 초안(sih-submit-{code})에 제목·주소·공동작가 필명을 넣어 둔다
 function prefillSubmit(map) {
@@ -502,7 +636,7 @@ async function saveImage() {
   if (!code) {
     $("sub").textContent = "책장 코드를 넣으면 우리 반 활동지가 열립니다";
     $("notice").innerHTML = `<div class="notice"><h2>선생님께 책장 코드를 받으세요</h2>
-      <p>활동지는 이 기기에만 저장돼요. 어느 반 활동지인지 알 수 있게 선생님이 알려 준 코드를 넣어 주세요.</p>
+      <p>어느 반 활동지인지 알 수 있게 선생님이 알려 준 코드를 넣어 주세요.</p>
       ${codeEntryHtml({ value: lastCode(), page: "worksheet" })}</div>`;
     bindCodeEntry(DEMO);
     return;
@@ -510,10 +644,227 @@ async function saveImage() {
   doc = load();
   rememberCode(code);
   $("codeText").textContent = code; $("codeChip").hidden = false;
-  $("sub").textContent = "입력하면 이 기기에 자동 저장돼요 · 다 쓰면 이미지로 저장하거나 인쇄해요";
-  $("wsMain").hidden = false; $("wsBar").hidden = false;
-  renderJourney(); renderSheet();
+  $("sub").textContent = "활동지를 여는 중…";
+  let offline = false;
+  try {
+    shelf = (await Promise.race([loadShelf(code), new Promise((_, rej) => setTimeout(() => rej(new Error("timeout")), 12000))])).shelf;
+  } catch (e) { shelf = null; offline = true; }
+  // 책장을 못 찾으면(또는 인터넷이 없으면) 예전처럼 이 기기에만 저장한다
+  if (!shelf) return openSheet(offline ? "인터넷 연결이 없어 이 기기에만 저장돼요. 연결되면 새로고침해서 내 활동지를 여세요." : "");
+  const saved = readLogin();
+  if (!saved) return showLogin();
+  try {
+    const s = await getStudent(shelf, saved.key);
+    if (!s) { forgetLogin(); return showLogin("이 기기에 기억해 둔 활동지가 바뀌었어요. 선생님이 비밀번호를 0000으로 바꿔 주었다면 0000으로 들어와요."); }
+    enter(s);
+  } catch (e) {
+    // 인터넷이 잠시 없으면 이 기기에 기억해 둔 정보로 연다 (모둠 칸은 연결되면 맞춰진다)
+    enter({ ...saved.profile, id: saved.key, reset: false });
+  }
+})();
 
+/* 이 기기의 로그인 기억 */
+function readLogin() { try { const o = JSON.parse(localStorage.getItem(LOGIN_KEY) || "null"); return o && o.key ? o : null; } catch (e) { return null; } }
+function saveLogin() {
+  const { id, sid, name, grade, classNo, num, team } = me;
+  try { localStorage.setItem(LOGIN_KEY, JSON.stringify({ key: id, profile: { sid, name, grade, classNo, num, team } })); } catch (e) { /* 무시 */ }
+}
+function forgetLogin() { try { localStorage.removeItem(LOGIN_KEY); } catch (e) { /* 무시 */ } }
+
+// 로그인한 학생으로 들어간다: 이 기기의 기록과 서버 백업을 합치고, 비밀번호·모둠을 확인한 뒤 활동지를 연다
+function enter(s) {
+  me = s;
+  if (doc.sid && doc.sid !== me.sid) {
+    // 이 기기에 다른 학생의 기록이 있으면 따로 보관해 두고 새로 시작한다
+    try { localStorage.setItem(`${KEY}-${doc.sid}`, JSON.stringify(doc)); } catch (e) { /* 무시 */ }
+    doc = { v: 1, code, meta: {}, answers: {}, updatedAt: null };
+  }
+  doc.sid = me.sid;
+  Object.entries(me.answers || {}).forEach(([k, v]) => { if (String(rawGet(k)).trim() === "") rawSet(k, v); });
+  try { localStorage.setItem(KEY, JSON.stringify(doc)); } catch (e) { /* 무시 */ }
+  saveLogin();
+  if (me.reset) return showPin(true);
+  if (!me.team) return showTeam();
+  openSheet();
+}
+function whoText() { return me ? `${me.grade}학년 ${me.classNo}반 ${me.num}번 ${me.name}` : ""; }
+function card(html) {
+  stopMe(); stopMe = () => {};
+  stopGroup(); stopGroup = () => {}; gid = "";
+  $("wsMain").hidden = true; $("wsBar").hidden = true;
+  $("notice").innerHTML = `<div class="notice ws-card">${html}</div>`;
+  const f = $("notice").querySelector("input");
+  if (f && !matchMedia("(pointer: coarse)").matches) f.focus();
+}
+const fail = (id, text) => { const e = $(id); e.textContent = text; e.hidden = false; };
+const busy = (btn, on, text) => { btn.disabled = on; if (text) btn.textContent = text; };
+const pinOk = (p) => /^\d{4}$/.test(p);
+
+function showLogin(msg = "") {
+  $("sub").textContent = `${shelf.school} · 학번과 비밀번호로 내 활동지를 열어요`;
+  card(`<h2>내 활동지 열기</h2>
+    <p>학번 5자리와 비밀번호 4자리를 넣어요. <b>처음이면 지금 정한 비밀번호를 꼭 기억해 두세요.</b></p>
+    <form class="ws-form" id="loginForm" novalidate>
+      <label>학번 <input id="sidIn" inputmode="numeric" autocomplete="off" maxlength="5" placeholder="예: 20415"></label>
+      <span class="sid-hint" id="sidHint"></span>
+      <label>비밀번호 4자리 <input id="pinIn" type="password" inputmode="numeric" autocomplete="off" maxlength="4" placeholder="●●●●"></label>
+      <div class="ws-name" id="nameRow" hidden>
+        <p>처음 왔네요! 이름을 넣고 시작해요.</p>
+        <label>이름 <input id="nameIn" autocomplete="off" maxlength="20" placeholder="예: 김하늘"></label>
+      </div>
+      <button class="btn primary" id="loginBtn" type="submit">열기</button>
+      <p class="err" id="loginErr" role="alert"${msg ? "" : " hidden"}>${esc(msg)}</p>
+    </form>
+    <p class="links"><a href="#" id="localOnly">로그인하지 않고 이 기기에만 쓰기</a> <small>(모둠 칸이 친구들과 공유되지 않아요)</small></p>`);
+  const sidIn = $("sidIn"), pinIn = $("pinIn"), btn = $("loginBtn");
+  let isNew = false;
+  sidIn.addEventListener("input", () => {
+    sidIn.value = sidIn.value.replace(/\D/g, "");
+    const p = parseSid(sidIn.value);
+    $("sidHint").textContent = p ? `${p.grade}학년 ${p.classNo}반 ${p.num}번` : "";
+    if (isNew) { isNew = false; $("nameRow").hidden = true; btn.textContent = "열기"; }
+  });
+  pinIn.addEventListener("input", () => { pinIn.value = pinIn.value.replace(/\D/g, ""); });
+  $("localOnly").addEventListener("click", (e) => { e.preventDefault(); shelf = null; openSheet("로그인하지 않아 이 기기에만 저장되고, 모둠 칸이 친구들과 공유되지 않아요."); });
+  $("loginForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    $("loginErr").hidden = true;
+    const p = parseSid(sidIn.value), pin = pinIn.value;
+    if (!p) return fail("loginErr", "학번 5자리를 넣어 주세요. 예) 2학년 4반 15번 → 20415");
+    if (!pinOk(pin)) return fail("loginErr", "비밀번호는 숫자 4자리예요.");
+    busy(btn, true);
+    try {
+      if (isNew) {
+        const name = $("nameIn").value.trim();
+        if (!name) { busy(btn, false); return fail("loginErr", "이름을 넣어 주세요."); }
+        // 이 기기에 이미 적어 둔 개인 칸이 있으면(다른 학생 것이 아니면) 그대로 가져간다
+        const mine = !doc.sid || doc.sid === p.sid;
+        const answers = {};
+        if (mine) Object.entries(doc.answers).forEach(([k, v]) => { if (!GROUP_KEYS.has(k) && String(v ?? "") !== "") answers[k] = String(v); });
+        return enter(await createStudent(shelf, { sid: p.sid, name, pin, answers }));
+      }
+      const r = await findStudent(shelf, p.sid, pin);
+      if (r.status === "ok") return enter(r.student);
+      busy(btn, false);
+      if (r.status === "wrong") return fail("loginErr", pin === RESET_PIN
+        ? "비밀번호가 맞지 않아요. 선생님이 아직 0000으로 바꿔 주지 않았을 수 있어요."
+        : "비밀번호가 맞지 않아요. 잊었으면 선생님께 “비밀번호를 0000으로 바꿔 주세요”라고 말해요.");
+      if (pin === RESET_PIN) return fail("loginErr", "0000은 쓸 수 없어요. 다른 숫자 4자리를 정해 주세요.");
+      isNew = true; $("nameRow").hidden = false; btn.textContent = "시작하기"; $("nameIn").focus();
+    } catch (err) {
+      busy(btn, false);
+      fail("loginErr", err.code === "exists" ? "방금 다른 기기에서 같은 학번으로 시작했어요. 비밀번호를 확인하고 다시 눌러 주세요."
+        : "연결이 잠시 끊겼어요. 인터넷을 확인하고 다시 눌러 주세요.");
+      console.warn(err);
+    }
+  });
+}
+
+function showTeam(msg = "") {
+  const cur = me.team;
+  card(`<h2>모둠 번호 고르기</h2>
+    <p>${esc(whoText())} · 선생님이 정해 준 <b>모둠 번호</b>를 골라요. 같은 반에서 같은 번호를 고른 친구들과 <b>2차시 모둠별 칸</b>을 함께 써요.</p>
+    ${msg ? `<p class="err">${esc(msg)}</p>` : ""}
+    <div class="team-pick" role="group" aria-label="모둠 번호">${Array.from({ length: MAX_TEAM }, (_, i) => `<button type="button" class="btn${cur === i + 1 ? " primary" : ""}" data-team="${i + 1}">${i + 1}모둠</button>`).join("")}</div>
+    <p class="err" id="teamErr" role="alert" hidden></p>
+    ${cur ? `<p class="links"><a href="#" id="teamBack">바꾸지 않고 돌아가기</a></p>` : ""}`);
+  if (cur) $("teamBack").addEventListener("click", (e) => { e.preventDefault(); openSheet(); });
+  $("notice").querySelector(".team-pick").addEventListener("click", async (e) => {
+    const b = e.target.closest("[data-team]");
+    if (!b) return;
+    const team = +b.dataset.team;
+    $("notice").querySelectorAll("[data-team]").forEach((x) => (x.disabled = true));
+    try {
+      await updateStudent(shelf, me.id, { team });
+      me.team = team; saveLogin(); openSheet();
+    } catch (err) {
+      $("notice").querySelectorAll("[data-team]").forEach((x) => (x.disabled = false));
+      fail("teamErr", "저장하지 못했어요. 인터넷을 확인하고 다시 눌러 주세요.");
+      console.warn(err);
+    }
+  });
+}
+
+function showPin(forced) {
+  card(`<h2>${forced ? "새 비밀번호 정하기" : "비밀번호 바꾸기"}</h2>
+    <p>${esc(whoText())} · ${forced ? "선생님이 비밀번호를 0000으로 바꿔 주었어요. " : ""}새로 쓸 숫자 4자리를 정해요. 꼭 기억해 두세요.</p>
+    <form class="ws-form" id="pinForm" novalidate>
+      <label>새 비밀번호 <input id="pin1" type="password" inputmode="numeric" maxlength="4" autocomplete="off" placeholder="●●●●"></label>
+      <label>한 번 더 <input id="pin2" type="password" inputmode="numeric" maxlength="4" autocomplete="off" placeholder="●●●●"></label>
+      <button class="btn primary" id="pinBtn" type="submit">정하기</button>
+      <p class="err" id="pinErr" role="alert" hidden></p>
+    </form>
+    ${forced ? "" : `<p class="links"><a href="#" id="pinBack">바꾸지 않고 돌아가기</a></p>`}`);
+  if (!forced) $("pinBack").addEventListener("click", (e) => { e.preventDefault(); openSheet(); });
+  ["pin1", "pin2"].forEach((id) => $(id).addEventListener("input", (e) => { e.target.value = e.target.value.replace(/\D/g, ""); }));
+  $("pinForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const a = $("pin1").value, b = $("pin2").value;
+    if (!pinOk(a)) return fail("pinErr", "숫자 4자리를 넣어 주세요.");
+    if (a === RESET_PIN) return fail("pinErr", "0000은 쓸 수 없어요. 다른 숫자를 정해 주세요.");
+    if (a !== b) return fail("pinErr", "두 칸의 숫자가 달라요. 다시 넣어 주세요.");
+    busy($("pinBtn"), true);
+    try {
+      await backup();
+      me.id = await changePin(shelf, me, a);
+      me.reset = false; saveLogin();
+      if (!me.team) showTeam(); else openSheet();
+    } catch (err) {
+      busy($("pinBtn"), false);
+      fail("pinErr", "바꾸지 못했어요. 인터넷을 확인하고 다시 눌러 주세요.");
+      console.warn(err);
+    }
+  });
+}
+
+async function logout() {
+  flush();
+  clearTimeout(backupTimer);
+  const ok = await backup();
+  stopMe(); stopGroup();
+  forgetLogin();
+  // 서버에 백업했으므로 이 기기의 개인 기록은 지운다 (다음 학생에게 보이지 않게). 백업이 안 됐으면 따로 보관한다
+  try {
+    if (!ok) localStorage.setItem(`${KEY}-${doc.sid}`, JSON.stringify(doc));
+    localStorage.removeItem(KEY);
+  } catch (e) { /* 무시 */ }
+  doc = load(); me = null; gid = "";
+  showLogin();
+}
+
+// 활동지를 연다. note 가 있으면 이 기기에만 저장하는 상태를 알린다
+let wired = false;
+function openSheet(note = "") {
+  if (me && shelf) {
+    $("sub").textContent = `${shelf.school} · 입력하면 자동 저장돼요 · 다 쓰면 이미지로 저장하거나 인쇄해요`;
+    $("notice").innerHTML = `<div class="who-bar no-print"><span><b>${esc(whoText())}</b> · <b>${me.team}모둠</b></span>
+      <span class="grow"></span>
+      <button type="button" class="btn small" id="chTeam">모둠 바꾸기</button>
+      <button type="button" class="btn small" id="chPin">비밀번호 바꾸기</button>
+      <button type="button" class="btn small" id="logout">다른 학생으로 열기</button></div>`;
+    $("chTeam").addEventListener("click", () => { flush(); showTeam(); });
+    $("chPin").addEventListener("click", () => { flush(); showPin(false); });
+    $("logout").addEventListener("click", logout);
+    joinGroup();
+    // 선생님이 모둠에서 빼거나 비밀번호를 0000으로 되돌리면 바로 알아챈다
+    stopMe();
+    stopMe = watchStudent(shelf, me.id, (x) => {
+      if (!me) return;
+      if (!x) { stopMe(); stopGroup(); forgetLogin(); me = null; gid = ""; showLogin("선생님이 비밀번호를 0000으로 바꿨어요. 0000으로 들어와 새 비밀번호를 정해요."); return; }
+      if (x.team !== me.team) {
+        me.team = x.team; saveLogin();
+        if (!x.team) { flush(); showTeam("선생님이 모둠에서 뺐어요. 내 모둠 번호를 다시 골라요."); }
+        else openSheet();
+      }
+    }, () => {});
+  } else {
+    $("sub").textContent = shelf ? `${shelf.school} · 입력하면 이 기기에 자동 저장돼요` : "입력하면 이 기기에 자동 저장돼요 · 다 쓰면 이미지로 저장하거나 인쇄해요";
+    $("notice").innerHTML = note ? `<div class="who-bar no-print"><span>${esc(note)}</span></div>` : "";
+  }
+  $("wsMain").hidden = false; $("wsBar").hidden = false;
+  renderJourney(); renderSheet(); showState();
+  if (wired) return;
+  wired = true;
   $("sheet").addEventListener("input", onInput);
   $("sheet").addEventListener("change", onInput);
   $("sheet").addEventListener("click", (e) => {
@@ -523,6 +874,11 @@ async function saveImage() {
     const g = e.target.closest("a[data-go]"); if (g) { e.preventDefault(); return go(g.dataset.go); }
     const fig = e.target.closest(".fig.has-img img"); if (fig) return window.open(fig.src, "_blank", "noopener");   // 안내 그림은 누르면 새 창에서 크게
     const a = e.target.closest("a[data-prefill]"); if (a) { flush(); try { prefillSubmit(JSON.parse(a.dataset.prefill)); } catch (e2) { /* 무시 */ } }
+  });
+  // 내가 쓰던 칸에서 벗어나면, 그사이 다른 모둠원이 바꾼 값을 반영한다
+  $("sheet").addEventListener("focusout", (e) => {
+    const el = e.target.closest("[data-key]");
+    if (el && isGroup(el.dataset.key)) setTimeout(() => { if (groupPending[el.dataset.key] == null) applyRemote(el.dataset.key); }, 0);
   });
   $("journey").addEventListener("click", (e) => { const a = e.target.closest("a.step"); if (a) { e.preventDefault(); go(a.dataset.n); } });
   $("prev").addEventListener("click", (e) => { e.preventDefault(); go(ORDER[ORDER.indexOf(n) - 1]); });
@@ -535,10 +891,6 @@ async function saveImage() {
   $("clearYes").addEventListener("click", () => { $("confirmClear").hidden = true; clearLesson(); });
   window.addEventListener("beforeprint", () => $("sheet").querySelectorAll("textarea").forEach(autosize));
   window.addEventListener("resize", () => $("sheet").querySelectorAll("textarea").forEach(autosize));
-
-  // 학교 이름은 되면 붙이고, 안 되어도 활동지는 그대로 연다
-  try {
-    const { shelf } = await loadShelf(code);
-    if (shelf) $("sub").textContent = `${shelf.school} · 입력하면 이 기기에 자동 저장돼요`;
-  } catch (e) { /* 네트워크가 없어도 됨 */ }
-})();
+  // 창을 닫거나 다른 앱으로 갈 때 기다리던 저장을 끝낸다
+  document.addEventListener("visibilitychange", () => { if (document.visibilityState === "hidden") { flush(); if (backupTimer) { clearTimeout(backupTimer); backup(); } } });
+}

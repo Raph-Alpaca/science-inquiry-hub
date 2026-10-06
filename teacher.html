@@ -95,6 +95,18 @@
   <div class="ft"><button class="btn" id="dg-cancel">취소</button><button class="btn danger" id="dg-ok" disabled></button></div>
 </dialog>
 
+<!-- 활동지 명단: 학생이 학번·비밀번호로 연 활동지와 고른 모둠. 잘못 들어간 학생은 빼고, 비밀번호를 잊으면 0000으로 -->
+<dialog class="sheet wide" id="wsDlg" aria-labelledby="ws-title">
+  <div class="bd">
+    <h2 id="ws-title">활동지 명단</h2>
+    <p class="upload-note" style="margin:0 0 12px">학생이 학번과 비밀번호로 연 활동지입니다. 같은 반·같은 모둠 번호를 고른 학생끼리 2차시 모둠별 칸을 함께 씁니다.
+      다른 모둠에 잘못 들어간 학생은 <b>모둠에서 빼기</b>, 비밀번호를 잊은 학생은 <b>0000으로</b>를 누르세요. 학생은 0000으로 들어와 새 비밀번호를 정합니다.</p>
+    <div class="ws-tools"><label for="ws-class">반</label><select id="ws-class"></select><span class="note" id="ws-count"></span></div>
+    <div id="ws-list"><p class="upload-note">불러오는 중…</p></div>
+  </div>
+  <div class="ft"><button class="btn dark" id="ws-close">닫기</button></div>
+</dialog>
+
 <dialog class="sheet" id="editDlg">
   <form method="dialog" class="bd" id="editForm">
     <h2>책 수정</h2>
@@ -124,6 +136,7 @@ import {
   listBooks, loadMembers, setStatus, updateBook, deleteBook, clearShelfCache,
   checkAccess, watchAccess, addAllowed, removeAllowed, watchAllowed, watchAllShelves, renameShelf, deleteShelf,
   watchShelfBooks, submitRequest, watchMyRequest, watchRequests, approveRequest, removeRequest,
+  watchStudents, kickStudent, resetStudentPin, deleteStudent, RESET_PIN,
 } from "./assets/shelf-data.js";
 import { SITE } from "./assets/site-config.js";
 
@@ -633,6 +646,7 @@ function shelfCard(s) {
         <button class="btn small" data-a="qr">QR 보기</button>
         <button class="btn small" data-a="copyUrl">주소 복사</button>
         <button class="btn small go" data-a="peek">학생 화면 보기</button>
+        <button class="btn small" data-a="worksheets">활동지 명단</button>
         <button class="btn small" data-a="csv">CSV 내보내기</button>
         <button class="btn small" data-a="settings">책장 설정</button>
       </div>
@@ -740,6 +754,7 @@ function wire() {
       if (a === "peek") return openPeek(s, btn);
       if (a === "csv") return exportCsv(s);
       if (a === "settings") return openSettings(s);
+      if (a === "worksheets") return openWorksheets(s);
       if (a === "approveAll") {
         const ids = liveBooks(s).filter((b) => b.status === "pending").map((b) => b.id);
         await setStatus(s, ids, "approved");
@@ -819,6 +834,88 @@ $("peekClose").onclick = closePeek;
 document.addEventListener("keydown", (ev) => {
   if (ev.key === "Escape" && !$("peek").hidden && !document.querySelector("dialog[open]")) closePeek();
 });
+
+/* ---------- 활동지 명단 ----------
+ * 학생 목록을 실시간으로 받아 반별·모둠별로 묶어 보여 준다. 개인 칸 내용은 읽어 오지 않는다(쓴 칸 수만). */
+let wsStop = () => {}, wsShelf = null, wsRows = [], wsClass = "";
+function openWorksheets(s) {
+  wsShelf = s; wsRows = [];
+  $("ws-title").textContent = `${s.title} · 활동지 명단`;
+  $("ws-list").innerHTML = `<p class="upload-note">불러오는 중…</p>`;
+  $("ws-class").innerHTML = ""; $("ws-count").textContent = "";
+  wsStop();
+  wsStop = watchStudents(s.id, (rows) => { wsRows = rows; drawWorksheets(); },
+    (e) => { $("ws-list").innerHTML = `<p class="upload-note">명단을 불러오지 못했어요. 저장소 규칙을 올렸는지 확인해 주세요. (${esc(e.code || e.message)})</p>`; });
+  $("wsDlg").showModal();
+}
+function drawWorksheets() {
+  const classes = [...new Set(wsRows.map((r) => `${r.grade}-${r.classNo}`))].sort((a, b) => {
+    const [g1, c1] = a.split("-").map(Number), [g2, c2] = b.split("-").map(Number); return g1 - g2 || c1 - c2;
+  });
+  if (!classes.includes(wsClass)) wsClass = classes[0] || "";
+  $("ws-class").innerHTML = classes.map((c) => { const [g, k] = c.split("-"); return `<option value="${c}"${c === wsClass ? " selected" : ""}>${g}학년 ${k}반</option>`; }).join("");
+  $("ws-class").disabled = !classes.length;
+  if (!classes.length) {
+    $("ws-count").textContent = "";
+    $("ws-list").innerHTML = `<p class="upload-note">아직 활동지를 연 학생이 없습니다. 학생은 활동지에서 학번과 비밀번호 4자리를 넣고 들어옵니다.</p>`;
+    return;
+  }
+  const rows = wsRows.filter((r) => `${r.grade}-${r.classNo}` === wsClass);
+  $("ws-count").textContent = `${rows.length}명`;
+  const teams = [...new Set(rows.map((r) => r.team || 0))].sort((a, b) => (a || 99) - (b || 99));
+  const when = (t) => { if (!t) return "-"; const d = new Date(t); return `${d.getMonth() + 1}. ${d.getDate()} ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`; };
+  $("ws-list").innerHTML = teams.map((t) => {
+    const list = rows.filter((r) => (r.team || 0) === t);
+    return `<section class="ws-team"><h3>${t ? `${t}모둠` : "모둠을 아직 고르지 않음"} <small>${list.length}명</small></h3>
+      <table class="books ws-table"><thead><tr><th>학번</th><th>이름</th><th>쓴 칸</th><th>마지막 저장</th><th></th></tr></thead><tbody>
+      ${list.map((r) => `<tr data-sid="${esc(r.sid)}">
+        <td data-l="학번">${esc(r.sid)}</td>
+        <td data-l="이름"><b>${esc(r.name || "(활동지 없음)")}</b>${r.reset ? ' <span class="chip amber">0000으로 바뀜</span>' : ""}</td>
+        <td data-l="쓴 칸">${r.orphan ? "-" : r.filled}</td>
+        <td data-l="마지막 저장">${r.orphan ? "-" : when(r.updatedAt)}</td>
+        <td><span class="row-acts">
+          ${r.team ? `<button class="btn small" data-w="kick">모둠에서 빼기</button>` : ""}
+          ${r.orphan ? "" : `<button class="btn small" data-w="reset"${r.reset ? " disabled" : ""}>비밀번호 ${RESET_PIN}으로</button>`}
+          <button class="btn small" data-w="del" style="color:var(--coral-ink)">지우기</button>
+        </span></td></tr>`).join("")}
+      </tbody></table></section>`;
+  }).join("");
+}
+$("ws-class").onchange = () => { wsClass = $("ws-class").value; drawWorksheets(); };
+$("ws-close").onclick = () => $("wsDlg").close();
+$("wsDlg").addEventListener("close", () => { wsStop(); wsStop = () => {}; });
+$("ws-list").onclick = async (ev) => {
+  const b = ev.target.closest("[data-w]");
+  if (!b || !wsShelf) return;
+  const r = wsRows.find((x) => x.sid === b.closest("tr").dataset.sid && (x.id || !x.orphan));
+  if (!r) return;
+  const who = `${r.sid} ${r.name || ""}`.trim();
+  const ask = { kick: `${who} 학생을 ${r.team}모둠에서 뺄까요? 학생 화면에서 모둠 번호를 다시 고르게 됩니다.`,
+    reset: `${who} 학생의 비밀번호를 ${RESET_PIN}으로 바꿀까요? 학생은 ${RESET_PIN}으로 들어와 새 비밀번호를 정합니다.`,
+    del: `${who} 학생의 활동지를 지울까요? 서버에 백업된 개인 칸이 지워지고, 이 학번으로 다시 시작할 수 있게 됩니다. (모둠 칸은 그대로입니다)` }[b.dataset.w];
+  if (!(await confirmBox(ask))) return;
+  b.disabled = true;
+  try {
+    if (b.dataset.w === "kick") { await kickStudent(wsShelf.id, r.id); toast("모둠에서 뺐어요"); }
+    if (b.dataset.w === "reset") { await resetStudentPin(wsShelf.id, r); toast(`비밀번호를 ${RESET_PIN}으로 바꿨어요`); }
+    if (b.dataset.w === "del") { await deleteStudent(wsShelf.id, r); toast("활동지를 지웠어요"); }
+  } catch (e) {
+    b.disabled = false;
+    toast("바꾸지 못했어요. 인터넷을 확인해 주세요.");
+    console.warn(e);
+  }
+};
+// 명단 창 안에서 쓰는 짧은 확인 (브라우저 confirm 창 대신)
+function confirmBox(text) {
+  return new Promise((res) => {
+    const box = document.createElement("div");
+    box.className = "ws-confirm";
+    box.innerHTML = `<p>${esc(text)}</p><div><button class="btn small" data-c="0">취소</button><button class="btn small dark" data-c="1">확인</button></div>`;
+    $("ws-list").before(box);
+    box.querySelector('[data-c="1"]').focus();
+    box.onclick = (e) => { const c = e.target.closest("[data-c]"); if (!c) return; box.remove(); res(c.dataset.c === "1"); };
+  });
+}
 
 /* ---------- QR ---------- */
 async function showQr(s) {
