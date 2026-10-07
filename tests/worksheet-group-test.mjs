@@ -55,11 +55,11 @@ async function student(tag) {
   await page.goto(W(), { waitUntil: "load" });   // 실시간 연결(long polling)이 늘 열려 있어 networkidle 은 오지 않는다
   return { ctx, page, errors, tag };
 }
-async function login(page, { sid, pin, name, team }) {
+async function login(page, { sid, pin, team }) {
   await page.waitForSelector("#loginForm", { timeout: 15000 });
   await page.fill("#sidIn", sid); await page.fill("#pinIn", pin); await page.click("#loginBtn");
-  await page.waitForFunction(() => !document.querySelector("#nameRow")?.hidden || document.querySelector(".team-pick") || document.querySelector("#pinForm") || !document.getElementById("wsMain").hidden || !document.getElementById("loginErr")?.hidden, null, { timeout: 15000 });
-  if (name && await page.$("#nameRow:not([hidden])")) { await page.fill("#nameIn", name); await page.click("#loginBtn"); }
+  await page.waitForFunction(() => !document.querySelector("#newRow")?.hidden || document.querySelector(".team-pick") || document.querySelector("#pinForm") || !document.getElementById("wsMain").hidden || !document.getElementById("loginErr")?.hidden, null, { timeout: 15000 });
+  if (await page.$("#newRow:not([hidden])")) await page.click("#loginBtn");   // 처음이면 [시작하기] (이름은 받지 않는다)
   if (team) { await page.waitForSelector(".team-pick", { timeout: 15000 }); await page.click(`[data-team="${team}"]`); }
   await page.waitForFunction(() => !document.getElementById("wsMain").hidden, null, { timeout: 15000 });
   await sleep(300);
@@ -67,13 +67,13 @@ async function login(page, { sid, pin, name, team }) {
 const waitValue = (page, key, v, ms = 10000) => page.waitForFunction(([k, v]) => document.querySelector(`[data-key="${k}"]`)?.value === v, [key, v], { timeout: ms }).then(() => true).catch(() => false);
 
 const A = await student("A"), B = await student("B"), C = await student("C");
-await login(A.page, { sid: "20415", pin: "1234", name: "김하늘", team: 3 });
-await login(B.page, { sid: "20416", pin: "5678", name: "이서준", team: 3 });
-await login(C.page, { sid: "20417", pin: "1111", name: "박지우", team: 4 });
+await login(A.page, { sid: "20415", pin: "1234", team: 3 });
+await login(B.page, { sid: "20416", pin: "5678", team: 3 });
+await login(C.page, { sid: "20417", pin: "1111", team: 4 });
 check("학생 셋이 학번·비밀번호로 들어와 모둠을 고름", (await A.page.textContent(".who-bar")).includes("3모둠") && (await C.page.textContent(".who-bar")).includes("4모둠"));
 
 await A.page.fill('[data-key="n2.prompt"]', "너는 물리 선생님이야. 빗면 시뮬레이션을 만들어 줘");
-await A.page.fill('[data-key="n2.plan.name"]', "하늘의 개인 기획");
+await A.page.fill('[data-key="n2.plan.name"]', "알파카의 개인 기획");
 check("A 가 쓴 모둠 칸이 B 화면에 새로고침 없이 뜸", await waitValue(B.page, "n2.prompt", "너는 물리 선생님이야. 빗면 시뮬레이션을 만들어 줘"));
 check("A 의 개인 칸은 B 에게 안 보임", await B.page.inputValue('[data-key="n2.plan.name"]') === "");
 await sleep(1500);
@@ -94,12 +94,35 @@ check("내가 쓰고 있는 칸은 그대로", await B.page.inputValue('[data-ke
 await sleep(1200);
 check("B 가 쓴 칸이 A 에게 반영", await waitValue(A.page, "n2.team.role", "B 가 쓰는 역할"));
 
+// 3차시 모둠 대화: A 가 올린 글이 B 에게 실시간으로, 학번과 함께. C(다른 모둠)에는 안 보임
+const SCI = '.chat[data-chat-key="n3.chat.sci"]', UX = '.chat[data-chat-key="n3.chat.ux"]';
+for (const s of [A, B, C]) { await s.page.click('#journey .step[data-n="3"]'); await sleep(300); }
+await A.page.fill(`${SCI} textarea.chat-in`, "슬라이더에 단위가 없어요"); await A.page.click(`${SCI} [data-chat="post"]`);
+const seen = await B.page.waitForFunction(() => [...document.querySelectorAll('.chat .bubble.l:not(.blank) .chat-text')].some((e) => e.textContent === "슬라이더에 단위가 없어요"), null, { timeout: 10000 }).then(() => true).catch(() => false);
+check("A 가 올린 대화 글이 B 화면에 새로고침 없이, 학번 20415 와 함께", seen && (await B.page.textContent(`${SCI} .bubble.l:not(.blank) .who`)).includes("20415"));
+check("B 화면에서 친구 글에는 고치기·지우기 없음", (await B.page.$$(`${SCI} .bubble.l [data-chat]`)).length === 0);
+await sleep(1000);
+check("다른 모둠 C 에는 대화 글이 안 보임", (await C.page.$$(".chat .bubble:not(.blank)")).length === 0);
+await A.page.fill(`${UX} textarea.chat-in`, "리셋 단추가 필요해요"); await A.page.click(`${UX} [data-chat="post"]`);
+await A.page.waitForSelector(`${UX} .bubble.mine`, { timeout: 10000 }).catch(() => {});
+check("A 가 3차시 전체 2개를 다 쓰면 올리기가 잠김", await A.page.$eval(`${SCI} [data-chat="post"]`, (b) => b.disabled));
+const third = await rest("GET", `shelves/${SHELF}/groups/2-4-3/posts/20415-2`);
+check("서버에 글이 학번-번호 주소로 저장됨", !!third && third.fields.sid.stringValue === "20415" && third.fields.area.stringValue === "ux");
+await A.page.click(`${SCI} [data-chat="edit"]`); await A.page.fill(`${SCI} textarea.chat-edit`, "슬라이더에 단위(°)가 없어요"); await A.page.click(`${SCI} [data-chat="save"]`);
+check("A 가 고친 글이 B 에게 반영", await B.page.waitForFunction(() => [...document.querySelectorAll(".chat-text")].some((e) => e.textContent === "슬라이더에 단위(°)가 없어요"), null, { timeout: 10000 }).then(() => true).catch(() => false));
+await A.page.click(`${UX} [data-chat="del"]`); await A.page.click(`${UX} [data-chat="delYes"]`);
+check("A 가 지운 글이 B 화면에서 사라짐", await B.page.waitForFunction(() => ![...document.querySelectorAll(".chat-text")].some((e) => e.textContent === "리셋 단추가 필요해요"), null, { timeout: 10000 }).then(() => true).catch(() => false));
+check("지운 뒤 A 는 다시 올릴 수 있음", await A.page.waitForFunction(() => !document.querySelector('.chat[data-chat-key="n3.chat.sci"] [data-chat="post"]').disabled, null, { timeout: 5000 }).then(() => true).catch(() => false));
+const studentDoc = await rest("GET", `shelves/${SHELF}/students/${keyOf("20415", "1234")}`);
+check("학생 문서에 이름이 없음", studentDoc && !studentDoc.fields.name);
+for (const s of [A, B, C]) { await s.page.click('#journey .step[data-n="2"]'); await sleep(200); }
+
 // 서버 확인
 await sleep(1800);
 const g = await rest("GET", `shelves/${SHELF}/groups/2-4-3`);
 check("모둠 문서(2-4-3)에 모둠 칸이 저장됨", g && g.fields.answers.mapValue.fields["n2.prompt"].stringValue.includes("빗면"));
 const sa = await rest("GET", `shelves/${SHELF}/students/${keyOf("20415", "1234")}`);
-check("A 의 개인 칸이 A 문서에 백업됨 (모둠 칸은 빠짐)", sa && sa.fields.answers.mapValue.fields["n2.plan.name"].stringValue === "하늘의 개인 기획" && !sa.fields.answers.mapValue.fields["n2.prompt"]);
+check("A 의 개인 칸이 A 문서에 백업됨 (모둠 칸은 빠짐)", sa && sa.fields.answers.mapValue.fields["n2.plan.name"].stringValue === "알파카의 개인 기획" && !sa.fields.answers.mapValue.fields["n2.prompt"]);
 
 // 다른 기기에서 A 로 들어오기
 const A2 = await student("A2");
@@ -107,7 +130,7 @@ await A2.page.fill("#sidIn", "20415"); await A2.page.fill("#pinIn", "9999"); awa
 await A2.page.waitForFunction(() => !document.getElementById("loginErr").hidden, null, { timeout: 10000 }).catch(() => {});
 check("비밀번호가 틀리면 막힘", (await A2.page.textContent("#loginErr")).includes("비밀번호가 맞지 않아요"));
 await login(A2.page, { sid: "20415", pin: "1234" });
-check("다른 기기에서 들어와도 개인 칸·모둠 칸이 보임", await A2.page.inputValue('[data-key="n2.plan.name"]') === "하늘의 개인 기획" && await A2.page.inputValue('[data-key="n2.prompt"]') !== "");
+check("다른 기기에서 들어와도 개인 칸·모둠 칸이 보임", await A2.page.inputValue('[data-key="n2.plan.name"]') === "알파카의 개인 기획" && await A2.page.inputValue('[data-key="n2.prompt"]') !== "");
 await A2.ctx.close();
 
 // 선생님: 모둠에서 빼기 (관리 토큰으로 team 을 0 으로)

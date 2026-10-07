@@ -85,11 +85,9 @@
   font: inherit; font-size: 20px; font-weight: 600; letter-spacing: .06em; font-variant-numeric: tabular-nums;
   padding: 9px 14px; border: 1px solid var(--line-2); border-radius: var(--r-s); background: var(--white); color: var(--ink); min-width: 0;
 }
-.ws-form #nameIn { letter-spacing: 0; }
 .ws-form input::placeholder { color: var(--ink-3); font-weight: 500; letter-spacing: 0; }
 .ws-form .sid-hint { font-size: 13px; color: var(--ink-2); margin-top: -6px; min-height: 1em; }
-.ws-form .ws-name { display: grid; gap: 8px; }
-.ws-form .ws-name p { margin: 0; font-weight: 600; color: var(--ink); }
+.ws-form .ws-new { margin: 0; font-weight: 600; color: var(--ink); }
 .ws-card .err { color: var(--bad); font-size: 13.5px; margin: 0; }
 .team-pick { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin: 14px 0; max-width: 460px; }
 .team-pick .btn { justify-content: center; }
@@ -184,12 +182,28 @@
 .criteria { list-style: none; margin: 0 0 16px; padding: 12px 16px; border: var(--dot); border-radius: 12px; background: var(--white); display: grid; gap: 5px; font-size: 14px; line-height: 1.55; }
 .criteria b { font-weight: 700; }
 
-/* 이름 + 말풍선 (모둠원이 번갈아 적는다) */
-.say { display: flex; gap: 8px; align-items: flex-start; width: 88%; margin: 0 0 12px; }
-.say.r { flex-direction: row-reverse; margin-left: auto; }
-.sheet .say input.say-name, .say .as-text.say-name { flex: 0 0 76px; width: 76px; padding: 7px 6px; font-size: 13.5px; text-align: center; border-radius: 10px; }
-.sheet .say textarea, .say .as-text.ta { flex: 1; width: auto; min-width: 0; border-radius: 4px 16px 16px 16px; }
-.sheet .say.r textarea, .say.r .as-text.ta { border-radius: 16px 4px 16px 16px; }
+/* 3차시 모둠 대화: 학번 딱지 + 말풍선. 내 글은 오른쪽, 친구 글은 왼쪽 */
+.print-only { display: none !important; }
+.chat { margin: 0 0 14px; }
+.chat-list { display: grid; gap: 10px; margin-bottom: 10px; }
+.chat-empty, .chat-off { margin: 0; padding: 10px 12px; border: 1.5px dashed var(--line-2); border-radius: 12px; color: var(--ink-2); font-size: 13.5px; text-align: center; }
+.bubble { display: flex; gap: 8px; align-items: flex-start; width: 88%; }
+.bubble.r { flex-direction: row-reverse; margin-left: auto; }
+.bubble .who { flex: 0 0 78px; display: grid; justify-items: center; gap: 1px; padding: 6px 4px; border: var(--dot); border-radius: 10px; background: var(--white); font-size: 12.5px; line-height: 1.25; text-align: center; }
+.bubble .who b { font-size: 14px; font-variant-numeric: tabular-nums; }
+.bubble .who small { color: var(--ink-3); font-size: 11px; }
+.bubble.mine .who { background: #FFF6CF; }
+.bubble .say-box { flex: 1; min-width: 0; min-height: 46px; background: var(--white); border: var(--dot); border-radius: 4px 16px 16px 16px; padding: 8px 12px; }
+.bubble.r .say-box { border-radius: 16px 4px 16px 16px; }
+.bubble.mine .say-box { background: #FFFBEA; }
+.chat-text { margin: 0; white-space: pre-wrap; word-break: break-word; font-size: 15px; line-height: 1.6; }
+.sheet .chat textarea.chat-edit { min-height: 60px; }
+.chat-acts { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 6px; margin-top: 6px; font-size: 13px; color: var(--ink-2); }
+.chat-compose { display: grid; gap: 6px; }
+.sheet .chat textarea.chat-in { min-height: 64px; }
+.sheet .chat textarea.chat-in:disabled { background: var(--paper-2); }
+.chat-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.chat-left { flex: 1 1 200px; font-size: 12.5px; color: var(--ink-2); }
 
 /* 3단 고르기: 잘 돼요 · 조금 아쉬워요 · 안 돼요 */
 .seg { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
@@ -238,6 +252,10 @@
 .fig.has-img img { display: block; width: 100%; height: auto; cursor: zoom-in; }
 .fig.has-img figcaption { display: none; }
 .guide-note { margin: 16px 0 0; color: var(--cap); font-weight: 700; text-align: center; white-space: pre-line; }
+/* 도움말 상자: 제미나이가 만들어 주지 않을 때 */
+.tip { margin: 18px auto 0; max-width: 860px; background: #FFF8D6; border: 1.5px solid #F2C94C; border-radius: 14px; padding: 12px 16px 10px; }
+.tip-title { margin: 0 0 6px; font-weight: 700; font-size: 15px; }
+.tip ol { margin: 0; padding-left: 1.4em; display: grid; gap: 4px; font-size: 14px; line-height: 1.55; }
 
 .linkrow { margin: 0 0 22px; padding: 14px 16px; background: var(--paper-2); border-radius: 14px; display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
 .linkrow p { margin: 0; flex: 1 1 240px; color: var(--ink-2); font-size: 13.5px; }
@@ -331,56 +349,121 @@
   .meta-row label:first-child { grid-column: 1 / -1; }
   .seg { grid-template-columns: 1fr; }
   .chips.list { grid-template-columns: 1fr; }
-  .say { width: 100%; }
-  .sheet .say input.say-name { flex-basis: 62px; width: 62px; }
+  .bubble { width: 100%; }
+  .bubble .who { flex-basis: 64px; }
   .jn-e { grid-template-columns: 1fr; }
   .ws-bar { padding: 8px 10px; gap: 6px; }
   .ws-bar .state { flex-basis: 100%; order: 9; text-align: center; }
   .ws-bar .btn { flex: 1 1 auto; }
 }
 
-/* ---------- 인쇄: 종이만, 종이 활동지처럼 A4 가로 ---------- */
-@page { size: A4 landscape; margin: 10mm 12mm 12mm; }
+/* ---------- 인쇄: 캔바 활동지처럼 A4 가로 한 쪽을 꽉 채운다 ----------
+   차시는 lessons.js 의 printBreak 로 쪽(.print-page)을 나눈다. 쪽마다 인쇄 영역 높이를 채우는 세로 flex 이고,
+   여러 줄 칸은 --r(줄 수) 비율로 남는 높이를 나눠 가져 손글씨 쓸 공간이 된다.
+   글을 아주 많이 써서 넘치면 그 쪽이 다음 장으로 늘어난다(잘리지 않는다). 안내 그림·단추는 인쇄하지 않는다. */
+@page { size: A4 landscape; margin: 6mm; }
 @media print {
   * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   html, body { background: #fff !important; }
   .demo-bar, .head, .journey, .ws-bar, .no-print, .fab { display: none !important; }
-  .wrap, .wrap.narrow, .wrap.narrow.ws { max-width: none; padding: 0; }
+  .wrap, .wrap.narrow, .wrap.narrow.ws { max-width: none; padding: 0; margin: 0; }
   .ws-main { display: block; }
-  .sheet { --sheet-paper: #fff; max-width: none; border: 0; border-radius: 0; box-shadow: none; padding: 0; background: #fff; }
-  .sheet-head { margin-bottom: 18px; }
-  .sheet-top { margin-bottom: 8px; }
-  .ribbon { font-size: 17px; padding: 6px 44px; }
-  .les-badge { font-size: 14px; }
-  .sec { --leg: 12px; --rad: 16px; margin-bottom: 18px; padding: var(--leg) 14px 10px; }
+  .sheet { --sheet-paper: #fff; --dot: 1.2px dotted #55504A; max-width: none; border: 0; border-radius: 0; box-shadow: none; padding: 0; background: #fff; }
+  .sheet-foot { display: none; }
+
+  /* 쪽 */
+  .print-page { min-height: 197mm; display: flex; flex-direction: column; break-after: page; }
+  .print-page:last-of-type { break-after: auto; }
+  .print-page > .sheet-body { flex: 1 1 auto; display: flex; flex-direction: column; }
+  .sheet-body > * { flex: 0 0 auto; margin: 0 0 2.5mm; }
+  .sheet-body > :last-child { margin-bottom: 0; }
+  /* 남는 높이를 나눠 가질 묶음 (나란히 놓은 묶음과 큰 상자) */
+  .sheet-body > .reps, .sheet-body > .row2 { flex: 1 1 0; }
+  .sheet-body > .sec.frame:not(.narrow) { flex: 1 1 0; }
+
+  /* 머리: <n차시> · 리본 제목 · 사이트 이름 을 한 줄에 (캔바 활동지와 같게) */
+  .sheet-head { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 3mm; margin: 0 0 2.5mm; }
+  .sheet-top { display: contents; }
+  .les-badge { grid-column: 1; grid-row: 1; justify-self: start; font-size: 13px; padding: 1px 10px; }
+  .ribbon { grid-column: 2; grid-row: 1; margin: 0; font-size: 14.5px; padding: 4px 40px; line-height: 1.35; }
+  .ribbon::before, .ribbon::after { width: 20px; }
+  .sheet-kicker { grid-column: 3; grid-row: 1; justify-self: end; margin: 0; font-size: 11px; }
+  .sheet-goal { grid-column: 1 / -1; margin: 0; font-size: 11px; }
+  .meta-row { grid-template-columns: 1.3fr .8fr .6fr; gap: 6mm; }
+  .meta-row label { display: flex; align-items: baseline; gap: 2mm; font-size: 11px; white-space: nowrap; }
+  .sheet .meta-row input, .meta-row .as-text { flex: 1; min-width: 0; font-size: 12px; padding: 1px 2px; min-height: 0; }
+  .part { font-size: 12.5px; gap: 8px; }
+  .part::before, .part::after { border-top-width: 3px; }
+
+  /* 상자: 세로 flex 로 칸을 늘린다 */
+  .sec { --leg: 10px; --rad: 14px; display: flex; flex-direction: column; padding: var(--leg) 10px 7px; margin: 0; }
   .sec::before { border-width: 2px; }
-  .sec > h3 { font-size: 14.5px; margin-bottom: 8px; }
-  .sec.pick { --leg: 15px; }
-  .sec.pick > h3 span { font-size: 19px; }
-  .reps { gap: 16px 12px; margin: 0 0 18px; }
+  .sec > h3 { flex: none; font-size: 13px; margin-bottom: 3px; line-height: 1.5; }
+  .sec.pick { --leg: 13px; }
+  .sec.pick > h3 { margin-bottom: 4px; }
+  .sec.pick > h3 span { font-size: 16px; padding: 2px 14px 0; }
+  .sec.pick > h3 span::before, .sec.pick > h3 span::after { width: 9px; height: 9px; }
+  .reps { display: grid; gap: 3mm; margin: 0; }
   .reps.c3 { grid-template-columns: repeat(3, 1fr); }
   .reps.c4 { grid-template-columns: repeat(4, 1fr); }
-  .row2 { grid-template-columns: 1fr 1fr; margin-bottom: 18px; }
-  .row2.arrow { grid-template-columns: 1.2fr 30px 1fr; gap: 0 6px; }
-  .row2 > .tri.r { display: block; width: 30px; height: 40%; min-height: 90px; align-self: center; }
+  .reps.c4 > .sec { --leg: 10px; padding: var(--leg) 8px 7px; }
+  .reps.c4 .sec > h3 { font-size: 12px; }
+  .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0 4mm; margin: 0; }
+  .row2.arrow { grid-template-columns: 1.25fr 22px 1fr; gap: 0 3mm; }
+  .row2 > .tri.r { display: block; width: 22px; height: 40%; min-height: 70px; align-self: center; }
   .row2 > .tri.d { display: none; }
-  .cols { grid-template-columns: 1fr 1.45fr; }
-  .grid2 { grid-template-columns: 1fr 1fr; }
-  .steps.c2 { grid-template-columns: repeat(2, 1fr); }
-  .steps.c3 { grid-template-columns: repeat(3, 1fr); }
-  .part { font-size: 14px; margin: 18px 0 16px; }
-  .q { margin-bottom: 8px; }
-  .q-label, .q-line, .group-box .q-label { font-size: 12px; margin-bottom: 3px; }
-  .q-hint, .q-note, .sheet-note, .sec-intro, .criteria, .jn-e dt { font-size: 11.5px; }
-  .sheet input[type=text], .sheet input[type=url], .sheet textarea, .as-text { font-size: 12px; padding: 5px 8px; background: #fff; }
-  .sheet textarea { min-height: 44px; resize: none; overflow: visible; }
-  .chip-opt span { min-height: 22px; font-size: 12px; }
-  .chip-opt span::before { width: 14px; height: 14px; font-size: 10px; }
-  .cap { font-size: 13px; }
-  .meta-row { margin-bottom: 14px; gap: 10px; }
-  .sheet .meta-row input { font-size: 13px; min-height: 26px; }
-  .jn-e dd, .jn-group h4 { font-size: 12.5px; }
-  .sheet-foot { margin-top: 14px; font-size: 11px; }
-  .q, .meta-row, .sheet-head, .jn-e, .say, .criteria, .row2, .reps.c4 > .sec, .sec.frame, .jn-card { break-inside: avoid; }
-  .sec > h3, .flow { break-after: avoid; }
+  .sec > .cols, .sec > .grid2 { flex: 1 1 0; display: grid; gap: 0 5mm; }
+  .sec > .cols { display: flex; align-items: stretch; }   /* grid 로 두면 인쇄에서 왼쪽 단이 끝까지 늘지 않는다 */
+  .sec > .cols > div { flex: 1 1 0; min-width: 0; }
+  .sec > .cols > div + div { flex-grow: 1.3; }
+  .sec > .grid2 { grid-template-columns: 1fr 1fr; grid-auto-rows: 1fr; gap: 2mm 5mm; }
+  .cols > div { display: grid; grid-template-rows: var(--tpl); }
+  .steps.c2, .steps.c3 { display: none; }
+
+  /* 문항 */
+  .q { margin: 0 0 1.8mm; flex: none; }
+  .q-long, .q-group { flex: var(--r, 3) 1 0; display: flex; flex-direction: column; }
+  /* 칸(textarea)이 인쇄에서도 남는 높이를 다 채우도록 이름표 + 칸 의 두 줄 grid 로 둔다 */
+  .q-long { display: grid; grid-template-rows: auto 1fr; }
+  .q-long > .copy-row { display: none; }
+  .q-label, .q-line, .group-box .q-label { font-size: 11px; margin-bottom: 1px; line-height: 1.35; }
+  .q-line { margin-bottom: 1.8mm; }
+  .q-hint, .q-note, .sec-intro, .criteria, .jn-e dt { font-size: 10px; }
+  .sheet input[type=text], .sheet input[type=url], .as-text.in { font-size: 11.5px; padding: 3px 7px; min-height: 0; border-radius: 8px; background: #fff; }
+  .sheet textarea, .as-text.ta { flex: 1 1 auto; font-size: 11.5px; line-height: 1.45; padding: 3px 7px; border-radius: 8px; background: #fff;
+    height: auto !important; min-height: 6mm !important; resize: none; overflow: hidden; field-sizing: fixed; }
+  .group-box { flex: 1 1 auto; display: flex; flex-direction: column; padding: 4px 8px 0; border-radius: 8px; }
+  .group-box .q { flex: var(--r, 2) 1 0; display: grid; grid-template-rows: auto 1fr; margin-bottom: 3px; }
+  .group-box .q + .q { padding-top: 3px; }
+  .sheet .group-box textarea { padding: 1px 2px 3px; min-height: 4mm !important; }
+  .criteria { margin: 0 0 2mm; padding: 4px 8px; gap: 1px; border-radius: 8px; line-height: 1.4; }
+  .chips { gap: 2px 12px; }
+  .chips.list { gap: 2px 10px; }
+  .chip-opt span { min-height: 18px; font-size: 11px; gap: 5px; }
+  .chip-opt span::before { width: 12px; height: 12px; font-size: 9px; border-radius: 3px; }
+  .sheet .chips input.other-in { min-height: 18px; font-size: 11px; padding: 0 4px; }
+  .sheet input.title-in { font-size: inherit; padding: 0 2px; }
+
+  /* 3차시 모둠 대화: 올린 글 + 손으로 쓸 빈 말풍선 */
+  .chat { flex: 6 1 0; display: flex; flex-direction: column; margin: 0 0 2mm; }
+  .chat-list { flex: 1 1 auto; display: flex; flex-direction: column; gap: 2mm; margin: 0; }
+  .bubble { flex: 1 1 0; width: 92%; align-items: stretch; break-inside: avoid; }
+  .bubble.print-only { display: flex !important; }
+  .bubble .who { flex-basis: 15mm; padding: 2px; font-size: 9.5px; border-radius: 7px; align-content: center; }
+  .bubble .who b { font-size: 11px; }
+  .bubble.blank .who b { color: var(--ink-3); font-weight: 500; }
+  .bubble .say-box { min-height: 8mm; padding: 3px 8px; border-radius: 3px 12px 12px 12px; background: #fff; }
+  .bubble.r .say-box { border-radius: 12px 3px 12px 12px; }
+  .chat-text { font-size: 11.5px; line-height: 1.45; }
+  .bubble.mine .who, .bubble.mine .say-box { background: #fff; }
+
+  .flow { margin: 0 0 1mm; }
+  .flow .tri { height: 5mm; width: min(420px, 50%); }
+  .sec.narrow { width: 70%; max-width: none; }
+
+  /* 나의 여정은 이어서 인쇄 */
+  .sheet.jn .sheet-head { margin-bottom: 4mm; }
+  .jn-e dd, .jn-group h4 { font-size: 12px; }
+  .jn-e, .jn-card, .jn-group h4 { break-inside: avoid; }
+  .sheet.jn .sec { display: block; margin-bottom: 4mm; }
 }

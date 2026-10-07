@@ -3,7 +3,7 @@
  * 설정(assets/firebase-config.js)이 비어 있거나 주소에 ?demo=1 이 붙으면
  * "미리보기(데모)" 모드로 동작합니다. 데모 모드는 이 브라우저에만 저장됩니다.
  *
- * 공개 화면에서는 모둠원 이름(shelves/{id}/private)을 절대 읽지 않습니다.
+ * 공개 화면에서는 모둠원 학번(shelves/{id}/private)을 절대 읽지 않습니다.
  */
 import { firebaseConfig, FEATURES } from "./firebase-config.js";
 
@@ -127,7 +127,7 @@ function demoSeed() {
         }),
       ],
     },
-    priv: { d1: "김하늘, 이서준, 박지우", d2: "최민준, 정수아", d3: "한예린, 오지호", d4: "강도윤, 임서연", d5: "문가온, 배시우" },
+    priv: { d1: "20301, 20302, 20303", d2: "20304, 20305", d3: "20306, 20307", d4: "20308, 20309", d5: "20401, 20402" },
   };
 }
 function demoRead() {
@@ -280,7 +280,7 @@ export function watchShelf(code, cb, onError) {
   return () => { cancelled = true; stop(); };
 }
 
-/* 선생님 화면: 한 책장의 모든 책과 모둠원 이름을 구독한다. cb({ books, members }) */
+/* 선생님 화면: 한 책장의 모든 책과 모둠원 학번을 구독한다. cb({ books, members }) */
 export function watchShelfBooks(shelfId, cb, onError) {
   if (DEMO) {
     return demoWatch(() => {
@@ -310,7 +310,7 @@ export function watchShelfBooks(shelfId, cb, onError) {
         };
         const unB = F.onSnapshot(F.collection(db, "shelves", shelfId, "books"),
           (snap) => { books = sortBooks(snap.docs.map(docOf)); push(); }, fail);
-        // 모둠원 이름은 책보다 한 박자 늦게 저장되므로 따로 구독해서 뒤따라 채운다
+        // 모둠원 학번은 책보다 한 박자 늦게 저장되므로 따로 구독해서 뒤따라 채운다
         const unP = F.onSnapshot(F.collection(db, "shelves", shelfId, "private"),
           (snap) => { members = {}; snap.docs.forEach((d) => (members[d.id] = d.data().memberNames || "")); push(); }, fail);
         return () => { unB(); unP(); };
@@ -609,7 +609,7 @@ export async function deleteShelf(shelf) {
     return;
   }
   const { F, db } = await fb();
-  // 책과 모둠원 이름을 먼저 지우고 마지막에 책장을 지운다 (하위 문서는 자동으로 지워지지 않는다)
+  // 책과 모둠원 학번을 먼저 지우고 마지막에 책장을 지운다 (하위 문서는 자동으로 지워지지 않는다)
   const snap = await F.getDocs(F.collection(db, "shelves", shelf.id, "books"));
   for (const d of snap.docs) {
     await F.deleteDoc(F.doc(db, "shelves", shelf.id, "books", d.id));
@@ -720,8 +720,10 @@ export async function deleteBook(shelfId, id) {
  * 학생은 로그인 계정이 없다. 학번(5자리) + 비밀번호(4자리)로 자기 활동지를 찾는다.
  *   shelves/{책장}/roster/{학번}        이 학번이 이미 쓰이고 있는지만 알려 준다 (이름 없음)
  *   shelves/{책장}/students/{해시}      해시 = sha256(책장id|학번|비밀번호). 주소를 아는 사람 = 본인
- *     { sid, name, grade, classNo, num, team(0 = 모둠 없음), answers(개인 칸), reset, code, createdAt, updatedAt }
+ *     { sid, grade, classNo, num, team(0 = 모둠 없음), answers(개인 칸), reset, code, createdAt, updatedAt }
+ *     학생 이름은 받지 않는다(개인정보). 예전에 만든 문서의 name 은 학생이 들어올 때 지운다(dropName).
  *   shelves/{책장}/groups/{학년-반-모둠} { answers(모둠 칸), code, updatedAt }
+ *   shelves/{책장}/groups/{학년-반-모둠}/posts/{학번-1|2} { sid, area, text, code, createdAt, updatedAt }  3차시 모둠 대화
  * 선생님(책장 주인)은 students 를 모두 읽고, 비밀번호를 0000 으로 되돌리거나 모둠에서 뺄 수 있다.
  */
 export const RESET_PIN = "0000";
@@ -766,11 +768,11 @@ export async function getStudent(shelf, key) {
   const s = await fromServer(() => F.getDocFromServer(F.doc(db, "shelves", shelf.id, "students", key)));
   return s.exists() ? stuOf(key, s.data({ serverTimestamps: "estimate" })) : null;
 }
-export async function createStudent(shelf, { sid, name, pin, answers = {} }) {
+export async function createStudent(shelf, { sid, pin, answers = {} }) {
   const p = parseSid(sid);
   if (!p) throw new Error("학번은 5자리 숫자예요 (예: 20415)");
   const key = await studentKey(shelf.id, p.sid, pin);
-  const base = { sid: p.sid, name: String(name).trim().slice(0, 20), grade: p.grade, classNo: p.classNo, num: p.num, team: 0, answers, reset: false };
+  const base = { sid: p.sid, grade: p.grade, classNo: p.classNo, num: p.num, team: 0, answers, reset: false };
   if (DEMO) {
     const d = demoRead(), w = wsOf(d, shelf.id);
     if (w.roster[p.sid]) throw existsErr();
@@ -799,6 +801,16 @@ export async function updateStudent(shelf, key, patch) {
   const { F, db } = await fb();
   await F.updateDoc(F.doc(db, "shelves", shelf.id, "students", key), { ...patch, code: shelf.code, updatedAt: F.serverTimestamp() });
 }
+/* 예전에 받은 이름을 학생 문서에서 지운다 (이름은 더 받지 않는다) */
+export async function dropName(shelf, key) {
+  if (DEMO) {
+    const d = demoRead(), s = wsOf(d, shelf.id).students[key];
+    if (s && "name" in s) { delete s.name; demoWrite(d); }
+    return;
+  }
+  const { F, db } = await fb();
+  await F.updateDoc(F.doc(db, "shelves", shelf.id, "students", key), { name: F.deleteField(), code: shelf.code, updatedAt: F.serverTimestamp() });
+}
 /* 비밀번호 바꾸기: 새 주소로 옮기고 옛 문서를 지운다. 새 열쇠를 돌려준다 */
 export async function changePin(shelf, student, newPin) {
   const key = await studentKey(shelf.id, student.sid, newPin);
@@ -818,7 +830,7 @@ export async function changePin(shelf, student, newPin) {
   const x = cur.data();
   const batch = F.writeBatch(db);
   batch.set(F.doc(db, "shelves", shelf.id, "students", key), {
-    sid: x.sid, name: x.name, grade: x.grade, classNo: x.classNo, num: x.num, team: x.team || 0,
+    sid: x.sid, grade: x.grade, classNo: x.classNo, num: x.num, team: x.team || 0,
     answers: x.answers || {}, reset: false, from: student.id,   // 규칙이 같은 학번의 옛 문서를 지우는지 확인한다
     code: shelf.code, createdAt: F.serverTimestamp(), updatedAt: F.serverTimestamp(),
   });
@@ -861,6 +873,59 @@ export async function saveGroup(shelf, gid, values) {
   }
   const { F, db } = await fb();
   await F.setDoc(F.doc(db, "shelves", shelf.id, "groups", gid), { answers: values, code: shelf.code, updatedAt: F.serverTimestamp() }, { merge: true });
+}
+
+/* ---------- 3차시 모둠 대화 ----------
+ * 글 주소는 {학번}-1, {학번}-2 둘뿐이다 → 한 학생은 3차시 전체에서 2개까지. 규칙도 같은 것을 확인한다. */
+export const POST_MAX = 2;
+export const POST_LEN = 300;
+const postOf = (id, x) => ({ id, sid: x.sid, area: x.area, text: x.text, createdAt: ms(x.createdAt), updatedAt: ms(x.updatedAt) });
+const sortPosts = (list) => list.sort((a, b) => a.createdAt - b.createdAt || a.id.localeCompare(b.id));
+/* 한 모둠의 글을 지켜본다. cb(글 목록, { offline }) — 실시간 연결이 흔들릴 때 캐시로 지운 것처럼 보이지 않게 offline 을 함께 넘긴다 */
+export function watchPosts(shelfId, gid, cb, onError) {
+  if (DEMO) return demoWatch(() => sortPosts(Object.entries(((wsOf(demoRead(), shelfId).groups[gid] || {}).posts) || {}).map(([k, x]) => postOf(k, x))), (list) => cb(list, { offline: false }));
+  let stop = () => {}, cancelled = false;
+  fb().then(({ F, db }) => {
+    if (cancelled) return;
+    const col = F.collection(db, "shelves", shelfId, "groups", gid, "posts");
+    stop = liveOrPoll({
+      cb: (list) => cb(list, { offline: false }), onError,
+      fetchOnce: async () => sortPosts((await fromServer(() => F.getDocsFromServer(col))).docs.map((d) => postOf(d.id, d.data({ serverTimestamps: "estimate" })))),
+      listen: (next, fail) => F.onSnapshot(col, { includeMetadataChanges: true }, (snap) => {
+        if (snap.metadata.fromCache && !snap.metadata.hasPendingWrites) return;   // 캐시만 있는 응답은 믿지 않는다
+        next(sortPosts(snap.docs.map((d) => postOf(d.id, d.data({ serverTimestamps: "estimate" })))));
+      }, fail),
+    });
+  }).catch((e) => { if (onError) onError(e); });
+  return () => { cancelled = true; stop(); };
+}
+/* 글 올리기·고치기. slot 은 1 또는 2. 고칠 때는 처음 올린 때(createdAt)를 그대로 둔다 */
+export async function savePost(shelf, gid, sid, slot, { area, text }, isNew) {
+  const id = `${sid}-${slot}`;
+  const body = { sid, area, text: String(text).trim().slice(0, POST_LEN) };
+  if (!body.text) throw new Error("빈 글은 올릴 수 없어요");
+  if (DEMO) {
+    const d = demoRead(), w = wsOf(d, shelf.id);
+    const g = (w.groups[gid] = w.groups[gid] || { answers: {} });
+    g.posts = g.posts || {};
+    const old = g.posts[id];
+    g.posts[id] = { ...body, createdAt: isNew || !old ? Date.now() : old.createdAt, updatedAt: Date.now() };
+    demoWrite(d);
+    return;
+  }
+  const { F, db } = await fb();
+  const ref = F.doc(db, "shelves", shelf.id, "groups", gid, "posts", id);
+  if (isNew) await F.setDoc(ref, { ...body, code: shelf.code, createdAt: F.serverTimestamp(), updatedAt: F.serverTimestamp() });
+  else await F.updateDoc(ref, { ...body, code: shelf.code, updatedAt: F.serverTimestamp() });
+}
+export async function deletePost(shelfId, gid, id) {
+  if (DEMO) {
+    const d = demoRead(), g = wsOf(d, shelfId).groups[gid];
+    if (g && g.posts) { delete g.posts[id]; demoWrite(d); }
+    return;
+  }
+  const { F, db } = await fb();
+  await F.deleteDoc(F.doc(db, "shelves", shelfId, "groups", gid, "posts", id));
 }
 
 /* 선생님 화면: 활동지를 연 학생 명단. cb(학생 목록) — 개인 칸 내용은 빼고 칸 수만 넘긴다 */
@@ -916,7 +981,8 @@ export async function resetStudentPin(shelfId, row) {
     const d = demoRead(), w = wsOf(d, shelfId), s = w.students[row.id];
     if (!s) return;
     delete w.students[row.id];
-    w.students[key] = { ...s, reset: true, updatedAt: Date.now() };
+    const { name, ...rest } = s;
+    w.students[key] = { ...rest, reset: true, updatedAt: Date.now() };
     demoWrite(d);
     return;
   }
@@ -925,7 +991,8 @@ export async function resetStudentPin(shelfId, row) {
   const cur = await fromServer(() => F.getDocFromServer(F.doc(db, "shelves", shelfId, "students", row.id)));
   if (!cur.exists()) return;
   const batch = F.writeBatch(db);
-  batch.set(F.doc(db, "shelves", shelfId, "students", key), { ...cur.data(), reset: true });
+  const { name, ...rest } = cur.data();   // 예전 문서의 이름은 옮기지 않는다
+  batch.set(F.doc(db, "shelves", shelfId, "students", key), { ...rest, reset: true });
   batch.delete(F.doc(db, "shelves", shelfId, "students", row.id));
   await batch.commit();
 }

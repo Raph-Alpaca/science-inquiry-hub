@@ -247,7 +247,7 @@
     <p>책을 누르면 앞표지가 왼쪽으로 열리면서 펼쳐집니다. 왼쪽 면은 만든 이유와 사용 방법, 오른쪽 면은 시뮬레이션입니다. 화살표 키로 다음 책, <code>Esc</code> 로 닫기가 됩니다. 휴대폰에서는 아래에서 시트가 올라옵니다.</p>
 
     <h3>학생에게 시킬 때</h3>
-    <p>학생은 로그인하지 않습니다. 책장 화면 오른쪽 아래 “출판 의뢰하기”를 누르고 아홉 칸을 채우면 끝입니다. 적는 항목은 학년·반, 공동작가 필명, 책 제목, 개발자의 의도, 시뮬레이션 링크, 사용 방법, 관련 과학 개념, 모둠원 이름, 표지입니다.</p>
+    <p>학생은 로그인하지 않습니다. 책장 화면 오른쪽 아래 “출판 의뢰하기”를 누르고 아홉 칸을 채우면 끝입니다. 적는 항목은 학년·반, 공동작가 필명, 책 제목, 개발자의 의도, 시뮬레이션 링크, 사용 방법, 관련 과학 개념, 모둠원 학번, 표지입니다.</p>
     <div class="note">
       <p>작품 자체는 이 사이트에 올리지 않습니다. 제미나이·캔바·러버블 어디서 만들었든 <strong>공유 링크만</strong> 받습니다. 링크는 <code>https://</code> 로 시작해야 접수됩니다.</p>
     </div>
@@ -277,11 +277,11 @@
           <tr><td>쌓인 것 한꺼번에 공개</td><td><strong>대기 중인 N권 모두 승인</strong></td><td>반 서가가 자동으로 생김</td></tr>
           <tr><td>내용 고치기</td><td><strong>수정</strong></td><td>제목·링크·설명·개념·학년반 변경</td></tr>
           <tr><td>잠깐 내리기</td><td><strong>숨김</strong></td><td>공개 책장에서 사라짐. 되돌릴 수 있음</td></tr>
-          <tr><td>아주 지우기</td><td>수정 → <strong>이 책 삭제</strong></td><td>모둠원 이름까지 함께 지워짐</td></tr>
+          <tr><td>아주 지우기</td><td>수정 → <strong>이 책 삭제</strong></td><td>모둠원 학번까지 함께 지워짐</td></tr>
           <tr><td>잘 만든 작품 올리기</td><td>수정 → <strong>우리 학교 예시로 올리기</strong></td><td>책장 위쪽 칸으로 옮겨짐</td></tr>
-          <tr><td>평가 자료 뽑기</td><td><strong>CSV 내보내기</strong></td><td>엑셀 파일. 모둠원 이름 포함</td></tr>
+          <tr><td>평가 자료 뽑기</td><td><strong>CSV 내보내기</strong></td><td>엑셀 파일. 모둠원 학번 포함</td></tr>
           <tr><td>학교 이름·책장 이름 고치기</td><td><strong>책장 설정</strong></td><td>코드는 그대로 유지됨</td></tr>
-          <tr><td>책장 통째로 지우기</td><td>책장 설정 → <strong>이 책장을 지웁니다</strong></td><td>안에 든 책과 모둠원 이름까지 삭제</td></tr>
+          <tr><td>책장 통째로 지우기</td><td>책장 설정 → <strong>이 책장을 지웁니다</strong></td><td>안에 든 책과 모둠원 학번까지 삭제</td></tr>
         </tbody>
       </table>
     </div>
@@ -366,7 +366,7 @@
     <div class="note">
       <p>관리자 계정은 Firestore의 <code>admins</code> 문서로 정해집니다. 코드에는 이메일을 적지 않았습니다. 관리자를 바꾸거나 늘리려면 Firebase 콘솔에서 <code>admins</code> 컬렉션에 이메일을 문서 이름으로 하나 더 만들면 됩니다.</p>
     </div>
-    <p>관리자는 다른 학교 책장의 이름을 고치거나 지울 수 있고, 올라온 책을 숨길 수 있습니다. 다만 <strong>모둠원 이름은 관리자도 읽지 못합니다.</strong> 그 책장을 만든 선생님만 봅니다.</p>
+    <p>관리자는 다른 학교 책장의 이름을 고치거나 지울 수 있고, 올라온 책을 숨길 수 있습니다. 다만 <strong>모둠원 학번은 관리자도 읽지 못합니다.</strong> 그 책장을 만든 선생님만 봅니다.</p>
     <p>한 책장을 두 선생님이 함께 관리하는 기능은 아직 없습니다.</p>
   </section>
 
@@ -400,12 +400,12 @@
           <tr><td>학년·반·공동작가 필명</td><td><span class="pill">보임</span></td><td><span class="pill">보임</span></td></tr>
           <tr><td>책 제목·의도·사용 방법·개념</td><td><span class="pill">보임</span></td><td><span class="pill">보임</span></td></tr>
           <tr><td>작품 링크</td><td><span class="pill">보임</span></td><td><span class="pill">보임</span></td></tr>
-          <tr><td>모둠원 이름</td><td><span class="pill no">안 보임</span></td><td><span class="pill">보임</span></td></tr>
+          <tr><td>모둠원 학번</td><td><span class="pill no">안 보임</span></td><td><span class="pill">보임</span></td></tr>
           <tr><td>승인 전 제출물</td><td><span class="pill no">안 보임</span></td><td><span class="pill">보임</span></td></tr>
         </tbody>
       </table>
     </div>
-    <p>화면에서 가리는 정도가 아니라 저장소 규칙으로 막혀 있습니다. 주소를 직접 두드려도 승인 전 제출물과 모둠원 이름은 거부됩니다. 다른 선생님이 남의 책장을 고치는 것도 막힙니다.</p>
+    <p>화면에서 가리는 정도가 아니라 저장소 규칙으로 막혀 있습니다. 주소를 직접 두드려도 승인 전 제출물과 모둠원 학번은 거부됩니다. 다른 선생님이 남의 책장을 고치는 것도 막힙니다.</p>
     <div class="note warn">
       <p><strong>코드가 밖으로 새면</strong> 선생님 화면에서 <strong>코드 재발급</strong>을 누르세요. 예전 코드로는 더 이상 제출할 수 없고, 이미 꽂힌 책은 그대로 남습니다.</p>
     </div>

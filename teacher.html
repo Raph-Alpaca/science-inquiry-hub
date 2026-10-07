@@ -33,6 +33,10 @@
   </header>
 
   <main id="main"></main>
+<footer class="site-note no-print">
+  <p>※ 이 사이트와 자료는 교육 활동을 위해 만들었습니다. 학생 작품과 수업 결과물의 저작권은 만든 사람에게 있으며, 허락 없이 복제·배포·수정하거나 상업적으로 이용할 수 없습니다.</p>
+  <p>※ 일부 이미지와 시각 자료는 생성형 AI의 도움을 받아 만들었습니다.</p>
+</footer>
 </div>
 
 <aside class="peek" id="peek" hidden aria-label="학생이 보는 화면">
@@ -120,7 +124,7 @@
     <div class="field"><label for="ed-intent">개발자의 의도</label><textarea id="ed-intent" maxlength="600"></textarea></div>
     <div class="field"><label for="ed-howto">사용 방법</label><textarea id="ed-howto" maxlength="600"></textarea></div>
     <div class="field"><label for="ed-concepts">관련 과학 개념 (쉼표로 구분)</label><input type="text" id="ed-concepts" maxlength="120"></div>
-    <div class="field"><span class="lab">모둠원 이름 (선생님만 보입니다)</span><p id="ed-members" style="margin:0;color:var(--coral-ink)"></p></div>
+    <div class="field"><span class="lab">모둠원 학번 (선생님만 보입니다)</span><p id="ed-members" style="margin:0;color:var(--coral-ink)"></p></div>
     <label class="consent"><input type="checkbox" id="ed-example"><span>“우리 학교 예시”로 올리기 (책장 위쪽 칸에 꽂힙니다)</span></label>
   </form>
   <div class="ft">
@@ -136,7 +140,7 @@ import {
   listBooks, loadMembers, setStatus, updateBook, deleteBook, clearShelfCache,
   checkAccess, watchAccess, addAllowed, removeAllowed, watchAllowed, watchAllShelves, renameShelf, deleteShelf,
   watchShelfBooks, submitRequest, watchMyRequest, watchRequests, approveRequest, removeRequest,
-  watchStudents, kickStudent, resetStudentPin, deleteStudent, RESET_PIN,
+  watchStudents, kickStudent, resetStudentPin, deleteStudent, RESET_PIN, watchPosts, deletePost,
 } from "./assets/shelf-data.js";
 import { SITE } from "./assets/site-config.js";
 
@@ -658,13 +662,13 @@ function shelfCard(s) {
     </div>
     ${rows.length ? `
     <table class="books">
-      <thead><tr><th>학년-반</th><th>책 제목</th><th>모둠원 (선생님만)</th><th>링크</th><th>제출일</th><th>개발자의 의도</th><th></th></tr></thead>
+      <thead><tr><th>학년-반</th><th>책 제목</th><th>모둠원 학번 (선생님만)</th><th>링크</th><th>제출일</th><th>개발자의 의도</th><th></th></tr></thead>
       <tbody>${rows.map((b) => bookRow(s, b, d.members[b.id])).join("")}</tbody>
     </table>` : `<p class="upload-note" style="margin:18px 0 0">${t === "pending" ? "승인을 기다리는 책이 없습니다." : t === "approved" ? "아직 승인한 책이 없습니다." : "숨긴 책이 없습니다."}</p>`}
     ${t === "pending" && counts.pending ? `
     <div class="bulk">
       <button class="btn dark" data-a="approveAll">대기 중인 ${counts.pending}권 모두 승인</button>
-      <span class="note">승인하면 바로 공개 책장에 꽂힙니다. 모둠원 이름은 공개되지 않습니다.</span>
+      <span class="note">승인하면 바로 공개 책장에 꽂힙니다. 모둠원 학번은 공개되지 않습니다.</span>
     </div>` : ""}
   </section>`;
 }
@@ -673,7 +677,7 @@ function bookRow(s, b, members) {
   return `<tr data-b="${b.id}">
     <td data-l="학년-반">${b.grade}-${b.classNo}</td>
     <td data-l="제목"><b>${esc(b.title)}</b>${b.example ? ' <span class="chip amber">예시</span>' : ""}</td>
-    <td data-l="모둠원" class="names">${esc(members || "(없음)")}</td>
+    <td data-l="모둠원 학번" class="names">${esc(members || "(없음)")}</td>
     <td data-l="링크"><a class="lk" href="${esc(b.url)}" target="_blank" rel="noopener noreferrer">${esc(b.url)}</a></td>
     <td data-l="제출일">${date ? `${date.getMonth() + 1}. ${date.getDate()}` : "-"}</td>
     <td data-l="의도">${esc((b.intent || "").slice(0, 18))}${(b.intent || "").length > 18 ? "…" : ""}</td>
@@ -806,6 +810,9 @@ function closePeek() {
   document.body.classList.remove("peeking");
   const done = () => { el.hidden = true; $("peekFrame").src = "about:blank"; };
   if (matchMedia("(prefers-reduced-motion: reduce)").matches) done(); else setTimeout(done, 240);
+  // 패널이 열린 사이 책장 카드가 다시 그려졌으면, 같은 책장의 새 단추를 찾아 돌아간다
+  if (peekFrom && !document.contains(peekFrom) && peekShelves.length)
+    peekFrom = peekShelves.length > 1 ? $("mergeGo") : document.querySelector(`.shelf-card[data-s="${peekShelves[0].id}"] [data-a="peek"]`);
   if (peekFrom && document.contains(peekFrom)) peekFrom.focus();
   peekShelves = [];
 }
@@ -836,10 +843,39 @@ document.addEventListener("keydown", (ev) => {
 });
 
 /* ---------- 활동지 명단 ----------
- * 학생 목록을 실시간으로 받아 반별·모둠별로 묶어 보여 준다. 개인 칸 내용은 읽어 오지 않는다(쓴 칸 수만). */
+ * 학생 목록을 실시간으로 받아 반별·모둠별로 묶어 보여 준다. 개인 칸 내용은 읽어 오지 않는다(쓴 칸 수만).
+ * 학생 이름은 받지 않으므로 학번만 보인다. 모둠마다 3차시 모둠 대화(학생이 올린 글)를 펼쳐 볼 수 있다. */
 let wsStop = () => {}, wsShelf = null, wsRows = [], wsClass = "";
+const CHAT_AREAS = { sci: "과학적 원리와 변인 점검", ux: "독자를 위한 기능 추가·보완" };
+let wsPosts = {}, wsPostStops = {}, wsChatOpen = new Set();
+// 고른 반의 모둠들만 대화를 구독한다 (반을 바꾸거나 창을 닫으면 끊는다)
+function syncPostWatch(gids) {
+  Object.keys(wsPostStops).forEach((g) => { if (!gids.includes(g)) { wsPostStops[g](); delete wsPostStops[g]; delete wsPosts[g]; } });
+  gids.forEach((g) => {
+    if (wsPostStops[g]) return;
+    wsPostStops[g] = watchPosts(wsShelf.id, g, (list) => { wsPosts[g] = list; drawChat(g); }, () => {});
+  });
+}
+function stopPostWatch() { Object.values(wsPostStops).forEach((f) => f()); wsPostStops = {}; wsPosts = {}; }
+function chatBoxHtml(g) {
+  const list = wsPosts[g];
+  const when = (t) => { if (!t) return ""; const d = new Date(t); return `${d.getMonth() + 1}. ${d.getDate()} ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`; };
+  const body = !list ? `<p class="upload-note">불러오는 중…</p>`
+    : !list.length ? `<p class="upload-note">아직 올린 글이 없습니다.</p>`
+    : Object.entries(CHAT_AREAS).map(([a, label]) => {
+      const xs = list.filter((x) => x.area === a);
+      return `<div class="ws-chat-area"><h4>${esc(label)} <small>${xs.length}개</small></h4>${xs.length ? `<ul>${xs.map((x) => `<li data-post="${esc(x.id)}">
+        <b>${esc(x.sid)}</b><span class="t">${esc(x.text)}</span><small>${esc(when(x.updatedAt || x.createdAt))}</small>
+        <button class="btn small" data-w="post-del" data-g="${esc(g)}" data-id="${esc(x.id)}" style="color:var(--coral-ink)">지우기</button></li>`).join("")}</ul>` : `<p class="upload-note">없음</p>`}</div>`;
+    }).join("");
+  return `<details class="ws-chat" data-g="${esc(g)}"${wsChatOpen.has(g) ? " open" : ""}><summary>3차시 모둠 대화 <small>${list ? `${list.length}개` : ""}</small></summary>${body}</details>`;
+}
+function drawChat(g) {
+  const el = $("ws-list").querySelector(`details.ws-chat[data-g="${CSS.escape(g)}"]`);
+  if (el) el.outerHTML = chatBoxHtml(g);
+}
 function openWorksheets(s) {
-  wsShelf = s; wsRows = [];
+  wsShelf = s; wsRows = []; stopPostWatch(); wsChatOpen = new Set();
   $("ws-title").textContent = `${s.title} · 활동지 명단`;
   $("ws-list").innerHTML = `<p class="upload-note">불러오는 중…</p>`;
   $("ws-class").innerHTML = ""; $("ws-count").textContent = "";
@@ -858,19 +894,20 @@ function drawWorksheets() {
   if (!classes.length) {
     $("ws-count").textContent = "";
     $("ws-list").innerHTML = `<p class="upload-note">아직 활동지를 연 학생이 없습니다. 학생은 활동지에서 학번과 비밀번호 4자리를 넣고 들어옵니다.</p>`;
+    syncPostWatch([]);
     return;
   }
   const rows = wsRows.filter((r) => `${r.grade}-${r.classNo}` === wsClass);
   $("ws-count").textContent = `${rows.length}명`;
   const teams = [...new Set(rows.map((r) => r.team || 0))].sort((a, b) => (a || 99) - (b || 99));
   const when = (t) => { if (!t) return "-"; const d = new Date(t); return `${d.getMonth() + 1}. ${d.getDate()} ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`; };
+  const gidOf = (t) => `${wsClass}-${t}`;
   $("ws-list").innerHTML = teams.map((t) => {
     const list = rows.filter((r) => (r.team || 0) === t);
     return `<section class="ws-team"><h3>${t ? `${t}모둠` : "모둠을 아직 고르지 않음"} <small>${list.length}명</small></h3>
-      <table class="books ws-table"><thead><tr><th>학번</th><th>이름</th><th>쓴 칸</th><th>마지막 저장</th><th></th></tr></thead><tbody>
+      <table class="books ws-table"><thead><tr><th>학번</th><th>쓴 칸</th><th>마지막 저장</th><th></th></tr></thead><tbody>
       ${list.map((r) => `<tr data-sid="${esc(r.sid)}">
-        <td data-l="학번">${esc(r.sid)}</td>
-        <td data-l="이름"><b>${esc(r.name || "(활동지 없음)")}</b>${r.reset ? ' <span class="chip amber">0000으로 바뀜</span>' : ""}</td>
+        <td data-l="학번"><b>${esc(r.sid)}</b>${r.orphan ? " (활동지 없음)" : ""}${r.reset ? ' <span class="chip amber">0000으로 바뀜</span>' : ""}</td>
         <td data-l="쓴 칸">${r.orphan ? "-" : r.filled}</td>
         <td data-l="마지막 저장">${r.orphan ? "-" : when(r.updatedAt)}</td>
         <td><span class="row-acts">
@@ -878,18 +915,31 @@ function drawWorksheets() {
           ${r.orphan ? "" : `<button class="btn small" data-w="reset"${r.reset ? " disabled" : ""}>비밀번호 ${RESET_PIN}으로</button>`}
           <button class="btn small" data-w="del" style="color:var(--coral-ink)">지우기</button>
         </span></td></tr>`).join("")}
-      </tbody></table></section>`;
+      </tbody></table>${t ? chatBoxHtml(gidOf(t)) : ""}</section>`;
   }).join("");
+  syncPostWatch(teams.filter(Boolean).map(gidOf));
 }
 $("ws-class").onchange = () => { wsClass = $("ws-class").value; drawWorksheets(); };
 $("ws-close").onclick = () => $("wsDlg").close();
-$("wsDlg").addEventListener("close", () => { wsStop(); wsStop = () => {}; });
+$("wsDlg").addEventListener("close", () => { wsStop(); wsStop = () => {}; stopPostWatch(); });
+$("ws-list").addEventListener("toggle", (ev) => {
+  const d = ev.target.closest && ev.target.closest("details.ws-chat");
+  if (d) { if (d.open) wsChatOpen.add(d.dataset.g); else wsChatOpen.delete(d.dataset.g); }
+}, true);
 $("ws-list").onclick = async (ev) => {
   const b = ev.target.closest("[data-w]");
   if (!b || !wsShelf) return;
+  if (b.dataset.w === "post-del") {
+    const x = (wsPosts[b.dataset.g] || []).find((p) => p.id === b.dataset.id);
+    if (!x || !(await confirmBox(`${x.sid} 학생이 올린 글을 지울까요? "${x.text.slice(0, 40)}${x.text.length > 40 ? "…" : ""}"`))) return;
+    b.disabled = true;
+    try { await deletePost(wsShelf.id, b.dataset.g, x.id); toast("글을 지웠어요"); }
+    catch (e) { b.disabled = false; toast("지우지 못했어요. 인터넷을 확인해 주세요."); console.warn(e); }
+    return;
+  }
   const r = wsRows.find((x) => x.sid === b.closest("tr").dataset.sid && (x.id || !x.orphan));
   if (!r) return;
-  const who = `${r.sid} ${r.name || ""}`.trim();
+  const who = r.sid;
   const ask = { kick: `${who} 학생을 ${r.team}모둠에서 뺄까요? 학생 화면에서 모둠 번호를 다시 고르게 됩니다.`,
     reset: `${who} 학생의 비밀번호를 ${RESET_PIN}으로 바꿀까요? 학생은 ${RESET_PIN}으로 들어와 새 비밀번호를 정합니다.`,
     del: `${who} 학생의 활동지를 지울까요? 서버에 백업된 개인 칸이 지워지고, 이 학번으로 다시 시작할 수 있게 됩니다. (모둠 칸은 그대로입니다)` }[b.dataset.w];
@@ -938,7 +988,7 @@ $("qrPrint").onclick = () => window.print();
 /* ---------- CSV ---------- */
 function exportCsv(s) {
   const d = data[s.id];
-  const head = ["학년", "반", "모둠", "책 제목", "링크", "개발자의 의도", "사용 방법", "관련 과학 개념", "모둠원", "상태", "제출일"];
+  const head = ["학년", "반", "모둠", "책 제목", "링크", "개발자의 의도", "사용 방법", "관련 과학 개념", "모둠원 학번", "상태", "제출일"];
   const q = (v) => `"${String(v ?? "").replace(/"/g, '""')}"`;
   const lines = [head.map(q).join(",")].concat(d.books.map((b) => [
     b.grade, b.classNo, b.team, b.title, b.url, b.intent, b.howto, (b.concepts || []).join(" / "),
@@ -964,7 +1014,7 @@ function openSettings(s) {
   $("sh-code").textContent = s.code;
   const n = (data[s.id]?.books || []).length;
   $("sh-delnote").textContent = n
-    ? `이 책장과 안에 든 책 ${n}권, 모둠원 이름까지 모두 지워집니다. 누르면 책장 이름을 한 번 더 적어 확인하고, 지운 뒤 ${UNDO_SEC}초 안에는 되돌릴 수 있습니다.`
+    ? `이 책장과 안에 든 책 ${n}권, 모둠원 학번까지 모두 지워집니다. 누르면 책장 이름을 한 번 더 적어 확인하고, 지운 뒤 ${UNDO_SEC}초 안에는 되돌릴 수 있습니다.`
     : `이 책장을 지웁니다. 누르면 책장 이름을 한 번 더 적어 확인합니다.`;
   $("shelfDlg").showModal();
 }
@@ -1001,7 +1051,7 @@ $("sh-del").onclick = async () => {
     title: "책장 지우기",
     what: `"${s.title}" (코드 ${s.code}) · 책 ${books.length}권${approved ? `, 그중 공개 중 ${approved}권` : ""}`,
     note: books.length
-      ? "책장과 안에 든 책, 모둠원 이름까지 모두 지워집니다. 학생들이 보던 공개 책장도 사라지고, 지운 뒤에는 되살릴 수 없습니다."
+      ? "책장과 안에 든 책, 모둠원 학번까지 모두 지워집니다. 학생들이 보던 공개 책장도 사라지고, 지운 뒤에는 되살릴 수 없습니다."
       : "빈 책장입니다. 지우면 이 코드로는 더 이상 제출할 수 없습니다.",
     word: s.title,
     wordLabel: `확인을 위해 책장 이름 "${s.title}"을(를) 그대로 적어 주세요`,
@@ -1060,7 +1110,7 @@ $("ed-delete").onclick = async () => {
   const yes = await askDanger({
     title: "책 삭제",
     what: `"${b.title}" · ${b.grade}학년 ${b.classNo}반 ${b.team || ""}`.trim(),
-    note: "학생이 제출한 내용과 모둠원 이름이 지워지고 되살릴 수 없습니다. 학생에게 안 보이게만 하려면 삭제 대신 목록의 \"숨김\"을 쓰세요.",
+    note: "학생이 제출한 내용과 모둠원 학번이 지워지고 되살릴 수 없습니다. 학생에게 안 보이게만 하려면 삭제 대신 목록의 \"숨김\"을 쓰세요.",
     word: "삭제",
     wordLabel: "확인을 위해 \"삭제\"라고 적어 주세요",
     ok: "이 책 삭제",

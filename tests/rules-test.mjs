@@ -1,7 +1,7 @@
 // Firestore / Storage 보안 규칙을 에뮬레이터로 검증한다.
 import { initializeTestEnvironment, assertFails, assertSucceeds } from "@firebase/rules-unit-testing";
 import {
-  doc, getDoc, setDoc, addDoc, updateDoc, deleteDoc, collection, getDocs, query, where, serverTimestamp, writeBatch,
+  doc, getDoc, setDoc, addDoc, updateDoc, deleteDoc, collection, getDocs, query, where, serverTimestamp, writeBatch, deleteField,
 } from "firebase/firestore";
 import { ref, uploadBytes, getBytes, deleteObject } from "firebase/storage";
 import fs from "node:fs";
@@ -36,7 +36,7 @@ await env.withSecurityRulesDisabled(async (c) => {
   await setDoc(doc(db, "shelves", SHELF), { code: CODE, school: "서울○○중학교", teacherName: "김선생", title: "2학년 책장", teacherUid: TEACHER, createdAt: new Date() });
   await setDoc(doc(db, "shelves", SHELF, "books", "approved1"), { ...bookBase, status: "approved" });
   await setDoc(doc(db, "shelves", SHELF, "books", "pending1"), { ...bookBase });
-  await setDoc(doc(db, "shelves", SHELF, "private", "approved1"), { memberNames: "김하늘, 이서준", code: CODE, createdAt: new Date() });
+  await setDoc(doc(db, "shelves", SHELF, "private", "approved1"), { memberNames: "20415, 20416", code: CODE, createdAt: new Date() });
   await setDoc(doc(db, "shelves", SHELF, "private", "pending1"), { memberNames: "최민준", code: CODE, createdAt: new Date() });
 });
 
@@ -53,8 +53,8 @@ await no("비로그인: 승인 대기 책 읽기 차단", getDoc(doc(anon, "shel
 await ok("비로그인: 승인된 책만 목록 조회", getDocs(query(collection(anon, "shelves", SHELF, "books"), where("status", "==", "approved"))));
 await no("비로그인: 상태 조건 없이 전체 목록 차단", getDocs(collection(anon, "shelves", SHELF, "books")));
 await no("비로그인: 대기 목록 조회 차단", getDocs(query(collection(anon, "shelves", SHELF, "books"), where("status", "==", "pending"))));
-await no("비로그인: 모둠원 이름 읽기 차단", getDoc(doc(anon, "shelves", SHELF, "private", "approved1")));
-await no("비로그인: 모둠원 이름 목록 조회 차단", getDocs(collection(anon, "shelves", SHELF, "private")));
+await no("비로그인: 모둠원 학번 읽기 차단", getDoc(doc(anon, "shelves", SHELF, "private", "approved1")));
+await no("비로그인: 모둠원 학번 목록 조회 차단", getDocs(collection(anon, "shelves", SHELF, "private")));
 
 /* 학생 제출 */
 await ok("학생: 올바른 코드로 제출", addDoc(collection(anon, "shelves", SHELF, "books"), { ...bookBase, createdAt: serverTimestamp() }));
@@ -63,9 +63,9 @@ await no("학생: 스스로 승인 상태로 제출 차단", addDoc(collection(a
 await no("학생: 예시로 올려 제출 차단", addDoc(collection(anon, "shelves", SHELF, "books"), { ...bookBase, example: true, createdAt: serverTimestamp() }));
 await no("학생: http 링크 제출 차단", addDoc(collection(anon, "shelves", SHELF, "books"), { ...bookBase, url: "http://example.com", createdAt: serverTimestamp() }));
 await no("학생: 너무 긴 제목 차단", addDoc(collection(anon, "shelves", SHELF, "books"), { ...bookBase, title: "가".repeat(61), createdAt: serverTimestamp() }));
-await no("학생: 모둠원 이름을 책 문서에 넣으면 차단", addDoc(collection(anon, "shelves", SHELF, "books"), { ...bookBase, memberNames: "김하늘", createdAt: serverTimestamp() }));
-await ok("학생: 모둠원 이름을 private 에 저장", setDoc(doc(anon, "shelves", SHELF, "private", "newbook"), { memberNames: "김하늘", code: CODE, createdAt: serverTimestamp() }));
-await no("학생: 틀린 코드로 private 저장 차단", setDoc(doc(anon, "shelves", SHELF, "private", "newbook2"), { memberNames: "김하늘", code: "XXX-2026-0000", createdAt: serverTimestamp() }));
+await no("학생: 모둠원 학번을 책 문서에 넣으면 차단", addDoc(collection(anon, "shelves", SHELF, "books"), { ...bookBase, memberNames: "20415", createdAt: serverTimestamp() }));
+await ok("학생: 모둠원 학번을 private 에 저장", setDoc(doc(anon, "shelves", SHELF, "private", "newbook"), { memberNames: "20415, 20416", code: CODE, createdAt: serverTimestamp() }));
+await no("학생: 틀린 코드로 private 저장 차단", setDoc(doc(anon, "shelves", SHELF, "private", "newbook2"), { memberNames: "20415", code: "XXX-2026-0000", createdAt: serverTimestamp() }));
 await no("비로그인: 책 수정 차단", updateDoc(doc(anon, "shelves", SHELF, "books", "approved1"), { title: "바꿔치기" }));
 await no("비로그인: 책 삭제 차단", deleteDoc(doc(anon, "shelves", SHELF, "books", "approved1")));
 await no("비로그인: 책장 수정 차단", updateDoc(doc(anon, "shelves", SHELF), { code: "HACK-2026-0000" }));
@@ -73,7 +73,7 @@ await no("비로그인: 책장 수정 차단", updateDoc(doc(anon, "shelves", SH
 /* 책장 주인 선생님 */
 await ok("교사: 대기 목록 조회", getDocs(query(collection(mine, "shelves", SHELF, "books"), where("status", "==", "pending"))));
 await ok("교사: 전체 목록 조회", getDocs(collection(mine, "shelves", SHELF, "books")));
-await ok("교사: 모둠원 이름 읽기", getDoc(doc(mine, "shelves", SHELF, "private", "pending1")));
+await ok("교사: 모둠원 학번 읽기", getDoc(doc(mine, "shelves", SHELF, "private", "pending1")));
 await ok("교사: 승인 처리", updateDoc(doc(mine, "shelves", SHELF, "books", "pending1"), { status: "approved" }));
 await ok("교사: 예시로 올리기", updateDoc(doc(mine, "shelves", SHELF, "books", "pending1"), { example: true }));
 await ok("교사: 책 삭제", deleteDoc(doc(mine, "shelves", SHELF, "books", "approved1")));
@@ -83,7 +83,7 @@ await no("교사: 남의 uid 로 책장 만들기 차단", addDoc(collection(min
 
 /* 다른 선생님 */
 await no("다른 교사: 남의 책장 대기 목록 차단", getDocs(collection(others, "shelves", SHELF, "books")));
-await no("다른 교사: 남의 모둠원 이름 차단", getDoc(doc(others, "shelves", SHELF, "private", "pending1")));
+await no("다른 교사: 남의 모둠원 학번 차단", getDoc(doc(others, "shelves", SHELF, "private", "pending1")));
 await no("다른 교사: 남의 책 승인 차단", updateDoc(doc(others, "shelves", SHELF, "books", "pending1"), { status: "hidden" }));
 await no("다른 교사: 남의 책장 삭제 차단", deleteDoc(doc(others, "shelves", SHELF)));
 
@@ -137,14 +137,14 @@ await no("선생님: 관리자 명단 조회 차단", getDocs(collection(mine, "
 /* 관리자 권한 범위 */
 await ok("관리자: 남의 책장 이름 바꾸기", updateDoc(doc(admin, "shelves", SHELF), { title: "관리자가 정리한 책장" }));
 await no("관리자: 책장 주인 바꾸기 차단", updateDoc(doc(admin, "shelves", SHELF), { teacherUid: "admin-uid" }));
-await no("관리자: 모둠원 이름 읽기 차단", getDoc(doc(admin, "shelves", SHELF, "private", "pending1")));
+await no("관리자: 모둠원 학번 읽기 차단", getDoc(doc(admin, "shelves", SHELF, "private", "pending1")));
 await ok("관리자: 남의 책 숨기기", updateDoc(doc(admin, "shelves", SHELF, "books", "pending1"), { status: "hidden" }));
 
 /* 활동지: 학번 자리(roster)·학생 문서(students)·모둠 칸(groups) */
 {
   const CODE = "SEO-2026-NEW1";   // 위에서 코드를 재발급했다
   const W = (db, ...p) => doc(db, "shelves", SHELF, ...p);
-  const stu = (o = {}) => ({ sid: "20415", name: "김하늘", grade: 2, classNo: 4, num: 15, team: 0, answers: {}, reset: false, code: CODE, createdAt: serverTimestamp(), updatedAt: serverTimestamp(), ...o });
+  const stu = (o = {}) => ({ sid: "20415", grade: 2, classNo: 4, num: 15, team: 0, answers: {}, reset: false, code: CODE, createdAt: serverTimestamp(), updatedAt: serverTimestamp(), ...o });
   const newStudent = (db, key, o = {}, sid = "20415") => {
     const b = writeBatch(db);
     b.set(W(db, "roster", sid), { code: CODE, createdAt: serverTimestamp() });
@@ -157,13 +157,23 @@ await ok("관리자: 남의 책 숨기기", updateDoc(doc(admin, "shelves", SHEL
   await no("학생: 틀린 책장 코드로 시작 차단", newStudent(anon, "keyD", { code: "WRONG-CODE" }, "20417"));
   await no("학생: 잘못된 학번 모양 차단", newStudent(anon, "keyE", {}, "9999"));
   await no("학생: 처음부터 reset:true 차단", newStudent(anon, "keyF", { reset: true }, "20418"));
+  await no("학생: 이름을 넣어 시작하기 차단 (이름은 받지 않음)", newStudent(anon, "keyG", { name: "알파카" }, "20419"));
   await ok("누구나: 학번 자리 있는지 확인", getDoc(W(anon, "roster", "20415")));
   await ok("학생: 내 문서 읽기 (주소를 알면)", getDoc(W(anon, "students", "keyA")));
   await no("학생: 학생 목록 보기 차단", getDocs(collection(anon, "shelves", SHELF, "students")));
   await no("학생: 학번 자리 목록 보기 차단", getDocs(collection(anon, "shelves", SHELF, "roster")));
   await ok("학생: 개인 칸 백업·모둠 고르기", updateDoc(W(anon, "students", "keyA"), { answers: { "n1.b1.title": "이슬점" }, team: 3, code: CODE, updatedAt: serverTimestamp() }));
   await no("학생: 학번 바꾸기 차단", updateDoc(W(anon, "students", "keyA"), { sid: "20499", code: CODE }));
-  await no("학생: 이름 바꾸기 차단", updateDoc(W(anon, "students", "keyA"), { name: "가짜", code: CODE }));
+  await no("학생: 이름 넣기 차단", updateDoc(W(anon, "students", "keyA"), { name: "가짜", code: CODE }));
+  // 예전에 이름을 받아 둔 문서: 다른 칸은 계속 고칠 수 있고, 이름은 지우기만 된다
+  await ok("(준비) 예전 문서: 이름이 남아 있는 학생", (async () => { await env.withSecurityRulesDisabled(async (c) => {
+    const d = c.firestore();
+    await setDoc(doc(d, "shelves", SHELF, "roster", "20420"), { code: CODE, createdAt: new Date() });
+    await setDoc(doc(d, "shelves", SHELF, "students", "keyOld"), { sid: "20420", name: "알파카", grade: 2, classNo: 4, num: 20, team: 1, answers: {}, reset: false, code: CODE, createdAt: new Date(), updatedAt: new Date() });
+  }); })());
+  await ok("학생: 이름이 남은 문서도 개인 칸 백업", updateDoc(W(anon, "students", "keyOld"), { answers: { a: "b" }, code: CODE, updatedAt: serverTimestamp() }));
+  await no("학생: 남은 이름 바꾸기 차단", updateDoc(W(anon, "students", "keyOld"), { name: "가짜", code: CODE }));
+  await ok("학생: 남은 이름 지우기", updateDoc(W(anon, "students", "keyOld"), { name: deleteField(), code: CODE, updatedAt: serverTimestamp() }));
   await no("학생: 모둠 번호 9 차단", updateDoc(W(anon, "students", "keyA"), { team: 9, code: CODE }));
   await no("학생: 스스로 reset:true 차단", updateDoc(W(anon, "students", "keyA"), { reset: true, code: CODE }));
   await no("학생: 틀린 코드로 고치기 차단", updateDoc(W(anon, "students", "keyA"), { team: 1, code: "WRONG-CODE" }));
@@ -200,6 +210,25 @@ await ok("관리자: 남의 책 숨기기", updateDoc(doc(admin, "shelves", SHEL
   await no("학생: 모둠 문서에 엉뚱한 항목 차단", setDoc(W(anon, "groups", "2-4-3"), { secret: 1, code: CODE }, { merge: true }));
   await no("학생: 모둠 칸 지우기 차단", deleteDoc(W(anon, "groups", "2-4-3")));
   await ok("선생님: 모둠 칸 지우기", deleteDoc(W(mine, "groups", "2-4-3")));
+  // 3차시 모둠 대화: 글 주소 {학번}-1|2 → 한 학생 2개까지
+  const post = (o = {}) => ({ sid: "20415", area: "sci", text: "단위가 없어요", code: CODE, createdAt: serverTimestamp(), updatedAt: serverTimestamp(), ...o });
+  const P = (db, g, id) => W(db, "groups", g, "posts", id);
+  await ok("학생: 대화 글 올리기 (1번)", setDoc(P(anon, "2-4-3", "20415-1"), post()));
+  await ok("학생: 대화 글 올리기 (2번, 다른 영역)", setDoc(P(anon, "2-4-3", "20415-2"), post({ area: "ux" })));
+  await no("학생: 3번째 글 차단", setDoc(P(anon, "2-4-3", "20415-3"), post()));
+  await no("학생: 글 주소와 학번이 다르면 차단", setDoc(P(anon, "2-4-3", "20416-1"), post()));
+  await no("학생: 다른 반 모둠에 올리기 차단", setDoc(P(anon, "2-5-3", "20415-1"), post()));
+  await no("학생: 다른 학년 모둠에 올리기 차단", setDoc(P(anon, "3-4-3", "20415-1"), post()));
+  await no("학생: 300자 넘는 글 차단", setDoc(P(anon, "2-4-3", "20417-1"), post({ sid: "20417", text: "가".repeat(301) })));
+  await no("학생: 빈 글 차단", setDoc(P(anon, "2-4-3", "20417-1"), post({ sid: "20417", text: "" })));
+  await no("학생: 영역이 틀리면 차단", setDoc(P(anon, "2-4-3", "20417-1"), post({ sid: "20417", area: "etc" })));
+  await no("학생: 이름 같은 엉뚱한 항목 차단", setDoc(P(anon, "2-4-3", "20417-1"), post({ sid: "20417", name: "알파카" })));
+  await no("학생: 틀린 코드로 올리기 차단", setDoc(P(anon, "2-4-3", "20417-1"), post({ sid: "20417", code: "WRONG" })));
+  await ok("학생: 대화 글 고치기", updateDoc(P(anon, "2-4-3", "20415-1"), { sid: "20415", area: "sci", text: "단위를 붙여야 해요", code: CODE, updatedAt: serverTimestamp() }));
+  await ok("학생: 모둠 대화 읽기", getDocs(collection(anon, "shelves", SHELF, "groups", "2-4-3", "posts")));
+  await ok("학생: 대화 글 지우기", deleteDoc(P(anon, "2-4-3", "20415-2")));
+  await ok("선생님: 대화 읽기", getDocs(collection(mine, "shelves", SHELF, "groups", "2-4-3", "posts")));
+  await ok("선생님: 대화 글 지우기", deleteDoc(P(mine, "2-4-3", "20415-1")));
 }
 
 /* 책장 이름 바꾸기·삭제 */

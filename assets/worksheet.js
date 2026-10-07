@@ -3,20 +3,23 @@
  * 문항은 worksheet/lessons.js 에서 읽어 그립니다. 이 파일은 문항 내용을 모릅니다.
  *
  * - 저장: 책장 코드마다 localStorage 한 덩어리(sih-ws-{code})에 먼저 저장합니다.
- *   { v:1, code, sid, meta:{team,name}, answers:{key:value}, groupSynced, updatedAt }
- * - 학생 확인: 학번 + 비밀번호 4자리(shelf-data.js 의 활동지 부분). 이 기기에서는 기억해 둡니다(sih-ws-login-{code}).
+ *   { v:1, code, sid, meta:{team,name}, answers:{key:value}, groupSynced, updatedAt }   (meta.name 에는 학번만 들어간다)
+ * - 학생 확인: 학번 + 비밀번호 4자리. 이름은 받지 않는다(개인정보)(shelf-data.js 의 활동지 부분). 이 기기에서는 기억해 둡니다(sih-ws-login-{code}).
  *   · 개인 칸은 잠시 뒤 서버의 내 문서에도 백업합니다 (기기가 바뀌어도 이어 쓰기).
  *   · 모둠 칸(lessons.js 에서 group:true 띠 아래 + 공동작가 필명)은 같은 학년·반·모둠 번호 학생들이 함께 씁니다.
  *   책장을 못 찾거나 인터넷이 없으면 예전처럼 이 기기에만 저장합니다.
  * - 나의 여정(?n=journey): lessons.js 에서 journey 표시가 붙은 문항의 답만 모아 읽기 전용으로 보여 줍니다.
  * - 안내 그림: worksheet/img/ 에 정해진 이름의 파일이 있으면 그림이, 없으면 "○○ 이미지 추가하세요" 칸이 보입니다.
  * - 이미지 저장: 단추를 누를 때만 html2canvas 를 CDN 에서 받아 현재 종이만 캡처합니다.
- * - 인쇄: window.print() + assets/worksheet.css 의 @media print
+ * - 인쇄: window.print() + assets/worksheet.css 의 @media print. 캔바 활동지처럼 A4 가로 한 쪽을 꽉 채운다.
+ *   차시를 printBreak 표시로 쪽(.print-page)으로 나누고, 여러 줄 칸은 rows 비율(--r)로 남는 높이를 나눠 가진다(손글씨 공간).
+ *   안내 그림·단추·대화 올리기 칸은 인쇄하지 않고, 3차시 대화는 올린 글 + 빈 말풍선으로 나온다.
  */
 import { codeEntryHtml, bindCodeEntry, rememberCode, lastCode } from "./code-entry.js";
 import {
   DEMO, loadShelf, parseSid, groupId, RESET_PIN, MAX_TEAM,
-  findStudent, getStudent, createStudent, updateStudent, changePin, watchStudent, watchGroup, saveGroup,
+  findStudent, getStudent, createStudent, updateStudent, changePin, watchStudent, watchGroup, saveGroup, dropName,
+  watchPosts, savePost, deletePost, POST_MAX, POST_LEN,
 } from "./shelf-data.js";
 import { STEPS, LESSONS, JOURNEY } from "../worksheet/lessons.js";
 
@@ -66,12 +69,12 @@ function persist(d) {
 /* ---------- 학생 확인 · 서버 백업 · 모둠 칸 ---------- */
 const LOGIN_KEY = "sih-ws-login-" + code;
 let shelf = null;         // 책장 (찾지 못했거나 인터넷이 없으면 null → 이 기기에만 저장)
-let me = null;            // 로그인한 학생 { id, sid, name, grade, classNo, num, team, reset }
+let me = null;            // 로그인한 학생 { id, sid, grade, classNo, num, team, reset }
 let gid = "";             // 모둠 문서 이름 (학년-반-모둠)
 let groupVals = {};       // 서버에서 받은 모둠 칸
 let groupPending = {};    // 아직 서버가 받지 않은 내 모둠 칸 입력
 let groupTimer = null, backupTimer = null, groupSaving = false, groupOffline = false, groupReady = false;
-let stopGroup = () => {}, stopMe = () => {};
+let stopGroup = () => {}, stopMe = () => {}, stopPosts = () => {};
 
 // 모둠 칸 key 목록: lessons.js 에서 group:true 띠부터 그 차시 끝(또는 다음 띠)까지 + 공동작가 필명
 const GROUP_KEYS = (() => {
@@ -88,12 +91,13 @@ const GROUP_KEYS = (() => {
   return keys;
 })();
 const isGroup = (key) => !!gid && GROUP_KEYS.has(key);
-const myName = () => (me ? `${me.sid} ${me.name}` : "");
+const myName = () => (me ? me.sid : "");
 
 function rawGet(key) { return key.startsWith("meta.") ? (doc.meta[key.slice(5)] ?? "") : (doc.answers[key] ?? ""); }
 function rawSet(key, value) { if (key.startsWith("meta.")) doc.meta[key.slice(5)] = value; else doc.answers[key] = value; }
 function get(key) {
   if (key === "meta.name" && me) return myName();
+  if (CHAT_KEYS.has(key)) return myPosts().map((x) => x.text).join("\n");   // 진행률: 3차시 대화에 내 글이 하나라도 있으면 채운 것
   if (isGroup(key)) return groupPending[key] ?? groupVals[key] ?? (groupReady ? "" : rawGet(key));
   return rawGet(key);
 }
@@ -194,11 +198,126 @@ function onGroup({ answers, pending, offline }) {
   refreshProgress(); showState();
 }
 function joinGroup() {
-  stopGroup();
+  stopGroup(); stopPosts(); stopPosts = () => {};
   groupVals = {}; groupPending = {}; groupReady = false;
+  posts = []; postsReady = false; chatEdit = null; chatDel = null;
   gid = groupId(me);
   if (!gid || !shelf) { gid = ""; return; }
   stopGroup = watchGroup(shelf, gid, onGroup, (e) => { console.warn("모둠 칸을 읽지 못했습니다:", e.code || e.message); groupOffline = true; showState(); });
+  stopPosts = watchPosts(shelf.id, gid, (list) => { posts = list; postsReady = true; renderChats(); refreshProgress(); },
+    (e) => console.warn("모둠 대화를 읽지 못했습니다:", e.code || e.message));
+}
+
+/* ---------- 3차시 모둠 대화 ----------
+ * 말풍선 목록 + 올리기 칸. 글은 모둠 문서 아래 posts 에 {학번}-1, {학번}-2 로 저장된다 (3차시 전체에서 한 사람 2개).
+ * 내 글은 오른쪽, 친구 글은 왼쪽. 내 글에만 고치기·지우기. 인쇄에는 올린 글 + 손으로 쓸 빈 말풍선이 나온다. */
+const CHAT_PRINT_MIN = 4;     // 인쇄할 때 영역마다 최소 이만큼 말풍선을 둔다 (빈 것은 손으로 쓴다)
+const CHAT = new Map();       // 대화 문항 key → 문항 (영역·안내 글)
+LESSONS.forEach((les) => eachGroup(les.blocks, ({ items }) => eachItem(items, (it) => { if (it.type === "chat") CHAT.set(it.key, it); })));
+const CHAT_KEYS = new Set(CHAT.keys());
+let posts = [], postsReady = false;
+let chatEdit = null;          // 고치는 중인 내 글 { id, text }
+let chatDel = null;           // 지울지 묻는 중인 내 글 id
+let chatBusy = false;
+const chatOn = () => !!(me && gid && shelf);
+const myPosts = () => (me ? posts.filter((x) => x.sid === me.sid) : []);
+const freeSlot = () => Array.from({ length: POST_MAX }, (_, i) => i + 1).find((k) => !posts.some((x) => x.id === `${me.sid}-${k}`));
+const hhmm = (t) => { if (!t) return ""; const d = new Date(t); return `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`; };
+
+function chatHtml(it) {
+  return `<div class="chat" data-chat-key="${esc(it.key)}">
+    <div class="chat-list" aria-live="polite">${chatListHtml(it.area)}</div>
+    <div class="chat-compose no-print">${chatComposeHtml(it)}</div>
+  </div>`;
+}
+function bubbleHtml(x) {
+  const mine = !!me && x.sid === me.sid;
+  const editing = mine && chatEdit && chatEdit.id === x.id;
+  const asking = mine && chatDel === x.id;
+  const acts = !mine ? "" : editing
+    ? `<button type="button" class="btn small dark" data-chat="save" data-id="${esc(x.id)}">저장</button><button type="button" class="btn small" data-chat="cancel">취소</button>`
+    : asking
+      ? `<span>지울까요?</span><button type="button" class="btn small dark" data-chat="delYes" data-id="${esc(x.id)}">지우기</button><button type="button" class="btn small" data-chat="delNo">아니요</button>`
+      : `<button type="button" class="btn small" data-chat="edit" data-id="${esc(x.id)}">고치기</button><button type="button" class="btn small" data-chat="del" data-id="${esc(x.id)}">지우기</button>`;
+  const body = editing
+    ? `<textarea class="chat-edit" data-edit="${esc(x.id)}" maxlength="${POST_LEN}" rows="2" aria-label="내 글 고치기">${esc(chatEdit.text)}</textarea>`
+    : `<p class="chat-text">${esc(x.text)}</p>`;
+  const edited = x.updatedAt && x.createdAt && x.updatedAt - x.createdAt > 1500;
+  return `<div class="bubble ${mine ? "r mine" : "l"}" data-post="${esc(x.id)}">
+    <span class="who"><b>${esc(x.sid)}</b>${mine ? " (나)" : ""} <small>${esc(hhmm(x.updatedAt || x.createdAt))}${edited ? " · 고침" : ""}</small></span>
+    <div class="say-box">${body}${acts ? `<span class="chat-acts no-print">${acts}</span>` : ""}</div></div>`;
+}
+function chatListHtml(area) {
+  const list = chatOn() ? posts.filter((x) => x.area === area) : [];
+  const empty = chatOn() && postsReady && !list.length ? `<p class="chat-empty no-print">아직 올린 글이 없어요. 점검하며 발견한 것을 올려 보세요.</p>` : "";
+  // 빈 말풍선은 인쇄에서만 보인다 (종이에 손으로 쓰는 칸)
+  const paper = Array.from({ length: Math.max(0, CHAT_PRINT_MIN - list.length) }, (_, i) =>
+    `<div class="bubble ${(list.length + i) % 2 ? "r" : "l"} blank print-only"><span class="who"><b>학번</b></span><div class="say-box"></div></div>`).join("");
+  return empty + list.map(bubbleHtml).join("") + paper;
+}
+function chatComposeHtml(it) {
+  if (!chatOn()) return `<p class="chat-off">학번으로 로그인하면 이 칸에 모둠 친구들과 함께 글을 올려요. (지금은 로그인하지 않아 쓸 수 없어요)</p>`;
+  const left = POST_MAX - myPosts().length;
+  return `<textarea class="chat-in" maxlength="${POST_LEN}" rows="2" placeholder="${esc(left > 0 ? it.placeholder || "검토하며 발견한 내용을 써요." : "")}" aria-label="모둠 대화에 올릴 글"${left > 0 ? "" : " disabled"}></textarea>
+    <div class="chat-row"><span class="chat-left">${left > 0
+      ? `내 글 ${POST_MAX - left}/${POST_MAX}개 · 3차시 전체에서 ${POST_MAX}개까지 · 학번 <b>${esc(me.sid)}</b>가 자동으로 붙어요`
+      : `글은 3차시 전체에서 ${POST_MAX}개까지예요. 내 글을 고치거나 지운 뒤 다시 올려요.`}</span>
+    <button type="button" class="btn small dark" data-chat="post"${left > 0 ? "" : " disabled"}>올리기</button></div>`;
+}
+// 글이 바뀌면 목록을 다시 그린다. 올리기 칸에 쓰던 글과 고치던 글은 그대로 둔다
+function renderChats() {
+  if (n === J) return;
+  document.querySelectorAll("#sheet .chat").forEach((box) => {
+    const it = CHAT.get(box.dataset.chatKey);
+    const ed = box.querySelector("textarea.chat-edit");
+    const caret = ed && ed === document.activeElement ? ed.selectionStart : null;
+    box.querySelector(".chat-list").innerHTML = chatListHtml(it.area);
+    if (caret != null) { const e2 = box.querySelector("textarea.chat-edit"); if (e2) { e2.focus(); e2.setSelectionRange(caret, caret); } }
+    const comp = box.querySelector(".chat-compose");
+    const input = comp.querySelector("textarea.chat-in");
+    const draft = input ? input.value : "", had = !!input && input === document.activeElement;
+    comp.innerHTML = chatComposeHtml(it);
+    const ni = comp.querySelector("textarea.chat-in");
+    if (ni && !ni.disabled) { ni.value = draft; if (had) ni.focus(); }
+  });
+}
+async function onChat(btn) {
+  const act = btn.dataset.chat, id = btn.dataset.id;
+  const focusEdit = () => { const e = document.querySelector(`textarea.chat-edit[data-edit="${CSS.escape(id)}"]`); if (e) { e.focus(); e.setSelectionRange(e.value.length, e.value.length); } };
+  if (act === "edit") { const x = posts.find((p) => p.id === id); chatEdit = x ? { id, text: x.text } : null; chatDel = null; renderChats(); focusEdit(); return; }
+  if (act === "cancel") { chatEdit = null; renderChats(); return; }
+  if (act === "del") { chatDel = id; chatEdit = null; renderChats(); return; }
+  if (act === "delNo") { chatDel = null; renderChats(); return; }
+  if (chatBusy || !chatOn()) return;
+  chatBusy = true; btn.disabled = true;
+  try {
+    if (act === "post") {
+      const box = btn.closest(".chat"), input = box.querySelector("textarea.chat-in");
+      const text = input.value.trim(), slot = freeSlot();
+      if (!text) { input.focus(); return; }
+      if (!slot) return;
+      await savePost(shelf, gid, me.sid, slot, { area: CHAT.get(box.dataset.chatKey).area, text }, true);
+      input.value = "";
+      showState("모둠 대화에 올렸어요");
+    } else if (act === "save") {
+      const x = posts.find((p) => p.id === id);
+      const text = String(chatEdit ? chatEdit.text : "").trim();
+      if (!x || !text) { focusEdit(); return; }
+      await savePost(shelf, gid, me.sid, id.split("-")[1], { area: x.area, text }, false);
+      chatEdit = null;
+      showState("글을 고쳤어요");
+    } else if (act === "delYes") {
+      await deletePost(shelf.id, gid, id);
+      chatDel = null;
+      showState("글을 지웠어요");
+    }
+  } catch (e) {
+    showState("모둠 대화에 저장하지 못했어요. 인터넷을 확인하고 다시 눌러 주세요");
+    console.warn(e);
+  } finally {
+    chatBusy = false;
+    renderChats(); refreshProgress();
+  }
 }
 
 /* ---------- 문항 펼치기 (repeat 의 {i} {ord} {nth} 를 채운다) ---------- */
@@ -265,19 +384,17 @@ function itemHtml(it, no) {
     case "criteria":
       return `<ul class="criteria">${it.lines.map((l) => { const m = /^(\[[^\]]+\])\s*(.*)$/.exec(l); return `<li>${m ? `<b>${esc(m[1])}</b> ${esc(m[2])}` : esc(l)}</li>`; }).join("")}</ul>`;
     case "group":
-      return `<div class="q q-group"><div class="q-label">${num}${esc(it.label)}${hint}</div><div class="group-box">${itemsHtml(it.items, { sub: true })}</div></div>`;
+      return `<div class="q q-group" style="--r:${it.items.reduce((t, x) => t + (x.type === "long" ? x.rows || 3 : 1), 0)}"><div class="q-label">${num}${esc(it.label)}${hint}</div><div class="group-box">${itemsHtml(it.items, { sub: true })}</div></div>`;
     case "short":
     case "url":
       return `<div class="q"><label class="q-label" for="f-${esc(it.key)}">${num}${esc(it.label)}${hint}</label>
         <input type="${it.type === "url" ? "url" : "text"}" id="f-${esc(it.key)}" data-key="${esc(it.key)}" value="${esc(val)}" placeholder="${esc(it.placeholder || "")}"${it.type === "url" ? ' inputmode="url" autocapitalize="off" spellcheck="false"' : ""}></div>`;
     case "long":
-      return `<div class="q${it.copy ? " q-copy" : ""}"><label class="q-label" for="f-${esc(it.key)}">${num}${esc(it.label)}${hint}</label>
+      return `<div class="q q-long${it.copy ? " q-copy" : ""}" style="--r:${it.rows || 3}"><label class="q-label" for="f-${esc(it.key)}">${num}${esc(it.label)}${hint}</label>
         <textarea id="f-${esc(it.key)}" data-key="${esc(it.key)}" rows="${it.rows || 3}" style="${rowsStyle(it.rows)}" placeholder="${esc(it.placeholder || "")}">${esc(val)}</textarea>
         ${it.copy ? `<div class="copy-row no-print"><button type="button" class="btn small copy" data-copy="${esc(it.key)}">복사</button><span class="count" data-count="${esc(it.key)}">${String(val).length}자</span></div>` : ""}</div>`;
-    case "say":
-      return `<div class="say ${it.side === "r" ? "r" : "l"}">
-        <input type="text" class="say-name" data-key="${esc(it.key)}.name" value="${esc(get(it.key + ".name"))}" placeholder="이름" maxlength="12" aria-label="이름">
-        <textarea data-key="${esc(it.key)}" rows="${it.rows || 3}" style="${rowsStyle(it.rows)}" placeholder="${esc(it.placeholder || "")}" aria-label="검토하며 발견한 내용">${esc(val)}</textarea></div>`;
+    case "chat":
+      return chatHtml(it);
     case "check": {
       const opts = it.options || CHECK_DEFAULT;
       const marks = ["✓", "△", "✕"];
@@ -306,13 +423,16 @@ function itemHtml(it, no) {
 // 번호는 답이 들어가는 문항·묶음 문항·no:true 인 안내문에 차례로 붙는다. { type:"break" } 는 단을 나눈다.
 function itemsHtml(items, opt = {}) {
   let q = 0;
-  const cols = [[]];
+  const cols = [[]], tpl = [[]];
+  // 인쇄에서 단 안의 칸이 남는 높이를 줄 수 비율로 나눠 갖도록 grid 줄 틀(여러 줄 칸 = Nfr)을 함께 만든다
+  const weight = (it) => (it.type === "long" ? `${it.rows || 3}fr` : it.type === "group" ? `${it.items.reduce((t, x) => t + (x.type === "long" ? x.rows || 3 : 1), 0)}fr` : "auto");
   items.forEach((it) => {
-    if (it.type === "break") { cols.push([]); return; }
-    const numbered = !opt.plain && it.no !== false && (it.no === true || it.type === "group" || (it.key && it.type !== "say"));
+    if (it.type === "break") { cols.push([]); tpl.push([]); return; }
+    const numbered = !opt.plain && it.no !== false && (it.no === true || it.type === "group" || (it.key && it.type !== "chat"));
     cols[cols.length - 1].push(itemHtml(it, numbered ? ++q + (opt.sub ? ")" : ".") : ""));
+    tpl[tpl.length - 1].push(weight(it));
   });
-  return cols.length > 1 ? `<div class="cols">${cols.map((c) => `<div>${c.join("")}</div>`).join("")}</div>` : cols[0].join("");
+  return cols.length > 1 ? `<div class="cols">${cols.map((c, i) => `<div style="--tpl:${tpl[i].join(" ")}">${c.join("")}</div>`).join("")}</div>` : cols[0].join("");
 }
 
 /* ---------- 그리기: 묶음 ---------- */
@@ -332,7 +452,7 @@ function repeatHtml(b) {
     if (b.nameKey) {
       const key = fill(b.nameKey, i);
       const [a, z = ""] = title.split("{name}");
-      h3 = `${esc(a)}<input type="text" class="title-in" data-key="${esc(key)}" value="${esc(get(key))}" placeholder="이름" maxlength="12" aria-label="친구 이름">${esc(z)}`;
+      h3 = `${esc(a)}<input type="text" class="title-in" data-key="${esc(key)}" value="${esc(get(key))}" placeholder="학번" maxlength="5" inputmode="numeric" aria-label="친구 학번">${esc(z)}`;
     }
     out += `<section class="sec rep${b.pick ? " pick" : ""}"><h3>${b.pick ? `<span>${h3}</span>` : h3}</h3>${itemsHtml(fill(b.items, i), { plain: b.plain })}</section>`;
   }
@@ -340,18 +460,18 @@ function repeatHtml(b) {
 }
 function guideHtml(b) {
   const many = b.steps.length > 1;
-  return `<section class="sec frame guide"><h3>${esc(b.title)}</h3>
+  return `<section class="sec frame guide no-print"><h3>${esc(b.title)}</h3>
     <ol class="steps c${b.cols || 1}">${b.steps.map((s, i) => `<li${s.wide ? ' class="wide"' : ""}>
       <p class="cap">${many ? `<span class="cap-no">${i + 1}</span>` : ""}${esc(s.text)}</p>
       ${s.img ? `<figure class="fig no-print"><img alt="${esc(s.name || s.text)}" data-img="${esc(s.img)}" title="누르면 크게 보여요"><figcaption>${esc(s.name || s.text)} 이미지 추가하세요</figcaption></figure>` : ""}</li>`).join("")}
-    </ol>${b.note ? `<p class="guide-note">${esc(b.note)}</p>` : ""}</section>`;
+    </ol>${b.note ? `<p class="guide-note">${esc(b.note)}</p>` : ""}${b.tip ? `<div class="tip"><p class="tip-title">💡 ${esc(b.tip.title)}</p><ol>${b.tip.lines.map((l) => `<li>${esc(l)}</li>`).join("")}</ol></div>` : ""}</section>`;
 }
 function blockHtml(b, les) {
   switch (b.type) {
     case "meta":
       return `<div class="meta-row">
         <label>공동작가 필명 <input type="text" data-key="meta.team" value="${esc(get("meta.team"))}" placeholder="예: 별빛탐험대" maxlength="30"></label>
-        <label>학번·이름 <input type="text" data-key="meta.name" value="${esc(get("meta.name"))}" placeholder="예: 20415 김하늘" maxlength="40"${me ? ' readonly title="로그인한 학번·이름이에요"' : ""}></label>
+        <label>학번 <input type="text" data-key="meta.name" value="${esc(get("meta.name"))}" placeholder="예: 20415" maxlength="5" inputmode="numeric"${me ? ' readonly title="로그인한 학번이에요"' : ""}></label>
         <label>날짜 <input type="text" data-key="n${les.n}.date" value="${esc(get(`n${les.n}.date`))}" placeholder="월 / 일" maxlength="20"></label>
       </div>`;
     case "part":
@@ -371,7 +491,7 @@ function blockHtml(b, les) {
     case "guide":
       return guideHtml(b);
     case "note":
-      return `<p class="sheet-note">${esc(b.text)}</p>`;
+      return `<p class="sheet-note no-print">${esc(b.text)}</p>`;
     case "link": {
       if (b.view === "journey") return `<div class="linkrow no-print"><a class="btn go" href="${esc(pageUrl(J))}" data-go="${J}">${esc(b.label)}</a>${b.desc ? `<p>${esc(b.desc)}</p>` : ""}</div>`;
       const href = String(b.href).replace("{code}", encodeURIComponent(code)) + (DEMO && /\.html\?/.test(b.href) ? "&demo=1" : "");
@@ -407,7 +527,7 @@ function journeyData() {
         if (it.journey) entries.push({ key: it.key, label: typeof it.journey === "string" ? it.journey : it.label, value: shown(it), long: !!it.copy, group: isGroup(it.key) });
       });
       if (!entries.length) return;
-      const name = block.nameKey ? String(get(fill(block.nameKey, i))).trim() || "이름" : "";
+      const name = block.nameKey ? String(get(fill(block.nameKey, i))).trim() || "학번" : "";
       groups.push({ title: title.replace("{name}", name), entries, rep: block.type === "repeat" ? block : null, cols: block.cols || 1, group: entries.some((e) => e.group) });
     });
     return { les, groups };
@@ -494,13 +614,18 @@ function renderSheet() {
   } else {
     document.title = `${les.n}차시 ${les.title} — 학생 활동지`;
     $("sheet").className = "sheet n" + les.n + (les.field ? " field" : "");
+    // 인쇄할 쪽 나누기: printBreak 가 붙은 묶음부터 새 쪽. 화면에서는 그냥 차례로 이어진다
+    const pages = [[]];
+    (les.blocks || []).forEach((b) => { if (b.printBreak && pages[pages.length - 1].length) pages.push([]); pages[pages.length - 1].push(b); });
     $("sheet").innerHTML = `
+      <div class="print-page">
       <header class="sheet-head">
         <div class="sheet-top"><span class="les-badge">&lt;${les.n}차시&gt;</span><span class="sheet-kicker">${SITE_NAME}</span>${les.field ? "" : `<span class="sheet-pct no-print" id="sheetPct">${progressOf(les)}%</span>`}</div>
         <h2 class="ribbon"><span>[STEP. ${les.n} ${esc(les.step)}] ${esc(les.title)}</span></h2>
         ${les.goal ? `<p class="sheet-goal">${esc(les.goal)}</p>` : ""}
       </header>
-      <div class="sheet-body">${(les.blocks || []).map((b) => blockHtml(b, les)).join("")}</div>
+      ${pages.map((blocks, i) => `${i ? `</div><div class="print-page">` : ""}<div class="sheet-body">${blocks.map((b) => blockHtml(b, les)).join("")}</div>`).join("")}
+      </div>
       <footer class="sheet-foot">${esc(footText())}</footer>`;
     $("sheet").querySelectorAll("textarea").forEach(autosize);
     loadFigures();
@@ -666,14 +791,17 @@ async function saveImage() {
 /* 이 기기의 로그인 기억 */
 function readLogin() { try { const o = JSON.parse(localStorage.getItem(LOGIN_KEY) || "null"); return o && o.key ? o : null; } catch (e) { return null; } }
 function saveLogin() {
-  const { id, sid, name, grade, classNo, num, team } = me;
-  try { localStorage.setItem(LOGIN_KEY, JSON.stringify({ key: id, profile: { sid, name, grade, classNo, num, team } })); } catch (e) { /* 무시 */ }
+  const { id, sid, grade, classNo, num, team } = me;
+  try { localStorage.setItem(LOGIN_KEY, JSON.stringify({ key: id, profile: { sid, grade, classNo, num, team } })); } catch (e) { /* 무시 */ }
 }
 function forgetLogin() { try { localStorage.removeItem(LOGIN_KEY); } catch (e) { /* 무시 */ } }
 
 // 로그인한 학생으로 들어간다: 이 기기의 기록과 서버 백업을 합치고, 비밀번호·모둠을 확인한 뒤 활동지를 연다
 function enter(s) {
-  me = s;
+  const { name, ...rest } = s;
+  me = rest;
+  // 예전에 받은 이름이 서버에 남아 있으면 지운다 (이름은 더 쓰지 않는다)
+  if (name != null && shelf && !s.reset) dropName(shelf, s.id).catch((e) => console.warn("이름을 지우지 못했습니다:", e.code || e.message));
   if (doc.sid && doc.sid !== me.sid) {
     // 이 기기에 다른 학생의 기록이 있으면 따로 보관해 두고 새로 시작한다
     try { localStorage.setItem(`${KEY}-${doc.sid}`, JSON.stringify(doc)); } catch (e) { /* 무시 */ }
@@ -687,10 +815,10 @@ function enter(s) {
   if (!me.team) return showTeam();
   openSheet();
 }
-function whoText() { return me ? `${me.grade}학년 ${me.classNo}반 ${me.num}번 ${me.name}` : ""; }
+function whoText() { return me ? `${me.grade}학년 ${me.classNo}반 ${me.num}번` : ""; }
 function card(html) {
   stopMe(); stopMe = () => {};
-  stopGroup(); stopGroup = () => {}; gid = "";
+  stopGroup(); stopGroup = () => {}; stopPosts(); stopPosts = () => {}; gid = ""; posts = [];
   $("wsMain").hidden = true; $("wsBar").hidden = true;
   $("notice").innerHTML = `<div class="notice ws-card">${html}</div>`;
   const f = $("notice").querySelector("input");
@@ -708,10 +836,7 @@ function showLogin(msg = "") {
       <label>학번 <input id="sidIn" inputmode="numeric" autocomplete="off" maxlength="5" placeholder="예: 20415"></label>
       <span class="sid-hint" id="sidHint"></span>
       <label>비밀번호 4자리 <input id="pinIn" type="password" inputmode="numeric" autocomplete="off" maxlength="4" placeholder="●●●●"></label>
-      <div class="ws-name" id="nameRow" hidden>
-        <p>처음 왔네요! 이름을 넣고 시작해요.</p>
-        <label>이름 <input id="nameIn" autocomplete="off" maxlength="20" placeholder="예: 김하늘"></label>
-      </div>
+      <p class="ws-new" id="newRow" hidden>처음 왔네요! 이 학번과 비밀번호로 새 활동지를 시작해요. 비밀번호를 꼭 기억해 두세요.</p>
       <button class="btn primary" id="loginBtn" type="submit">열기</button>
       <p class="err" id="loginErr" role="alert"${msg ? "" : " hidden"}>${esc(msg)}</p>
     </form>
@@ -722,7 +847,7 @@ function showLogin(msg = "") {
     sidIn.value = sidIn.value.replace(/\D/g, "");
     const p = parseSid(sidIn.value);
     $("sidHint").textContent = p ? `${p.grade}학년 ${p.classNo}반 ${p.num}번` : "";
-    if (isNew) { isNew = false; $("nameRow").hidden = true; btn.textContent = "열기"; }
+    if (isNew) { isNew = false; $("newRow").hidden = true; btn.textContent = "열기"; }
   });
   pinIn.addEventListener("input", () => { pinIn.value = pinIn.value.replace(/\D/g, ""); });
   $("localOnly").addEventListener("click", (e) => { e.preventDefault(); shelf = null; openSheet("로그인하지 않아 이 기기에만 저장되고, 모둠 칸이 친구들과 공유되지 않아요."); });
@@ -735,13 +860,11 @@ function showLogin(msg = "") {
     busy(btn, true);
     try {
       if (isNew) {
-        const name = $("nameIn").value.trim();
-        if (!name) { busy(btn, false); return fail("loginErr", "이름을 넣어 주세요."); }
         // 이 기기에 이미 적어 둔 개인 칸이 있으면(다른 학생 것이 아니면) 그대로 가져간다
         const mine = !doc.sid || doc.sid === p.sid;
         const answers = {};
         if (mine) Object.entries(doc.answers).forEach(([k, v]) => { if (!GROUP_KEYS.has(k) && String(v ?? "") !== "") answers[k] = String(v); });
-        return enter(await createStudent(shelf, { sid: p.sid, name, pin, answers }));
+        return enter(await createStudent(shelf, { sid: p.sid, pin, answers }));
       }
       const r = await findStudent(shelf, p.sid, pin);
       if (r.status === "ok") return enter(r.student);
@@ -750,7 +873,7 @@ function showLogin(msg = "") {
         ? "비밀번호가 맞지 않아요. 선생님이 아직 0000으로 바꿔 주지 않았을 수 있어요."
         : "비밀번호가 맞지 않아요. 잊었으면 선생님께 “비밀번호를 0000으로 바꿔 주세요”라고 말해요.");
       if (pin === RESET_PIN) return fail("loginErr", "0000은 쓸 수 없어요. 다른 숫자 4자리를 정해 주세요.");
-      isNew = true; $("nameRow").hidden = false; btn.textContent = "시작하기"; $("nameIn").focus();
+      isNew = true; $("newRow").hidden = false; btn.textContent = "시작하기"; btn.focus();
     } catch (err) {
       busy(btn, false);
       fail("loginErr", err.code === "exists" ? "방금 다른 기기에서 같은 학번으로 시작했어요. 비밀번호를 확인하고 다시 눌러 주세요."
@@ -821,7 +944,7 @@ async function logout() {
   flush();
   clearTimeout(backupTimer);
   const ok = await backup();
-  stopMe(); stopGroup();
+  stopMe(); stopGroup(); stopPosts(); posts = [];
   forgetLogin();
   // 서버에 백업했으므로 이 기기의 개인 기록은 지운다 (다음 학생에게 보이지 않게). 백업이 안 됐으면 따로 보관한다
   try {
@@ -850,7 +973,7 @@ function openSheet(note = "") {
     stopMe();
     stopMe = watchStudent(shelf, me.id, (x) => {
       if (!me) return;
-      if (!x) { stopMe(); stopGroup(); forgetLogin(); me = null; gid = ""; showLogin("선생님이 비밀번호를 0000으로 바꿨어요. 0000으로 들어와 새 비밀번호를 정해요."); return; }
+      if (!x) { stopMe(); stopGroup(); stopPosts(); forgetLogin(); me = null; gid = ""; showLogin("선생님이 비밀번호를 0000으로 바꿨어요. 0000으로 들어와 새 비밀번호를 정해요."); return; }
       if (x.team !== me.team) {
         me.team = x.team; saveLogin();
         if (!x.team) { flush(); showTeam("선생님이 모둠에서 뺐어요. 내 모둠 번호를 다시 골라요."); }
@@ -866,8 +989,17 @@ function openSheet(note = "") {
   if (wired) return;
   wired = true;
   $("sheet").addEventListener("input", onInput);
+  $("sheet").addEventListener("input", (e) => { if (e.target.matches("textarea.chat-edit") && chatEdit) chatEdit.text = e.target.value; });
+  // 올리기 칸에서 Ctrl+Enter 로도 올린다
+  $("sheet").addEventListener("keydown", (e) => {
+    if (e.key !== "Enter" || !(e.ctrlKey || e.metaKey) || !e.target.matches("textarea.chat-in")) return;
+    e.preventDefault();
+    const b = e.target.closest(".chat").querySelector('[data-chat="post"]');
+    if (b && !b.disabled) onChat(b);
+  });
   $("sheet").addEventListener("change", onInput);
   $("sheet").addEventListener("click", (e) => {
+    const ch = e.target.closest("button[data-chat]"); if (ch) return onChat(ch);
     const c = e.target.closest("button[data-copy]");
     if (c) return copyText(String(get(c.dataset.copy)), c, document.querySelector(`textarea[data-key="${CSS.escape(c.dataset.copy)}"]`));
     if (e.target.closest("#jnCopy")) return copyText(journeyText(), e.target.closest("#jnCopy"));

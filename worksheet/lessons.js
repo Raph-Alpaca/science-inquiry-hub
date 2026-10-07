@@ -7,23 +7,25 @@
  *   { n, step, title, blocks[] }        field:true 이면 입력 칸 없이 안내만 있는 차시
  *
  * blocks[] 에 넣을 수 있는 것
- *   { type:"meta" }                                   공동작가 필명·이름·날짜 (필명·이름은 모든 차시가 같이 씀)
+ *   { type:"meta" }                                   공동작가 필명·학번·날짜 (필명·학번은 모든 차시가 같이 씀). 학생 이름은 받지 않는다
  *   { type:"part", label, group? }                    큰 구분 띠 (개별 작성 / 모둠별 작성). group:true 면 다음 띠까지 모둠 칸
  *   { type:"section", title, intro?, items[] }        문항 묶음 (테두리 상자)
  *                                                     cols:2 면 items 의 { type:"break" } 에서 단을 나눔. grid:2 면 두 칸씩 나란히
  *                                                     plain:true 면 문항 번호를 붙이지 않음
  *   { type:"repeat", count, title, items[] }          같은 문항 묶음을 count 번. key 와 글에 {i}(1) {ord}(1st) {nth}(첫 번째) 를 쓸 수 있음
  *                                                     cols:3 은 나란히 놓을 칸 수, pick:true 는 'My 1st pick' 이름표
- *                                                     nameKey 를 주면 title 의 {name} 자리가 이름 적는 칸이 됨
+ *                                                     nameKey 를 주면 title 의 {name} 자리가 친구 학번 적는 칸이 됨
  *                                                     need:2 면 진행률은 앞의 2묶음만 셈
  *   { type:"row", blocks:[a, b], arrow? }             두 묶음을 나란히. arrow:true 면 사이에 화살표
  *   { type:"flow" }                                   아래로 이어지는 화살표
- *   { type:"guide", title, cols?, steps[], note? }    그림 안내. steps: { text, img?, name?, wide? }  wide:true 면 한 줄을 다 써서 크게
+ *   { type:"guide", title, cols?, steps[], note?, tip? }  그림 안내. steps: { text, img?, name?, wide? }  wide:true 면 한 줄을 다 써서 크게
+ *                                                     tip: { title, lines[] } 은 그림 아래 노란 도움말 상자. 그림 안내는 인쇄하지 않음
  *                                                     img 는 worksheet/img/ 안의 파일 이름(확장자 빼고). 파일이 있으면 그림이, 없으면 "name 이미지 추가하세요" 가 보임
  *   { type:"note", text }                             안내문
  *   { type:"link", label, href, desc?, prefill? }     단추. href 의 {code} 는 책장 코드로 바뀜.
  *                                                     prefill:{team,title,url} 은 출판 의뢰서의 초안에 미리 채울 답의 key
  *   { type:"link", label, view:"journey", desc? }     '나의 여정' 을 여는 단추
+ *   공통: printBreak:true 면 인쇄할 때 이 묶음부터 새 쪽 (A4 가로 한 쪽에 맞춰 꽉 채운다)
  *
  * items[] (key 가 있어야 저장됨. key 는 활동지 전체에서 겹치지 않게)
  *   { key, type:"short", label, placeholder?, hint? }             한 줄
@@ -32,7 +34,8 @@
  *   { key, type:"choice", label, options[], other? }              하나 고르기. other:true 면 "기타" 적는 칸
  *   { key, type:"multi",  label?, options[], list? }              여러 개 고르기. list:true 면 한 줄에 하나씩
  *   { key, type:"check", label, options?, memo? }                 3단 고르기(잘 돼요·조금 아쉬워요·안 돼요)
- *   { key, type:"say", side:"l"|"r", placeholder? }               이름 + 말풍선 (이름은 key.name 에 저장)
+ *   { key, type:"chat", area, placeholder? }                      모둠 대화 (말풍선 + 올리기). 글은 서버의 모둠 문서 아래에 저장되고
+ *                                                                 학번이 자동으로 붙는다. 한 학생은 활동지 전체에서 글 2개까지
  *   { type:"group", label, hint?, items[] }                       한 문항 아래 1) 2) 3) 으로 묶인 작은 문항들
  *   { type:"criteria", lines[] }                                  점검 기준 목록 (입력 없음)
  *   { type:"note", text, no? }                                    문항 사이 안내문. no:true 면 문항 번호를 받음
@@ -58,6 +61,17 @@ export const JOURNEY = {
 
 const GRADES = ["중학교 1학년", "중학교 2학년", "중학교 3학년"];
 const SUBMIT_PREFILL = { team: "meta.team", title: "n2.plan.name", url: "n3.url" };
+
+/* 제미나이가 시뮬레이션을 만들어 주지 않을 때 (근거: Gemini 앱 정책 가이드라인 — 출력을 평가할 때 교육·과학 등 맥락을 고려,
+ * Google Workspace 프롬프트 가이드 — 역할·작업·맥락(목적·대상)·형식, Gemini 도움말 'Canvas로 문서, 앱 등 만들기' — 만 18세 미만 제한 기능) */
+const GEMINI_TIP = {
+  title: "제미나이가 \"시뮬레이션을 만들 수 없어요\"라고 하면?",
+  lines: [
+    "프롬프트 맨 앞에 목적과 대상을 먼저 밝혀요. 예) \"중학교 과학 수업에서 쓰는 교육용 웹 애플리케이션(시뮬레이션)을 만들려고 해.\"",
+    "그래도 안 되면 새 채팅을 열고 Canvas를 다시 켠 뒤 프롬프트를 보내요.",
+    "만 18세 미만 계정은 'Gemini 기능 추가'(앱 안에 AI 넣기) 같은 일부 Canvas 기능을 쓸 수 없어요. 이런 기능은 프롬프트에 넣지 않아요.",
+  ],
+};
 
 export const LESSONS = [
   /* ---------- 1차시 (1쪽) ---------- */
@@ -123,7 +137,7 @@ export const LESSONS = [
         ],
       },
       {
-        type: "row", arrow: true,
+        type: "row", arrow: true, printBreak: true,
         blocks: [
           {
             type: "section", title: "Talk Log로 결정한 우리 모둠의 선택", grid: 2,
@@ -158,6 +172,7 @@ export const LESSONS = [
           { text: "제미나이 접속, + 버튼 클릭하여 Canvas 기능 켜기", img: "n2-1", name: "제미나이 Canvas 켜기" },
           { text: "모델 설정, 입력 창에 프롬프트 입력 및 제출", img: "n2-2", name: "프롬프트 입력·제출" },
         ],
+        tip: GEMINI_TIP,
       },
     ],
   },
@@ -180,10 +195,7 @@ export const LESSONS = [
                 "[측정 검증] 조건 변화에 따른 결과(움직임, 실시간 수치, 그래프)가 정확히 관찰되나요?",
                 "[원리 검증] 시뮬레이션의 움직임이 실제 교과서의 내용과 일치하나요?",
               ] },
-              { key: "n3.sci.m1", type: "say", side: "l", placeholder: "검토하며 발견한 내용을 기록해요." },
-              { key: "n3.sci.m2", type: "say", side: "r", optional: true },
-              { key: "n3.sci.m3", type: "say", side: "l", optional: true },
-              { key: "n3.sci.m4", type: "say", side: "r", optional: true },
+              { key: "n3.chat.sci", type: "chat", area: "sci", placeholder: "점검하며 발견한 과학적 오류나 확인한 내용을 써요." },
               { key: "n3.talk1", type: "long", rows: 6, copy: true, label: "[Talk Log 수정] 과학적 오류 수정을 위한 추가 프롬프트", journey: "Talk Log 수정 (과학적 오류 수정)" },
             ],
           },
@@ -195,10 +207,7 @@ export const LESSONS = [
                 "[편의성 보완] 처음 상태로 되돌려 다시 실험할 수 있는 '리셋 버튼'이 작동하나요?",
                 "[데이터 비교] 이전 조건의 결과와 현재 결과를 한눈에 비교할 수 있나요?",
               ] },
-              { key: "n3.ux.m1", type: "say", side: "l", placeholder: "검토하며 발견한 내용을 기록해요." },
-              { key: "n3.ux.m2", type: "say", side: "r", optional: true },
-              { key: "n3.ux.m3", type: "say", side: "l", optional: true },
-              { key: "n3.ux.m4", type: "say", side: "r", optional: true },
+              { key: "n3.chat.ux", type: "chat", area: "ux", placeholder: "독자를 위해 더하거나 고칠 기능을 써요." },
               { key: "n3.talk2", type: "long", rows: 6, copy: true, label: "[Talk Log 고도화] 사용 편의 개선을 위한 추가 프롬프트", journey: "Talk Log 고도화 (사용 편의 개선)" },
             ],
           },
@@ -208,6 +217,7 @@ export const LESSONS = [
         type: "guide", title: "수정 프롬프트 입력하기",
         steps: [{ text: "수정 프롬프트 입력", img: "n3-1", name: "수정 프롬프트 입력" }],
         note: "시뮬레이션이 생성된 채팅방에 추가 프롬프트를 계속 입력하며 수정과 확인을 반복해요.\n더 이상 수정이나 보완할 사항이 없으면, 추가 프롬프트 입력을 멈춥니다.",
+        tip: GEMINI_TIP,
       },
       {
         type: "guide", title: "완성한 콘텐츠의 공유용 링크 생성하기", cols: 2,

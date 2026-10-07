@@ -225,3 +225,8 @@ footer.app-foot { margin-top: 26px; font-size: .85em; color: var(--muted); borde
 .sb-table code { font-size: .92em; white-space: normal; word-break: break-all; }
 .sb-log { margin: 8px 0; max-height: 180px; overflow: auto; background: var(--paper); border-radius: var(--radius-s); padding: 8px 10px; font-size: .78em; line-height: 1.5; white-space: pre-wrap; word-break: break-all; }
 .sensor-only[hidden], .sim-only[hidden], .field[hidden], .readout[hidden] { display: none !important; }
+
+/* 맨 아래 작은 안내: 저작권·생성형 AI 사용 (모든 화면 공통, 인쇄에는 넣지 않는다) */
+.site-note { margin: 40px auto 0; padding: 14px 0 0; border-top: 1px solid var(--line); color: var(--ink-2); font-size: 12px; line-height: 1.6; text-align: center; word-break: keep-all; }
+.site-note p { margin: 0; }
+@media print { .site-note { display: none !important; } }

@@ -620,3 +620,8 @@ dialog.sheet.wide { max-width: 860px; }
 .demo-bar a { color: var(--ink); font-weight: 700; margin-left: 8px; white-space: nowrap; }
 .tour-steps { margin: 0 0 18px; padding-left: 22px; display: grid; gap: 6px; }
 #tourCard { margin-top: 18px; }
+
+/* 맨 아래 작은 안내: 저작권·생성형 AI 사용 (모든 화면 공통, 인쇄에는 넣지 않는다) */
+.site-note { margin: 40px auto 0; padding: 14px 0 0; border-top: 1px solid var(--line); color: var(--ink-2); font-size: 12px; line-height: 1.6; text-align: center; word-break: keep-all; }
+.site-note p { margin: 0; }
+@media print { .site-note { display: none !important; } }

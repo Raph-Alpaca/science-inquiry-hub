@@ -58,7 +58,7 @@ for (const [vn, vp] of Object.entries(VIEWS)) {
       check(`${vn}: 책 표지의 학년반·모둠명 줄이 잘리지 않음`, cut.length === 0, cut.join(" | "));
     }
     check(`${vn}: 승인 대기 책은 공개 책장에 없음`, !info.html.includes("우리 학교 기온 기록"));
-    check(`${vn}: 모둠원 이름이 공개 화면에 없음`, !/김하늘|이서준|최민준|정수아/.test(info.html));
+    check(`${vn}: 모둠원 학번이 공개 화면에 없음`, !/20301|20302|20304/.test(info.html));
     check(`${vn}: 빈 서가 안내 문구`, info.html.includes("아직 꽂힌 책이 없어요"));
     // 한 서가는 칸 하나에 다 꽂고, 넘치는 만큼 옆으로 넘겨 본다 (예전에는 10권마다 "(이어서)" 칸이 생겼다)
     check(`${vn}: 서가를 나눠 "(이어서)" 칸을 만들지 않음`, !info.labels.some((t) => t.includes("이어서")), info.labels.join(" | "));
@@ -136,7 +136,7 @@ for (const [vn, vp] of Object.entries(VIEWS)) {
     await page.fill("#url", "https://example.com/mywork");
     await page.fill("#howto", "슬라이더를 움직여 보세요.");
     await page.fill("#concepts", "열평형, 대류");
-    await page.fill("#members", "홍길동, 김영희");
+    await page.fill("#members", "20398, 20399");
     await page.click('#coverPick button[data-k="space"]');
     await page.click('#colorPick button[data-c="#8A5CD6"]');
     await page.click("#send");
@@ -166,7 +166,7 @@ for (const [vn, vp] of Object.entries(VIEWS)) {
     await page.screenshot({ path: `${OUT}/${vn}-teacher.png`, fullPage: vn === "mobile" });
     const pend = await page.textContent('[role=tab][data-t="pending"]');
     check(`${vn}: 승인 대기 목록`, /승인 대기 [12]/.test(pend), pend);
-    check(`${vn}: 교사 화면에는 모둠원 이름이 보임`, (await page.content()).includes("홍길동"));
+    check(`${vn}: 교사 화면에는 모둠원 학번이 보임`, (await page.content()).includes("20398, 20399"));
     // QR
     await page.click('[data-a="qr"]');
     await page.waitForTimeout(800);
@@ -186,7 +186,7 @@ for (const [vn, vp] of Object.entries(VIEWS)) {
     if (dl) {
       const p = await dl.path();
       const csv = fs.readFileSync(p, "utf8");
-      check(`${vn}: CSV에 모둠원 포함`, csv.includes("홍길동") && csv.includes("모둠원"));
+      check(`${vn}: CSV에 모둠원 포함`, csv.includes("20398, 20399") && csv.includes("모둠원 학번"));
     }
     await page.click('[data-a="approveAll"]');
     await page.waitForTimeout(900);
@@ -213,7 +213,7 @@ for (const [vn, vp] of Object.entries(VIEWS)) {
     await page.waitForTimeout(700);
     const html = await page.content();
     check(`${vn}: 승인 후 공개 책장에 꽂힘`, html.includes("테스트 산출물"));
-    check(`${vn}: 승인 후에도 모둠원 이름 비공개`, !/홍길동|김영희/.test(html));
+    check(`${vn}: 승인 후에도 모둠원 학번 비공개`, !/20398|20399/.test(html));
     await page.close();
   }
   await ctx.close();

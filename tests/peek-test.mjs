@@ -47,7 +47,7 @@ for (const [vn, vp] of Object.entries({ classroom: { width: 1920, height: 1080 }
   await frame.waitForSelector(".row-label h2", { timeout: 6000 }).catch(() => {});
   const inner = await frame.evaluate(() => ({ rows: document.querySelectorAll(".row-label h2").length, html: document.body.innerHTML }));
   check(`${vn}: 패널 안에 책장 서가가 그려짐`, inner.rows >= 3, String(inner.rows));
-  check(`${vn}: 패널 안에 모둠원 이름 없음`, !/김하늘|이서준/.test(inner.html));
+  check(`${vn}: 패널 안에 모둠원 학번 없음`, !/20301, 20302/.test(inner.html));
   await page.screenshot({ path: `${OUT}/${vn}-peek.png` });
   if (vn !== "mobile") {
     await page.click("#peekWide"); await page.waitForTimeout(400);

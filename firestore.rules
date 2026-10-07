@@ -12,7 +12,8 @@ rules_version = '2';
 //   allowed/{이메일}  ← 관리자가 선생님 화면에서 추가·삭제한다
 //   requests/{이메일} ← 로그인한 선생님이 직접 내는 사용 신청. 승인·거절하면 지운다(연락처를 남기지 않는다)
 //
-//  모둠원 이름(private)은 그 책장을 만든 선생님만 읽는다. 관리자도 읽지 않는다.
+//  모둠원 학번(private)은 그 책장을 만든 선생님만 읽는다. 관리자도 읽지 않는다.
+//  학생 이름은 어디에도 받지 않는다(개인정보). 활동지는 학번만 쓴다.
 service cloud.firestore {
   match /databases/{database}/documents {
 
@@ -132,7 +133,7 @@ service cloud.firestore {
         allow update, delete: if isOwner(shelfId) || isAdmin();
       }
 
-      // 모둠원 이름: 그 책장을 만든 선생님만. 관리자도 읽지 못한다.
+      // 모둠원 학번(필드 이름은 예전 그대로 memberNames): 그 책장을 만든 선생님만. 관리자도 읽지 못한다.
       match /private/{bookId} {
         allow read: if isOwner(shelfId);
 
@@ -165,7 +166,7 @@ service cloud.firestore {
         function okStudent(d) {
           return d.keys().hasOnly(['sid', 'name', 'grade', 'classNo', 'num', 'team', 'answers', 'reset', 'from', 'code', 'createdAt', 'updatedAt'])
                  && d.sid is string && d.sid.matches('^[1-3][0-9]{4}$')
-                 && str(d.name, 20) && d.name.size() > 0
+                 && (!('name' in d) || str(d.name, 20))   // 이름은 더 받지 않는다. 예전 문서에만 남아 있다가 지워진다
                  && d.grade is int && d.classNo is int && d.num is int
                  && d.team is int && d.team >= 0 && d.team <= 8
                  && d.answers is map && d.answers.size() <= 400
@@ -179,6 +180,7 @@ service cloud.firestore {
                       || (codeMatches(shelfId)
                           && okStudent(request.resource.data)
                           && request.resource.data.reset == false
+                          && !('name' in request.resource.data)
                           && request.resource.data.createdAt == request.time
                           && ((!exists(/databases/$(database)/documents/shelves/$(shelfId)/roster/$(request.resource.data.sid))
                                && existsAfter(/databases/$(database)/documents/shelves/$(shelfId)/roster/$(request.resource.data.sid)))
@@ -186,11 +188,12 @@ service cloud.firestore {
                                   && exists(/databases/$(database)/documents/shelves/$(shelfId)/students/$(request.resource.data.from))
                                   && get(/databases/$(database)/documents/shelves/$(shelfId)/students/$(request.resource.data.from)).data.sid == request.resource.data.sid
                                   && !existsAfter(/databases/$(database)/documents/shelves/$(shelfId)/students/$(request.resource.data.from)))));
-        // 학생이 고칠 수 있는 것: 개인 칸, 모둠 번호, 비밀번호 새로 정함(reset → false). 학번·이름·만든 때는 그대로.
+        // 학생이 고칠 수 있는 것: 개인 칸, 모둠 번호, 비밀번호 새로 정함(reset → false), 예전 이름 지우기. 학번·만든 때는 그대로.
         allow update: if isOwner(shelfId)
                       || (codeMatches(shelfId)
                           && okStudent(request.resource.data)
-                          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['answers', 'team', 'reset', 'code', 'updatedAt'])
+                          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['answers', 'team', 'reset', 'code', 'updatedAt', 'name'])
+                          && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['name']) || !('name' in request.resource.data))
                           && (request.resource.data.reset == false || resource.data.reset == true));
         allow delete: if true;
       }
@@ -205,6 +208,21 @@ service cloud.firestore {
                               && request.resource.data.answers is map
                               && request.resource.data.answers.size() <= 80;
         allow delete: if isOwner(shelfId);
+
+        // 3차시 모둠 대화: 글 주소가 {학번}-1, {학번}-2 뿐이라 한 학생은 3차시 전체에서 글을 2개까지만 올린다.
+        // 학번의 학년·반이 모둠 문서(학년-반-모둠)와 같아야 한다. 고치기·지우기 단추는 화면에서 내 글에만 보인다.
+        match /posts/{pid} {
+          allow read: if true;
+          allow create, update: if pid.matches('^[1-3][0-9]{4}-[12]$')
+                                && codeMatches(shelfId)
+                                && request.resource.data.keys().hasOnly(['sid', 'area', 'text', 'code', 'createdAt', 'updatedAt'])
+                                && request.resource.data.sid == pid.split('-')[0]
+                                && gid.split('-')[0] == pid[0:1]
+                                && int(gid.split('-')[1]) == int(pid[1:3])
+                                && request.resource.data.area in ['sci', 'ux']
+                                && str(request.resource.data.text, 300) && request.resource.data.text.size() > 0;
+          allow delete: if true;
+        }
       }
     }
   }
