@@ -113,6 +113,38 @@ check("A 가 고친 글이 B 에게 반영", await B.page.waitForFunction(() => 
 await A.page.click(`${UX} [data-chat="del"]`); await A.page.click(`${UX} [data-chat="delYes"]`);
 check("A 가 지운 글이 B 화면에서 사라짐", await B.page.waitForFunction(() => ![...document.querySelectorAll(".chat-text")].some((e) => e.textContent === "리셋 단추가 필요해요"), null, { timeout: 10000 }).then(() => true).catch(() => false));
 check("지운 뒤 A 는 다시 올릴 수 있음", await A.page.waitForFunction(() => !document.querySelector('.chat[data-chat-key="n3.chat.sci"] [data-chat="post"]').disabled, null, { timeout: 5000 }).then(() => true).catch(() => false));
+
+// 3차시 맨 위 첫 결과물 링크(모둠 칸): A 가 붙여 넣으면 B 에게 실시간으로, [열기]도 켜짐. C(다른 모둠)에는 안 보임
+await A.page.fill('[data-key="n3.proto"]', "https://gemini.google.com/share/team3-proto");
+check("A 가 붙여 넣은 첫 결과물 링크가 B 화면에 새로고침 없이", await waitValue(B.page, "n3.proto", "https://gemini.google.com/share/team3-proto"));
+check("B 화면의 [열기]가 그 링크로 켜짐", await B.page.getAttribute('a[data-open="n3.proto"]', "href") === "https://gemini.google.com/share/team3-proto");
+check("다른 모둠 C 에는 링크가 안 보임", await C.page.inputValue('[data-key="n3.proto"]') === "");
+// Talk Log 모둠에 올리기: A 가 올린 프롬프트가 B 에게 실시간으로. 다시 올리면 고쳐짐. 대화 2개와 따로
+const T1 = '.talk[data-talk-key="n3.talk1"]';
+await A.page.fill('[data-key="n3.talk1"]', "각도 단위를 °로 붙여 줘");
+await A.page.click(`${T1} [data-talk="post"]`);
+const talkSeen = (page, text) => page.waitForFunction(([s, t]) => [...document.querySelectorAll(`${s} .talk-item:not(.mine) .chat-text`)].some((e) => e.textContent === t), [T1, text], { timeout: 10000 }).then(() => true).catch(() => false);
+check("A 가 올린 Talk Log 가 B 화면에 새로고침 없이, 학번 20415 와 함께", await talkSeen(B.page, "각도 단위를 °로 붙여 줘") && (await B.page.textContent(`${T1} .talk-item:not(.mine) .who`)).includes("20415"));
+check("A 는 Talk Log 를 올려도 대화 글을 더 올릴 수 있음 (대화 1/2)", (await A.page.textContent(`${SCI} .chat-left`)).includes("1/2"));
+const tk = await rest("GET", `shelves/${SHELF}/groups/2-4-3/posts/20415-t1`);
+check("서버에 Talk Log 가 학번-t1 주소, talk1 영역으로 저장됨", !!tk && tk.fields.area.stringValue === "talk1" && tk.fields.text.stringValue === "각도 단위를 °로 붙여 줘");
+await A.page.fill('[data-key="n3.talk1"]', "각도 단위를 °로 붙이고 범위를 0~60°로 해 줘");
+await A.page.click(`${T1} [data-talk="post"]`);
+check("A 가 다시 올린 Talk Log 가 B 에게 고쳐져 보임 (A 글 1개)", await talkSeen(B.page, "각도 단위를 °로 붙이고 범위를 0~60°로 해 줘") && (await B.page.$$(`${T1} .talk-item:not(.mine)`)).length === 1);
+await B.page.fill('[data-key="n3.talk1"]', "그래프 눈금을 넣어 줘"); await B.page.click(`${T1} [data-talk="post"]`);
+check("B 가 올린 Talk Log 도 A 에게 보임 (모둠 목록 2개)", await talkSeen(A.page, "그래프 눈금을 넣어 줘") && (await A.page.$$(`${T1} .talk-item`)).length === 2);
+await sleep(800);
+check("다른 모둠 C 에는 Talk Log 가 안 보임", (await C.page.$$(".talk .talk-item")).length === 0);
+
+// 예전에 개인 칸으로 적어 둔 최종 링크(n3.url)는 모둠 칸이 된 뒤 한 번 모둠 문서로 올라간다
+// (활동지를 떠날 때 화면이 자기 사본을 저장하므로, 먼저 같은 사이트의 다른 쪽으로 나간 뒤 고친다)
+await C.page.goto(`${BASE}/assets/worksheet.css`, { waitUntil: "load" });
+await C.page.evaluate((k) => { const o = JSON.parse(localStorage.getItem(k)); o.answers["n3.url"] = "https://example.com/c-old-link"; delete o.lateSynced; localStorage.setItem(k, JSON.stringify(o)); }, "sih-ws-" + CODE);
+await C.page.goto(W(3), { waitUntil: "load" });
+await C.page.waitForFunction(() => !document.getElementById("wsMain").hidden, null, { timeout: 15000 });
+await sleep(2000);
+const gc = await rest("GET", `shelves/${SHELF}/groups/2-4-4`);
+check("이미 모둠에 붙은 학생의 개인 최종 링크가 모둠 문서로 옮겨짐", !!gc && gc.fields.answers.mapValue.fields["n3.url"]?.stringValue === "https://example.com/c-old-link");
 const studentDoc = await rest("GET", `shelves/${SHELF}/students/${keyOf("20415", "1234")}`);
 check("학생 문서에 이름이 없음", studentDoc && !studentDoc.fields.name);
 for (const s of [A, B, C]) { await s.page.click('#journey .step[data-n="2"]'); await sleep(200); }

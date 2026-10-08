@@ -876,9 +876,12 @@ export async function saveGroup(shelf, gid, values) {
 }
 
 /* ---------- 3차시 모둠 대화 ----------
- * 글 주소는 {학번}-1, {학번}-2 둘뿐이다 → 한 학생은 3차시 전체에서 2개까지. 규칙도 같은 것을 확인한다. */
+ * 글 주소는 {학번}-1, {학번}-2 둘뿐이다 → 한 학생은 3차시 전체에서 2개까지. 규칙도 같은 것을 확인한다.
+ * Talk Log 추가 프롬프트는 {학번}-t1(area talk1)·{학번}-t2(area talk2) 에 한 사람 하나씩 올린다 (대화 2개와 따로). */
 export const POST_MAX = 2;
 export const POST_LEN = 300;
+export const TALK_LEN = 1500;
+export const isTalkArea = (area) => area === "talk1" || area === "talk2";
 const postOf = (id, x) => ({ id, sid: x.sid, area: x.area, text: x.text, createdAt: ms(x.createdAt), updatedAt: ms(x.updatedAt) });
 const sortPosts = (list) => list.sort((a, b) => a.createdAt - b.createdAt || a.id.localeCompare(b.id));
 /* 한 모둠의 글을 지켜본다. cb(글 목록, { offline }) — 실시간 연결이 흔들릴 때 캐시로 지운 것처럼 보이지 않게 offline 을 함께 넘긴다 */
@@ -899,10 +902,10 @@ export function watchPosts(shelfId, gid, cb, onError) {
   }).catch((e) => { if (onError) onError(e); });
   return () => { cancelled = true; stop(); };
 }
-/* 글 올리기·고치기. slot 은 1 또는 2. 고칠 때는 처음 올린 때(createdAt)를 그대로 둔다 */
+/* 글 올리기·고치기. slot 은 1·2 (대화) 또는 t1·t2 (Talk Log). 고칠 때는 처음 올린 때(createdAt)를 그대로 둔다 */
 export async function savePost(shelf, gid, sid, slot, { area, text }, isNew) {
   const id = `${sid}-${slot}`;
-  const body = { sid, area, text: String(text).trim().slice(0, POST_LEN) };
+  const body = { sid, area, text: String(text).trim().slice(0, isTalkArea(area) ? TALK_LEN : POST_LEN) };
   if (!body.text) throw new Error("빈 글은 올릴 수 없어요");
   if (DEMO) {
     const d = demoRead(), w = wsOf(d, shelf.id);

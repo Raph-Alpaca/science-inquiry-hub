@@ -41,6 +41,12 @@ service cloud.firestore {
     function str(v, maxLen) {
       return v is string && v.size() <= maxLen;
     }
+    // 3차시 모둠 글: 주소 끝(1·2 = 대화, t1·t2 = Talk Log)과 영역·글자 수가 맞아야 한다
+    function postAreaOk(slot, d) {
+      return (slot in ['1', '2'] && d.area in ['sci', 'ux'] && str(d.text, 300))
+          || (slot == 't1' && d.area == 'talk1' && str(d.text, 1500))
+          || (slot == 't2' && d.area == 'talk2' && str(d.text, 1500));
+    }
 
     // 관리자 명단: 콘솔에서만 만든다. 본인 것과 관리자만 읽을 수 있다.
     match /admins/{mail} {
@@ -211,16 +217,17 @@ service cloud.firestore {
 
         // 3차시 모둠 대화: 글 주소가 {학번}-1, {학번}-2 뿐이라 한 학생은 3차시 전체에서 글을 2개까지만 올린다.
         // 학번의 학년·반이 모둠 문서(학년-반-모둠)와 같아야 한다. 고치기·지우기 단추는 화면에서 내 글에만 보인다.
+        // Talk Log 추가 프롬프트는 {학번}-t1(수정)·{학번}-t2(고도화)에 한 사람 하나씩 올린다 (대화 2개와 따로 센다).
         match /posts/{pid} {
           allow read: if true;
-          allow create, update: if pid.matches('^[1-3][0-9]{4}-[12]$')
+          allow create, update: if pid.matches('^[1-3][0-9]{4}-([12]|t[12])$')
                                 && codeMatches(shelfId)
                                 && request.resource.data.keys().hasOnly(['sid', 'area', 'text', 'code', 'createdAt', 'updatedAt'])
                                 && request.resource.data.sid == pid.split('-')[0]
                                 && gid.split('-')[0] == pid[0:1]
                                 && int(gid.split('-')[1]) == int(pid[1:3])
-                                && request.resource.data.area in ['sci', 'ux']
-                                && str(request.resource.data.text, 300) && request.resource.data.text.size() > 0;
+                                && postAreaOk(pid.split('-')[1], request.resource.data)
+                                && request.resource.data.text.size() > 0;
           allow delete: if true;
         }
       }

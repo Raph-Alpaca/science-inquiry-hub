@@ -29,8 +29,9 @@
  *
  * items[] (key 가 있어야 저장됨. key 는 활동지 전체에서 겹치지 않게)
  *   { key, type:"short", label, placeholder?, hint? }             한 줄
- *   { key, type:"url",   label, placeholder? }                    한 줄 (주소)
- *   { key, type:"long",  label, rows?, placeholder?, hint?, copy? }  여러 줄. copy:true 면 복사 단추와 글자 수
+ *   { key, type:"url",   label, placeholder?, hint? }             한 줄 (주소). https:// 주소면 옆의 [열기]로 새 창에서 연다
+ *   { key, type:"long",  label, rows?, placeholder?, hint?, copy?, share? }  여러 줄. copy:true 면 복사 단추와 글자 수
+ *                                                                 share:"talk1"|"talk2" 면 칸 아래 [모둠에 올리기] + 모둠원이 올린 글 목록 (3차시 Talk Log)
  *   { key, type:"choice", label, options[], other? }              하나 고르기. other:true 면 "기타" 적는 칸
  *   { key, type:"multi",  label?, options[], list? }              여러 개 고르기. list:true 면 한 줄에 하나씩
  *   { key, type:"check", label, options?, memo? }                 3단 고르기(잘 돼요·조금 아쉬워요·안 돼요)
@@ -39,7 +40,7 @@
  *   { type:"group", label, hint?, items[] }                       한 문항 아래 1) 2) 3) 으로 묶인 작은 문항들
  *   { type:"criteria", lines[] }                                  점검 기준 목록 (입력 없음)
  *   { type:"note", text, no? }                                    문항 사이 안내문. no:true 면 문항 번호를 받음
- *   공통: no:false 번호 없음 · optional:true 진행률에서 뺌
+ *   공통: no:false 번호 없음 · optional:true 진행률에서 뺌 · group:true 면 이 칸 하나만 모둠 칸(모둠원이 함께 씀)
  *         journey:true 또는 journey:"짧은 이름" 이면 '나의 여정' 에 모아 보여 줌
  */
 
@@ -184,6 +185,16 @@ export const LESSONS = [
     blocks: [
       { type: "meta" },
       {
+        type: "section", title: "[첫 결과물] 우리 모둠 시뮬레이션 함께 보기", plain: true,
+        items: [
+          {
+            key: "n3.proto", type: "url", group: true, label: "2차시에 만든 첫 결과물의 공유 링크",
+            hint: "한 명이 붙여 넣으면 모둠원 모두에게 보여요. 각자 [열기]로 열어 아래 기준으로 점검해요. (공유 링크 만드는 법: 아래 '공유용 링크 생성하기' 그림)",
+            placeholder: "https:// (복사한 공유 링크를 붙여 넣어요)", journey: "첫 결과물 링크",
+          },
+        ],
+      },
+      {
         type: "row",
         blocks: [
           {
@@ -196,7 +207,7 @@ export const LESSONS = [
                 "[원리 검증] 시뮬레이션의 움직임이 실제 교과서의 내용과 일치하나요?",
               ] },
               { key: "n3.chat.sci", type: "chat", area: "sci", placeholder: "점검하며 발견한 과학적 오류나 확인한 내용을 써요." },
-              { key: "n3.talk1", type: "long", rows: 6, copy: true, label: "[Talk Log 수정] 과학적 오류 수정을 위한 추가 프롬프트", journey: "Talk Log 수정 (과학적 오류 수정)" },
+              { key: "n3.talk1", type: "long", rows: 6, copy: true, share: "talk1", label: "[Talk Log 수정] 과학적 오류 수정을 위한 추가 프롬프트", journey: "Talk Log 수정 (과학적 오류 수정)" },
             ],
           },
           {
@@ -208,7 +219,7 @@ export const LESSONS = [
                 "[데이터 비교] 이전 조건의 결과와 현재 결과를 한눈에 비교할 수 있나요?",
               ] },
               { key: "n3.chat.ux", type: "chat", area: "ux", placeholder: "독자를 위해 더하거나 고칠 기능을 써요." },
-              { key: "n3.talk2", type: "long", rows: 6, copy: true, label: "[Talk Log 고도화] 사용 편의 개선을 위한 추가 프롬프트", journey: "Talk Log 고도화 (사용 편의 개선)" },
+              { key: "n3.talk2", type: "long", rows: 6, copy: true, share: "talk2", label: "[Talk Log 고도화] 사용 편의 개선을 위한 추가 프롬프트", journey: "Talk Log 고도화 (사용 편의 개선)" },
             ],
           },
         ],
@@ -231,7 +242,7 @@ export const LESSONS = [
       {
         type: "section", title: "우리 모둠이 출간하는 디지털 과학책", plain: true, narrow: true,
         items: [
-          { key: "n3.url", type: "url", label: "[미리보기] 공유용 링크 생성하기", placeholder: "https:// (복사한 공유 링크를 붙여 넣어요)", journey: "완성한 책의 공유 링크" },
+          { key: "n3.url", type: "url", group: true, label: "[미리보기] 공유용 링크 생성하기", placeholder: "https:// (복사한 공유 링크를 붙여 넣어요)", journey: "완성한 책의 공유 링크" },
         ],
       },
     ],

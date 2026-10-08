@@ -134,7 +134,36 @@ for (const [vn, vp] of [["넓은 화면", { width: 1280, height: 900 }], ["휴�
   await page.click(`${ux} [data-chat="del"]`); await page.click(`${ux} [data-chat="delYes"]`);
   await page.waitForFunction((s) => !document.querySelector(`${s} .bubble.mine`), ux);
   check(`${vn}: 내 글 지우면 다시 올릴 수 있음`, !(await page.$eval(`${ux} [data-chat="post"]`, (b) => b.disabled)));
+  // 맨 위 첫 결과물 링크(모둠 칸): https 주소일 때만 [열기]
+  check(`${vn}: 3차시 맨 위(점검 기준보다 앞)에 첫 결과물 링크 칸`, await page.evaluate(() => { const a = document.querySelector('#sheet [data-key="n3.proto"]'), c = document.querySelector("#sheet .criteria"); return !!a && !!(a.compareDocumentPosition(c) & Node.DOCUMENT_POSITION_FOLLOWING); }));
+  const openOf = (k) => page.$eval(`a[data-open="${k}"]`, (a) => ({ href: a.getAttribute("href"), off: a.getAttribute("aria-disabled") === "true", tgt: a.target, rel: a.rel }));
+  check(`${vn}: 링크가 비어 있으면 [열기] 꺼짐`, (await openOf("n3.proto")).off);
+  await page.fill('[data-key="n3.proto"]', "javascript:alert(1)");
+  check(`${vn}: https 가 아닌 주소는 [열기] 꺼짐`, (await openOf("n3.proto")).off && (await openOf("n3.proto")).href === null);
+  await page.fill('[data-key="n3.proto"]', "https://gemini.google.com/share/abc123");
+  const op = await openOf("n3.proto");
+  check(`${vn}: https 주소면 [열기]가 새 창으로 그 주소를 엶`, !op.off && op.href === "https://gemini.google.com/share/abc123" && op.tgt === "_blank" && op.rel.includes("noopener"), JSON.stringify(op));
+  // Talk Log 모둠에 올리기: Talk Log 마다 1인 1개, 대화 2개 제한과 따로
+  const t1 = '.talk[data-talk-key="n3.talk1"]';
+  check(`${vn}: Talk Log 칸이 비어 있으면 올리기 꺼짐`, await page.$eval(`${t1} [data-talk="post"]`, (b) => b.disabled));
   await page.fill('[data-key="n3.talk1"]', "단위를 붙이고 범위를 0~60°로 고쳐 줘");
+  check(`${vn}: Talk Log 를 쓰면 [모둠에 올리기] 켜짐`, !(await page.$eval(`${t1} [data-talk="post"]`, (b) => b.disabled)) && (await page.textContent(`${t1} [data-talk="post"]`)).includes("모둠에 올리기"));
+  await page.click(`${t1} [data-talk="post"]`);
+  await page.waitForSelector(`${t1} .talk-item.mine`);
+  check(`${vn}: 올린 Talk Log 에 학번이 붙고 올림 표시`, (await page.textContent(`${t1} .talk-item.mine .who`)).includes("20415") && (await page.textContent(`${t1} .talk-item.mine .chat-text`)) === "단위를 붙이고 범위를 0~60°로 고쳐 줘"
+    && (await page.textContent(`${t1} .talk-bar`)).includes("올렸어요") && !(await page.$(`${t1} [data-talk="post"]`)));
+  check(`${vn}: Talk Log 를 올려도 대화 글 수(1/2)는 그대로`, (await page.textContent(`${sci} .chat-left`)).includes("1/2"));
+  check(`${vn}: Talk Log 2 에는 Talk Log 1 글이 안 섞임`, (await page.$$('.talk[data-talk-key="n3.talk2"] .talk-item')).length === 0);
+  await page.fill('[data-key="n3.talk1"]', "단위를 붙이고 범위를 0~60°로 고쳐 줘. 그래프도 넣어 줘");
+  check(`${vn}: 칸을 고치면 [고친 글 다시 올리기]`, (await page.textContent(`${t1} [data-talk="post"]`)).includes("다시 올리기"));
+  await page.click(`${t1} [data-talk="post"]`);
+  await page.waitForFunction((s) => document.querySelector(`${s} .talk-item.mine .chat-text`)?.textContent.endsWith("그래프도 넣어 줘"), t1);
+  check(`${vn}: 다시 올리면 새 글이 아니라 고쳐짐 (내 글 1개)`, (await page.$$(`${t1} .talk-item.mine`)).length === 1);
+  await page.click(`${t1} [data-talk="del"]`); await page.click(`${t1} [data-talk="delYes"]`);
+  await page.waitForFunction((s) => !document.querySelector(`${s} .talk-item.mine`), t1);
+  check(`${vn}: 내리면 목록에서 사라지고 다시 올릴 수 있음`, !(await page.$eval(`${t1} [data-talk="post"]`, (b) => b.disabled)));
+  await page.fill('[data-key="n3.talk1"]', "단위를 붙이고 범위를 0~60°로 고쳐 줘");
+  await page.click(`${t1} [data-talk="post"]`); await page.waitForSelector(`${t1} .talk-item.mine`);
   await page.fill('[data-key="n3.url"]', "https://example.com/our-book");
   await page.waitForTimeout(400);
   await page.screenshot({ path: path.join(OUT, `ws-3-${vp.width}.png`), fullPage: vp.width > 600 });
@@ -171,7 +200,8 @@ for (const [vn, vp] of [["넓은 화면", { width: 1280, height: 900 }], ["휴�
   await page.click("#clear"); check(`${vn}: 지우기 확인이 뜸`, !(await page.$eval("#confirmClear", (e) => e.hidden)));
   await page.click("#clearNo"); check(`${vn}: 취소하면 그대로`, await page.inputValue('[data-key="n3.url"]') === "https://example.com/our-book");
   await page.click("#clear"); await page.click("#clearYes"); await page.waitForTimeout(200);
-  check(`${vn}: 지우면 3차시 개인 칸만 비고 필명·모둠 대화는 남음`, await page.inputValue('[data-key="n3.url"]') === "" && await page.inputValue('[data-key="meta.team"]') === "3모둠" && (await page.$$(".chat .bubble.mine")).length === 1);
+  check(`${vn}: 지우면 3차시 개인 칸(Talk Log)만 비고 필명·모둠 링크·모둠 대화·올린 Talk Log 는 남음`, await page.inputValue('[data-key="n3.talk1"]') === "" && await page.inputValue('[data-key="n3.url"]') === "https://example.com/our-book"
+    && await page.inputValue('[data-key="n3.proto"]') === "https://gemini.google.com/share/abc123" && await page.inputValue('[data-key="meta.team"]') === "3모둠" && (await page.$$(".chat .bubble.mine")).length === 1 && (await page.$$(".talk .talk-item.mine")).length === 1);
   await page.click('#journey .step[data-n="1"]'); await page.waitForTimeout(150);
   check(`${vn}: 1차시 입력은 남아 있음`, await page.inputValue('[data-key="n1.b1.title"]') === "이슬점·구름 실험실");
 
@@ -214,7 +244,7 @@ for (const [vn, vp] of [["넓은 화면", { width: 1280, height: 900 }], ["휴�
     await page.click('#journey .step[data-n="3"]'); await page.waitForTimeout(200);
     await page.emulateMedia({ media: "print" });
     check(`${vn}: 3차시 인쇄에 올린 글 + 손으로 쓸 빈 말풍선(영역마다 4칸), 올리기 칸은 숨김`, await page.evaluate(() => [...document.querySelectorAll(".chat")].every((c) => [...c.querySelectorAll(".bubble")].filter((b) => getComputedStyle(b).display !== "none").length === 4)
-      && [...document.querySelectorAll(".chat-compose")].every((e) => getComputedStyle(e).display === "none")));
+      && [...document.querySelectorAll(".chat-compose, .talk, .url-open")].every((e) => getComputedStyle(e).display === "none")));
     await page.emulateMedia({ media: "screen" });
     check(`${vn}: 화면에서는 빈 말풍선이 안 보임`, await page.$$eval(".bubble.blank", (els) => els.every((e) => getComputedStyle(e).display === "none")));
   }
@@ -263,11 +293,20 @@ for (const [vn, vp] of [["넓은 화면", { width: 1280, height: 900 }], ["휴�
   await page.goto(W(3), { waitUntil: "networkidle" }); await page.waitForFunction(() => !document.getElementById("wsMain").hidden);
   await page.fill('.chat[data-chat-key="n3.chat.sci"] textarea.chat-in', "20415가 올린 글"); await page.click('.chat[data-chat-key="n3.chat.sci"] [data-chat="post"]');
   await page.waitForSelector(".chat .bubble.mine");
+  await page.fill('[data-key="n3.proto"]', "https://gemini.google.com/share/team3");
+  await page.fill('[data-key="n3.talk2"]', "20415의 고도화 프롬프트\n리셋 단추를 넣어 줘");
+  await page.click('.talk[data-talk-key="n3.talk2"] [data-talk="post"]'); await page.waitForSelector('.talk[data-talk-key="n3.talk2"] .talk-item.mine');
+  await page.waitForTimeout(900);
   await page.click("#logout"); await page.waitForSelector("#loginForm");
   await login(page, { sid: "20416", pin: "5678" });
   await page.waitForSelector(".chat .bubble.l:not(.blank)", { timeout: 5000 }).catch(() => {});
   check("모둠: 3차시 대화에 같은 모둠 친구 글이 학번과 함께 보이고, 고치기·지우기는 없음",
     (await page.textContent(".chat .bubble.l:not(.blank)")).includes("20415") && (await page.textContent(".chat .bubble.l:not(.blank) .chat-text")) === "20415가 올린 글" && (await page.$$(".chat .bubble.l [data-chat]")).length === 0);
+  check("모둠: 친구가 붙여 넣은 첫 결과물 링크가 보이고 [열기]가 켜짐", await page.inputValue('[data-key="n3.proto"]') === "https://gemini.google.com/share/team3" && await page.getAttribute('a[data-open="n3.proto"]', "href") === "https://gemini.google.com/share/team3");
+  const fr = '.talk[data-talk-key="n3.talk2"] .talk-item:not(.mine)';
+  check("모둠: 친구가 올린 Talk Log 가 학번·줄바꿈과 함께 보이고, [복사]만 있고 [내리기]는 없음",
+    (await page.textContent(`${fr} .who`)).includes("20415") && (await page.textContent(`${fr} .chat-text`)) === "20415의 고도화 프롬프트\n리셋 단추를 넣어 줘"
+    && (await page.$$(`${fr} [data-talk="copy"]`)).length === 1 && (await page.$$(`${fr} [data-talk="del"]`)).length === 0);
   await page.click("#logout"); await page.waitForSelector("#loginForm");
   await login(page, { sid: "20415", pin: "1234" });
   await page.goto(W(2), { waitUntil: "networkidle" }); await page.waitForFunction(() => !document.getElementById("wsMain").hidden);
@@ -280,6 +319,7 @@ for (const [vn, vp] of [["넓은 화면", { width: 1280, height: 900 }], ["휴�
   check("선생님: 활동지 명단에 반·모둠별로 학번이 보임 (이름 열 없음)", list.includes("3모둠") && list.includes("4모둠") && list.includes("20415") && list.includes("20416") && list.includes("20417") && !(await t.textContent("#ws-list thead")).includes("이름"));
   await t.click('details.ws-chat[data-g="2-4-3"] summary'); await t.waitForTimeout(300);
   check("선생님: 모둠마다 3차시 대화 글을 펼쳐 봄", (await t.textContent('details.ws-chat[data-g="2-4-3"]')).includes("20415가 올린 글"));
+  check("선생님: 모둠에 올린 Talk Log 도 따로 묶여 보임", (await t.textContent('details.ws-chat[data-g="2-4-3"]')).includes("Talk Log 고도화") && (await t.textContent('details.ws-chat[data-g="2-4-3"]')).includes("20415의 고도화 프롬프트"));
   await t.click('tr[data-sid="20415"] [data-w="kick"]'); await t.click('.ws-confirm [data-c="1"]');
   await page.waitForSelector(".team-pick", { timeout: 6000 }).catch(() => {});
   check("선생님이 모둠에서 빼면 학생 화면이 모둠을 다시 고르게 함", await page.$(".team-pick") !== null && (await page.textContent("#notice")).includes("선생님이 모둠에서 뺐어요"));

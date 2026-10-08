@@ -224,6 +224,19 @@ await ok("관리자: 남의 책 숨기기", updateDoc(doc(admin, "shelves", SHEL
   await no("학생: 영역이 틀리면 차단", setDoc(P(anon, "2-4-3", "20417-1"), post({ sid: "20417", area: "etc" })));
   await no("학생: 이름 같은 엉뚱한 항목 차단", setDoc(P(anon, "2-4-3", "20417-1"), post({ sid: "20417", name: "알파카" })));
   await no("학생: 틀린 코드로 올리기 차단", setDoc(P(anon, "2-4-3", "20417-1"), post({ sid: "20417", code: "WRONG" })));
+  // Talk Log 모둠에 올리기: {학번}-t1(talk1)·-t2(talk2), 1500자까지, 대화 2개와 따로
+  await ok("학생: Talk Log 수정 올리기 (t1)", setDoc(P(anon, "2-4-3", "20415-t1"), post({ area: "talk1", text: "가".repeat(1500) })));
+  await ok("학생: Talk Log 고도화 올리기 (t2)", setDoc(P(anon, "2-4-3", "20415-t2"), post({ area: "talk2", text: "리셋 단추를 넣어 줘" })));
+  await ok("학생: Talk Log 다시 올리기(고치기)", setDoc(P(anon, "2-4-3", "20415-t2"), post({ area: "talk2", text: "리셋 단추와 비교 표를 넣어 줘" }), { merge: true }));
+  await no("학생: Talk Log 1500자 넘으면 차단", setDoc(P(anon, "2-4-3", "20417-t1"), post({ sid: "20417", area: "talk1", text: "가".repeat(1501) })));
+  await no("학생: Talk Log 주소와 영역이 다르면 차단 (t1 에 talk2)", setDoc(P(anon, "2-4-3", "20417-t1"), post({ sid: "20417", area: "talk2" })));
+  await no("학생: Talk Log 주소에 대화 영역 차단 (t1 에 sci)", setDoc(P(anon, "2-4-3", "20417-t1"), post({ sid: "20417", area: "sci" })));
+  await no("학생: 대화 주소에 Talk Log 영역 차단 (1 에 talk1)", setDoc(P(anon, "2-4-3", "20417-1"), post({ sid: "20417", area: "talk1" })));
+  await no("학생: 대화 주소에는 긴 글 차단 (talk 길이라도)", setDoc(P(anon, "2-4-3", "20417-2"), post({ sid: "20417", area: "ux", text: "가".repeat(301) })));
+  await no("학생: t3 주소 차단", setDoc(P(anon, "2-4-3", "20417-t3"), post({ sid: "20417", area: "talk1" })));
+  await no("학생: Talk Log 다른 반 모둠에 올리기 차단", setDoc(P(anon, "2-5-3", "20415-t1"), post({ area: "talk1" })));
+  await no("학생: Talk Log 빈 글 차단", setDoc(P(anon, "2-4-3", "20417-t2"), post({ sid: "20417", area: "talk2", text: "" })));
+  await ok("학생: 올린 Talk Log 내리기", deleteDoc(P(anon, "2-4-3", "20415-t1")));
   await ok("학생: 대화 글 고치기", updateDoc(P(anon, "2-4-3", "20415-1"), { sid: "20415", area: "sci", text: "단위를 붙여야 해요", code: CODE, updatedAt: serverTimestamp() }));
   await ok("학생: 모둠 대화 읽기", getDocs(collection(anon, "shelves", SHELF, "groups", "2-4-3", "posts")));
   await ok("학생: 대화 글 지우기", deleteDoc(P(anon, "2-4-3", "20415-2")));

@@ -846,7 +846,7 @@ document.addEventListener("keydown", (ev) => {
  * 학생 목록을 실시간으로 받아 반별·모둠별로 묶어 보여 준다. 개인 칸 내용은 읽어 오지 않는다(쓴 칸 수만).
  * 학생 이름은 받지 않으므로 학번만 보인다. 모둠마다 3차시 모둠 대화(학생이 올린 글)를 펼쳐 볼 수 있다. */
 let wsStop = () => {}, wsShelf = null, wsRows = [], wsClass = "";
-const CHAT_AREAS = { sci: "과학적 원리와 변인 점검", ux: "독자를 위한 기능 추가·보완" };
+const CHAT_AREAS = { sci: "과학적 원리와 변인 점검", ux: "독자를 위한 기능 추가·보완", talk1: "모둠에 올린 Talk Log 수정 (과학적 오류)", talk2: "모둠에 올린 Talk Log 고도화 (사용 편의)" };
 let wsPosts = {}, wsPostStops = {}, wsChatOpen = new Set();
 // 고른 반의 모둠들만 대화를 구독한다 (반을 바꾸거나 창을 닫으면 끊는다)
 function syncPostWatch(gids) {
@@ -865,10 +865,10 @@ function chatBoxHtml(g) {
     : Object.entries(CHAT_AREAS).map(([a, label]) => {
       const xs = list.filter((x) => x.area === a);
       return `<div class="ws-chat-area"><h4>${esc(label)} <small>${xs.length}개</small></h4>${xs.length ? `<ul>${xs.map((x) => `<li data-post="${esc(x.id)}">
-        <b>${esc(x.sid)}</b><span class="t">${esc(x.text)}</span><small>${esc(when(x.updatedAt || x.createdAt))}</small>
+        <b>${esc(x.sid)}</b><span class="t" style="white-space:pre-wrap">${esc(x.text)}</span><small>${esc(when(x.updatedAt || x.createdAt))}</small>
         <button class="btn small" data-w="post-del" data-g="${esc(g)}" data-id="${esc(x.id)}" style="color:var(--coral-ink)">지우기</button></li>`).join("")}</ul>` : `<p class="upload-note">없음</p>`}</div>`;
     }).join("");
-  return `<details class="ws-chat" data-g="${esc(g)}"${wsChatOpen.has(g) ? " open" : ""}><summary>3차시 모둠 대화 <small>${list ? `${list.length}개` : ""}</small></summary>${body}</details>`;
+  return `<details class="ws-chat" data-g="${esc(g)}"${wsChatOpen.has(g) ? " open" : ""}><summary>3차시 모둠 대화·Talk Log <small>${list ? `${list.length}개` : ""}</small></summary>${body}</details>`;
 }
 function drawChat(g) {
   const el = $("ws-list").querySelector(`details.ws-chat[data-g="${CSS.escape(g)}"]`);
