@@ -604,16 +604,34 @@ export async function deleteShelf(shelf) {
     const d = demoRead();
     (d.books[shelf.id] || []).forEach((b) => delete d.priv[b.id]);
     delete d.books[shelf.id];
+    if (d.ws) delete d.ws[shelf.id];
     d.shelves = d.shelves.filter((x) => x.id !== shelf.id);
     demoWrite(d);
     return;
   }
   const { F, db } = await fb();
-  // 책과 모둠원 학번을 먼저 지우고 마지막에 책장을 지운다 (하위 문서는 자동으로 지워지지 않는다)
-  const snap = await F.getDocs(F.collection(db, "shelves", shelf.id, "books"));
-  for (const d of snap.docs) {
-    await F.deleteDoc(F.doc(db, "shelves", shelf.id, "books", d.id));
+  // 책·모둠원 학번·활동지(학번 자리, 학생 문서, 모둠 칸, 모둠 글)를 먼저 지우고 마지막에 책장을 지운다
+  // (하위 문서는 자동으로 지워지지 않는다. 개인정보 처리방침의 '책장을 지우면 학생 기록도 지운다'와 맞춘다)
+  const sub = (...p) => F.collection(db, "shelves", shelf.id, ...p);
+  const ids = async (...p) => (await fromServer(() => F.getDocsFromServer(sub(...p)))).docs;
+  const books = await ids("books");
+  for (const d of books) {
+    await F.deleteDoc(d.ref);
     await F.deleteDoc(F.doc(db, "shelves", shelf.id, "private", d.id)).catch(() => {});
+  }
+  const students = await ids("students"), roster = await ids("roster"), groups = await ids("groups");
+  // 모둠 글은 모둠 문서가 없어도 있을 수 있다 → 학생이 있는 반마다 모둠 1~8 을 모두 살핀다
+  const gids = new Set(groups.map((d) => d.id));
+  const classes = new Set(groups.map((d) => d.id.split("-").slice(0, 2).join("-")));
+  students.forEach((d) => { const x = d.data(); if (x.grade && x.classNo) classes.add(`${x.grade}-${x.classNo}`); });
+  roster.forEach((d) => classes.add(`${Number(d.id[0])}-${Number(d.id.slice(1, 3))}`));
+  classes.forEach((c) => { for (let t = 1; t <= 8; t++) gids.add(`${c}-${t}`); });
+  const posts = (await Promise.all([...gids].map((g) => ids("groups", g, "posts")))).flat();
+  const all = [...posts, ...groups, ...students, ...roster];
+  for (let i = 0; i < all.length; i += 400) {
+    const batch = F.writeBatch(db);
+    all.slice(i, i + 400).forEach((d) => batch.delete(d.ref));
+    await batch.commit();
   }
   await F.deleteDoc(F.doc(db, "shelves", shelf.id));
 }

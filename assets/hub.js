@@ -104,6 +104,10 @@
     const foot = document.createElement("footer");
     foot.className = "app-foot";
     foot.textContent = "시뮬레이션 값은 교과서 수준의 단순화된 모형으로 계산한 것이며, 실제 측정값과 다를 수 있습니다." + (A.sensorIn ? " 실시간 센서의 측정값은 이 기기 안에서만 처리하며 어디로도 전송하지 않습니다." : "") + (A.mediaIn ? " 마이크·카메라 입력은 이 기기 안에서 바로 계산만 하고, 녹음·촬영해 저장하거나 어디로도 전송하지 않습니다." : "");
+    const pp = document.createElement("a");
+    pp.href = "../privacy.html";
+    pp.textContent = "개인정보 처리방침";
+    foot.append(" ", pp);
     wrap.appendChild(foot);
 
     if (A.sensorIn) sensorSetup(A);

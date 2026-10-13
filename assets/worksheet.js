@@ -158,7 +158,13 @@ async function backup() {
   if (!me || !shelf) return true;
   const answers = {};
   Object.entries(doc.answers).forEach(([k, v]) => { if (!GROUP_KEYS.has(k) && String(v ?? "") !== "") answers[k] = String(v); });
-  try { await updateStudent(shelf, me.id, { answers }); return true; }
+  const at = doc.updatedAt;
+  try {
+    await updateStudent(shelf, me.id, { answers });
+    // 어디까지 서버에 올렸는지 적어 둔다 → 다른 학생이 이 기기로 들어올 때 올라간 기록은 남기지 않는다
+    if (doc.sid === me.sid) { doc.syncedAt = at; try { localStorage.setItem(KEY, JSON.stringify(doc)); } catch (e) { /* 무시 */ } }
+    return true;
+  }
   catch (e) { console.warn("개인 칸을 서버에 백업하지 못했습니다:", e.code || e.message); return false; }
 }
 // 다른 모둠원이 바꾼 칸을 화면에 반영한다. 지금 내가 쓰고 있는 칸은 건드리지 않는다
@@ -913,11 +919,23 @@ function enter(s) {
   // 예전에 받은 이름이 서버에 남아 있으면 지운다 (이름은 더 쓰지 않는다)
   if (name != null && shelf && !s.reset) dropName(shelf, s.id).catch((e) => console.warn("이름을 지우지 못했습니다:", e.code || e.message));
   if (doc.sid && doc.sid !== me.sid) {
-    // 이 기기에 다른 학생의 기록이 있으면 따로 보관해 두고 새로 시작한다
-    try { localStorage.setItem(`${KEY}-${doc.sid}`, JSON.stringify(doc)); } catch (e) { /* 무시 */ }
+    // 이 기기에 다른 학생의 기록이 있으면 새로 시작한다. 서버에 다 올라가지 않은 기록만 따로 보관한다
+    // (공용 기기에 다른 학생의 답을 남기지 않기 위해. 그 학생이 이 기기로 다시 들어오면 합치고 지운다)
+    if (doc.updatedAt && doc.syncedAt !== doc.updatedAt) {
+      try { localStorage.setItem(`${KEY}-${doc.sid}`, JSON.stringify(doc)); } catch (e) { /* 무시 */ }
+    }
     doc = { v: 1, code, meta: {}, answers: {}, updatedAt: null };
   }
   doc.sid = me.sid;
+  try {
+    const kept = JSON.parse(localStorage.getItem(`${KEY}-${me.sid}`) || "null");
+    if (kept && kept.answers) {
+      Object.entries(kept.answers).forEach(([k, v]) => { if (String(rawGet(k)).trim() === "") rawSet(k, v); });
+      doc.updatedAt = new Date().toISOString();
+      clearTimeout(backupTimer); backupTimer = setTimeout(backup, 1500);   // 합친 칸을 서버에 올린다
+    }
+    localStorage.removeItem(`${KEY}-${me.sid}`);
+  } catch (e) { /* 무시 */ }
   Object.entries(me.answers || {}).forEach(([k, v]) => { if (String(rawGet(k)).trim() === "") rawSet(k, v); });
   try { localStorage.setItem(KEY, JSON.stringify(doc)); } catch (e) { /* 무시 */ }
   saveLogin();
@@ -950,7 +968,8 @@ function showLogin(msg = "") {
       <button class="btn primary" id="loginBtn" type="submit">열기</button>
       <p class="err" id="loginErr" role="alert"${msg ? "" : " hidden"}>${esc(msg)}</p>
     </form>
-    <p class="links"><a href="#" id="localOnly">로그인하지 않고 이 기기에만 쓰기</a> <small>(모둠 칸이 친구들과 공유되지 않아요)</small></p>`);
+    <p class="links"><a href="#" id="localOnly">로그인하지 않고 이 기기에만 쓰기</a> <small>(모둠 칸이 친구들과 공유되지 않아요)</small></p>
+    <p class="links"><small>이름은 받지 않고 학번만 써요. 활동지 기록은 선생님만 보고, 학년이 끝나면 선생님이 지워요. <a href="privacy.html">개인정보 처리방침</a></small></p>`);
   const sidIn = $("sidIn"), pinIn = $("pinIn"), btn = $("loginBtn");
   let isNew = false;
   sidIn.addEventListener("input", () => {

@@ -47,7 +47,7 @@ for (const [vn, vp] of [["넓은 화면", { width: 1280, height: 900 }], ["휴�
   check(`${vn}: 처음 학생은 0000을 쓸 수 없음`, (await page.textContent("#loginErr")).includes("0000"));
   await page.fill("#sidIn", "20415"); await page.fill("#pinIn", "1234"); await page.click("#loginBtn");
   await page.waitForSelector("#newRow:not([hidden])");
-  check(`${vn}: 처음 학생에게 이름을 묻지 않음`, await page.$("#nameIn") === null && (await page.textContent("#loginForm")).includes("처음 왔네요") && !(await page.textContent("#notice")).includes("이름"));
+  check(`${vn}: 처음 학생에게 이름을 묻지 않음`, await page.$("#nameIn") === null && (await page.textContent("#loginForm")).includes("처음 왔네요") && !(await page.textContent("#loginForm")).includes("이름"));
   await login(page, { sid: "20415", pin: "1234", team: 3 });
   check(`${vn}: 로그인 뒤 학번·모둠 띠 (이름 없음)`, (await page.textContent(".who-bar")).includes("2학년 4반 15번") && (await page.textContent(".who-bar")).includes("3모둠"));
   check(`${vn}: 서버 학생 문서에 이름 없음`, await page.evaluate(() => Object.values(JSON.parse(localStorage.getItem("sih-demo-shelf-v1")).ws.demo.students).every((x) => !("name" in x))));

@@ -4,6 +4,7 @@
 //   /shelf      → shelf.html          /teacher → teacher.html
 //   /submit     → submit.html         /hub     → index.html
 //   /worksheet  → worksheet.html (학생 활동지)
+//   /privacy    → privacy.html (개인정보 처리방침)
 //   /c/책장코드  → shelf.html?code=책장코드   (QR·칠판용 짧은 주소)
 //   /s/책장코드  → submit.html?code=책장코드
 //   /w/책장코드  → worksheet.html?code=책장코드
@@ -23,6 +24,7 @@ const rules = [
   `/submit     /submit.html    200!`,
   `/hub        /index.html     200!`,
   `/worksheet  /worksheet.html 200!`,
+  `/privacy    /privacy.html   200!`,
   `/c/:code    /shelf.html?code=:code    302`,
   `/s/:code    /submit.html?code=:code   302`,
   `/w/:code    /worksheet.html?code=:code   302`,

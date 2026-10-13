@@ -36,6 +36,7 @@
 <footer class="site-note no-print">
   <p>※ 이 사이트와 자료는 교육 활동을 위해 만들었습니다. 학생 작품과 수업 결과물의 저작권은 만든 사람에게 있으며, 허락 없이 복제·배포·수정하거나 상업적으로 이용할 수 없습니다.</p>
   <p>※ 일부 이미지와 시각 자료는 생성형 AI의 도움을 받아 만들었습니다.</p>
+  <p><a href="privacy.html"><b>개인정보 처리방침</b></a></p>
 </footer>
 </div>
 
@@ -339,7 +340,8 @@ function renderPending(u) {
         <div class="field"><label for="rq-school">학교 이름</label><input type="text" id="rq-school" maxlength="40" placeholder="예: 서울○○중학교" required></div>
         <div class="field"><label for="rq-name">성함</label><input type="text" id="rq-name" maxlength="20" placeholder="예: 김선생" required></div>
         <div class="field"><label for="rq-phone">연락처 (선택)</label><input type="tel" id="rq-phone" maxlength="20" placeholder="예: 010-0000-0000" autocomplete="tel"></div>
-        <label class="consent"><input type="checkbox" id="rq-agree"><span>적은 내용은 사용 승인을 확인하는 데만 쓰이며, 승인·거절 뒤 연락처는 바로 지워지는 것에 동의합니다.</span></label>
+        <p class="upload-note">학생 활동지는 학번과 학습 기록을 서버에 저장합니다. 만 14세 미만 학생과 쓰실 때는 학교 절차에 따라 보호자 동의를 먼저 받아 주세요. (<a href="docs/consent-letter.html" target="_blank" rel="noopener">보호자 안내·동의서 양식</a>)</p>
+        <label class="consent"><input type="checkbox" id="rq-agree"><span>적은 내용은 사용 승인을 확인하는 데만 쓰입니다. 연락처는 승인·거절 뒤 바로 지워지고, 구글 이메일·학교·성함은 사용하는 동안 승인 명단에 보관했다가 사용을 그만두면 지워지는 것에 동의합니다. (<a href="privacy.html" target="_blank" rel="noopener">개인정보 처리방침</a>)</span></label>
         <button type="submit" class="btn primary" id="rq-send">사용 신청</button>
       </form>
       <p class="upload-note" style="margin-top:14px">다른 계정으로 쓰시려면 로그아웃한 뒤 그 계정으로 다시 로그인해 주세요. 문의: <a href="mailto:raphres@sen.go.kr">raphres@sen.go.kr</a></p>
@@ -1014,8 +1016,9 @@ function openSettings(s) {
   $("sh-code").textContent = s.code;
   const n = (data[s.id]?.books || []).length;
   $("sh-delnote").textContent = n
-    ? `이 책장과 안에 든 책 ${n}권, 모둠원 학번까지 모두 지워집니다. 누르면 책장 이름을 한 번 더 적어 확인하고, 지운 뒤 ${UNDO_SEC}초 안에는 되돌릴 수 있습니다.`
-    : `이 책장을 지웁니다. 누르면 책장 이름을 한 번 더 적어 확인합니다.`;
+    ? `이 책장과 안에 든 책 ${n}권, 모둠원 학번, 학생 활동지 기록까지 모두 지워집니다. 누르면 책장 이름을 한 번 더 적어 확인하고, 지운 뒤 ${UNDO_SEC}초 안에는 되돌릴 수 있습니다.`
+    : `이 책장과 학생 활동지 기록을 지웁니다. 누르면 책장 이름을 한 번 더 적어 확인합니다.`;
+  $("sh-delnote").textContent += " 학년도가 끝나면 책장을 지워 주세요(학생 개인정보를 남기지 않기 위해).";
   $("shelfDlg").showModal();
 }
 $("sh-cancel").onclick = () => $("shelfDlg").close();
@@ -1051,8 +1054,8 @@ $("sh-del").onclick = async () => {
     title: "책장 지우기",
     what: `"${s.title}" (코드 ${s.code}) · 책 ${books.length}권${approved ? `, 그중 공개 중 ${approved}권` : ""}`,
     note: books.length
-      ? "책장과 안에 든 책, 모둠원 학번까지 모두 지워집니다. 학생들이 보던 공개 책장도 사라지고, 지운 뒤에는 되살릴 수 없습니다."
-      : "빈 책장입니다. 지우면 이 코드로는 더 이상 제출할 수 없습니다.",
+      ? "책장과 안에 든 책, 모둠원 학번, 학생 활동지 기록(개인 칸·모둠 칸·모둠 글)까지 모두 지워집니다. 학생들이 보던 공개 책장도 사라지고, 지운 뒤에는 되살릴 수 없습니다."
+      : "빈 책장입니다. 학생 활동지 기록이 있으면 함께 지워지고, 이 코드로는 더 이상 제출할 수 없습니다.",
     word: s.title,
     wordLabel: `확인을 위해 책장 이름 "${s.title}"을(를) 그대로 적어 주세요`,
     ok: "이 책장 지우기",
