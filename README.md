@@ -256,6 +256,10 @@ GitHub 에 push 하면 두 사이트가 함께 다시 배포됩니다. 빌드 �
 5. `assets/site-config.js` 의 `studentLink` 에 `"https://sci-shelf.netlify.app/c/{code}"` 를 적고 push 합니다.
    선생님 화면의 **주소 복사**와 **QR** 이 이 짧은 주소로 바뀝니다. (지금 그렇게 되어 있습니다)
    "학생 화면 보기" 옆 패널은 일부러 자기 사이트의 shelf.html 을 띄웁니다. 파일이 같아 보이는 것도 같습니다.
+6. 같은 파일의 `teacherLink` 에 교사용 사이트 주소(`"https://sci-teacher.netlify.app/"`)를 적습니다. (지금 그렇게 되어 있습니다)
+   학생용 책장 화면 맨 아래 **선생님이신가요? 선생님 화면 →** 링크가 이 주소로 가고,
+   학생용 사이트에서 `/teacher` 로 들어와도 이 주소로 넘어갑니다. 선생님 화면은 교사용 사이트에서만 열립니다.
+   링크가 있어도 보호는 그대로입니다. 구글 로그인·관리자 승인·보안 규칙이 막습니다.
 
 Netlify 에서만 생기는 짧은 주소: `/shelf` `/teacher` `/submit` `/hub`,
 `/worksheet`, `/c/책장코드` → 공개 책장, `/s/책장코드` → 제출 폼, `/w/책장코드` → 학생 활동지. (`deploy/netlify-redirects.mjs` 가 만듭니다)

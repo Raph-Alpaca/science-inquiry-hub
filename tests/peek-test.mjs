@@ -48,6 +48,7 @@ for (const [vn, vp] of Object.entries({ classroom: { width: 1920, height: 1080 }
   const inner = await frame.evaluate(() => ({ rows: document.querySelectorAll(".row-label h2").length, html: document.body.innerHTML }));
   check(`${vn}: 패널 안에 책장 서가가 그려짐`, inner.rows >= 3, String(inner.rows));
   check(`${vn}: 패널 안에 모둠원 학번 없음`, !/20301, 20302/.test(inner.html));
+  check(`${vn}: 패널 안에서는 선생님 화면 링크 숨김`, await frame.evaluate(() => document.getElementById("teacherLinkWrap").hidden));
   await page.screenshot({ path: `${OUT}/${vn}-peek.png` });
   if (vn !== "mobile") {
     await page.click("#peekWide"); await page.waitForTimeout(400);

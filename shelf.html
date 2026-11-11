@@ -46,7 +46,7 @@
 <footer class="site-note no-print">
   <p>※ 이 사이트와 자료는 교육 활동을 위해 만들었습니다. 학생 작품과 수업 결과물의 저작권은 만든 사람에게 있으며, 허락 없이 복제·배포·수정하거나 상업적으로 이용할 수 없습니다.</p>
   <p>※ 일부 이미지와 시각 자료는 생성형 AI의 도움을 받아 만들었습니다.</p>
-  <p><a href="privacy.html"><b>개인정보 처리방침</b></a></p>
+  <p><a href="privacy.html"><b>개인정보 처리방침</b></a><span id="teacherLinkWrap"> · <a id="teacherLink" href="teacher.html" target="_blank" rel="noopener">선생님이신가요? 선생님 화면 →</a></span></p>
 </footer>
 </div>
 
@@ -104,6 +104,7 @@
 <script type="module">
 import { codeEntryHtml, bindCodeEntry, rememberCode, lastCode } from "./assets/code-entry.js";
 import { DEMO, watchShelf, loadTeacherExamples, coverSrc, coverTone } from "./assets/shelf-data.js";
+import { SITE } from "./assets/site-config.js";
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
@@ -123,6 +124,12 @@ if (DEMO) {
   // 미리보기 책장 안에서는 코드 넣는 첫 화면으로 되돌아갈 길을 띠에 붙인다
   if (code) $("demoBar").insertAdjacentHTML("beforeend", ` <a href="shelf.html">미리보기 끝내기 →</a>`);
 }
+
+// 맨 아래 "선생님 화면" 링크. 교사용 사이트를 따로 두었으면(assets/site-config.js) 그 주소로 보낸다.
+// 미리보기에서는 같은 사이트의 미리보기 선생님 화면으로, 선생님 화면의 옆 패널(iframe) 안에서는 숨긴다.
+if (window.self !== window.top) $("teacherLinkWrap").hidden = true;
+else if (DEMO) $("teacherLink").href = "teacher.html?demo=1";
+else if (SITE.teacherLink) $("teacherLink").href = SITE.teacherLink;
 
 /* ---------- 불러오기 (실시간) ---------- */
 (async function start() {

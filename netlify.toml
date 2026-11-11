@@ -8,6 +8,9 @@
 #   SITE_ROLE = teacher  → /  가 선생님 화면(teacher.html) 으로 열림 ← 교사용 사이트
 #   (비워 두면)          → /  가 허브(index.html) 로 열림
 #
+# 예외 하나: 학생용 사이트에서 /teacher 로 들어오면 교사용 사이트로 넘깁니다.
+# (교사용 주소는 assets/site-config.js 의 teacherLink)
+#
 # 빌드 도구는 쓰지 않습니다. 아래 명령은 _redirects 파일 하나를 써 넣을 뿐입니다.
 # GitHub 저장소에 push 하면 Netlify 가 두 사이트를 모두 다시 배포합니다.
 

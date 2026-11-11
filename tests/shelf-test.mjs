@@ -224,6 +224,11 @@ for (const [vn, vp] of Object.entries(VIEWS)) {
   const ctx = await browser.newContext({ viewport: VIEWS.laptop });
   const { page, errors } = await open(ctx, "/shelf.html?demo=1");
   check("코드 없이 접속하면 안내", (await page.textContent("#notice")).includes("책장 코드를 받으세요"));
+  // 맨 아래 선생님 화면 바로가기: 새 탭, 미리보기에서는 같은 사이트의 미리보기 선생님 화면
+  const tl = await page.$eval("#teacherLink", (a) => ({ href: a.getAttribute("href"), target: a.target, rel: a.rel, shown: a.offsetParent !== null, text: a.textContent }));
+  check("맨 아래 선생님 화면 링크가 보임", tl.shown && tl.text.includes("선생님 화면"), JSON.stringify(tl));
+  check("선생님 화면 링크는 새 탭(noopener)", tl.target === "_blank" && tl.rel.includes("noopener"), JSON.stringify(tl));
+  check("미리보기에서는 미리보기 선생님 화면으로", tl.href === "teacher.html?demo=1", tl.href);
   await page.screenshot({ path: `${OUT}/laptop-shelf-nocode.png` });
   await page.close();
   const { page: p2 } = await open(ctx, "/shelf.html?code=NOPE-2026-XXXX&demo=1");

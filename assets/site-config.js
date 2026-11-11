@@ -7,7 +7,12 @@
  *   예) "https://sci-shelf.netlify.app/c/{code}"
  *   비워 두면 지금 열려 있는 사이트의 shelf.html?code=코드 를 씁니다. (GitHub Pages 처럼 한 주소로 쓸 때)
  *   /c/{code} 모양은 Netlify 에서만 동작합니다. (deploy/netlify-redirects.mjs 가 만드는 짧은 주소)
+ *
+ * teacherLink: 교사용 사이트 주소. 학생용 책장 화면 맨 아래 "선생님 화면" 링크가 여기로 갑니다.
+ *   학생용 Netlify 사이트에서 /teacher 로 들어와도 이 주소로 넘깁니다. (deploy/netlify-redirects.mjs 가 이 줄을 읽음)
+ *   비워 두면 지금 열려 있는 사이트의 teacher.html 을 씁니다.
  */
 export const SITE = {
   studentLink: "https://sci-shelf.netlify.app/c/{code}",
+  teacherLink: "https://sci-teacher.netlify.app/",
 };
