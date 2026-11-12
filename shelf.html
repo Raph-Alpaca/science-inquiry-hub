@@ -102,7 +102,7 @@
 </div>
 
 <script type="module">
-import { codeEntryHtml, bindCodeEntry, rememberCode, lastCode } from "./assets/code-entry.js";
+import { codeEntryHtml, bindCodeEntry, rememberCode, lastCode, canonCode, fixCodeInUrl } from "./assets/code-entry.js";
 import { DEMO, watchShelf, loadTeacherExamples, coverSrc, coverTone } from "./assets/shelf-data.js";
 import { SITE } from "./assets/site-config.js";
 
@@ -111,8 +111,9 @@ const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<
 const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 const params = new URLSearchParams(location.search);
 // 코드를 쉼표로 이어 넣으면(code=A,B) 여러 책장의 서가를 한 화면에 이어서 본다. 선생님 화면의 "함께 보기"가 쓴다.
-const codes = [...new Set((params.get("code") || "").split(",").map((s) => s.trim().toUpperCase()).filter(Boolean))];
+const codes = [...new Set((params.get("code") || "").split(",").map(canonCode).filter(Boolean))];   // '-' 없이 넣은 코드도 같은 책장으로
 const code = codes[0] || "";
+if (code) fixCodeInUrl(codes.join(","));
 const merged = codes.length > 1;
 const DEMO_CODE = "DEMO-2026-BOOK";   // 첫 화면에서 열어 보는 미리보기 책장
 let flat = [];            // 펼쳐 보기용 순서

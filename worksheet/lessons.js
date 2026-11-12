@@ -264,7 +264,6 @@ export const LESSONS = [
       },
       { type: "link", label: "🧭 나의 여정 펼쳐 보기", view: "journey", desc: "1~3차시에 쓴 Talk Log를 한눈에 모아 봐요. 출판 의뢰서의 '개발자의 의도'와 '사용 방법'을 쓸 때 참고해요." },
       { type: "link", label: "📮 출판 의뢰하기", href: "submit.html?code={code}", desc: "책 제목·링크·공동작가 필명은 활동지에 쓴 대로 미리 채워 드려요.", prefill: SUBMIT_PREFILL },
-      { type: "link", label: "📚 우리 반 책장 열기", href: "shelf.html?code={code}", desc: "선생님이 승인하면 책장에 꽂혀요. 책장에 꽂힌 우리 책을 친구들에게 소개해요." },
     ],
   },
 

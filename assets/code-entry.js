@@ -9,6 +9,23 @@ const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<
 export function rememberCode(code) { try { localStorage.setItem(LAST, code); } catch (e) { /* 무시 */ } }
 export function lastCode() { try { return localStorage.getItem(LAST) || ""; } catch (e) { return ""; } }
 export function normalizeCode(v) { return String(v || "").toUpperCase().replace(/[^A-Z0-9-]/g, ""); }
+/* 책장 코드를 표준 꼴(영문-연도 4자리-4글자, 예: SEO-2026-4K7Q)로 고친다.
+ * '-' 를 빼거나 띄어 써도(SEO20264K7Q, seo 2026 4k7q) 같은 책장·같은 활동지로 모이게 한다.
+ * 이 꼴이 아닌 코드는 대문자·앞뒤 공백 정리만 한다. */
+export function canonCode(v) {
+  const up = String(v || "").trim().toUpperCase();
+  const m = up.replace(/[^A-Z0-9]/g, "").match(/^([A-Z]{2,6})(\d{4})([A-Z0-9]{4})$/);
+  return m ? `${m[1]}-${m[2]}-${m[3]}` : up;
+}
+// 주소창의 code 가 표준 꼴과 다르면 표준 꼴로 바꿔 둔다 (새로고침·주소 공유 때 한 가지 주소만 남게)
+export function fixCodeInUrl(code) {
+  try {
+    const p = new URLSearchParams(location.search);
+    if (!p.has("code") || p.get("code") === code) return;
+    p.set("code", code);
+    history.replaceState(null, "", `${location.pathname}?${p}${location.hash}`);
+  } catch (e) { /* 무시 */ }
+}
 
 /* page: "shelf" | "submit" | "worksheet"   wrong: 없는 코드로 들어와서 다시 넣게 할 때 */
 export function codeEntryHtml({ value = "", wrong = false, page = "shelf" } = {}) {
@@ -29,7 +46,7 @@ export function bindCodeEntry(demo) {
   const inp = document.getElementById("codeInput"), err = document.getElementById("codeErr");
   f.addEventListener("submit", (ev) => {
     ev.preventDefault();
-    const c = normalizeCode(inp.value);
+    const c = normalizeCode(canonCode(inp.value));
     if (c.length < 4) {
       err.textContent = "선생님이 알려 준 책장 코드를 넣어 주세요."; err.hidden = false;
       inp.setAttribute("aria-invalid", "true"); inp.focus();

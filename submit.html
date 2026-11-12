@@ -120,13 +120,14 @@
 </div>
 
 <script type="module">
-import { codeEntryHtml, bindCodeEntry, lastCode } from "./assets/code-entry.js";
+import { codeEntryHtml, bindCodeEntry, lastCode, canonCode, fixCodeInUrl } from "./assets/code-entry.js";
 import { DEMO, CAN_UPLOAD, loadShelf, submitBook, COVERS, COVER_COLORS, coverSrc, coverTone, coverColorName, clearShelfCache } from "./assets/shelf-data.js";
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 const params = new URLSearchParams(location.search);
-const code = (params.get("code") || "").trim().toUpperCase();
+const code = canonCode(params.get("code"));   // '-' 없이 넣은 코드도 같은 책장으로
+fixCodeInUrl(code);
 const suffix = DEMO ? "&demo=1" : "";
 let shelf = null, cover = "heat", color = COVER_COLORS[0], file = null;
 

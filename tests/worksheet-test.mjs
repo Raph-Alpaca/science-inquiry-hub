@@ -64,6 +64,9 @@ for (const [vn, vp] of [["넓은 화면", { width: 1280, height: 900 }], ["휴�
   check(`${vn}: 1차시에 입력 칸이 있음`, fields1 > 20, String(fields1));
   check(`${vn}: 진행률 0%`, (await page.textContent("#sheetPct")).trim() === "0%");
   check(`${vn}: 선생님 예시 책 링크가 책장으로`, (await page.getAttribute('#sheet a.btn', "href")).startsWith(`shelf.html?code=${CODE}`));
+  check(`${vn}: 머리글 책장 코드 옆에 '우리 반 책장 열기'`, !(await page.$eval("#shelfLink", (a) => a.hidden)) && (await page.textContent("#shelfLink")).includes("우리 반 책장 열기")
+    && (await page.getAttribute("#shelfLink", "href")) === `shelf.html?code=${CODE}&demo=1`);
+  check(`${vn}: 머리글 가로 넘침 없음`, await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1));
   await page.screenshot({ path: path.join(OUT, `ws-1-${vp.width}.png`), fullPage: vp.width > 600 });
 
   /* 3) 입력 → 자동 저장 → 새로고침 후 되살아남 */
@@ -83,6 +86,13 @@ for (const [vn, vp] of [["넓은 화면", { width: 1280, height: 900 }], ["휴�
   await page.reload({ waitUntil: "networkidle" });
   check(`${vn}: 새로고침 후 되살아남`, await page.inputValue('[data-key="n1.b1.title"]') === "이슬점·구름 실험실" && await page.inputValue('[data-key="meta.team"]') === "3모둠");
   check(`${vn}: 발자국(필명·학번)이 종이 아래에`, (await page.textContent("#sheet .sheet-foot")).includes("3모둠"));
+  // '-' 없이(소문자로) 넣은 코드도 같은 활동지로 열린다
+  check(`${vn}: '-' 없는 코드도 같은 활동지`, await (async () => {
+    const p2 = await ctx.newPage(); await p2.goto(URL_(`code=${CODE.replace(/-/g, "").toLowerCase()}&demo=1`), { waitUntil: "networkidle" });
+    const r = { url: p2.url(), chip: (await p2.textContent("#codeText")).trim(), v: await p2.inputValue('[data-key="n1.b1.title"]').catch(() => "(칸 없음)") };
+    await p2.close();
+    return r.url.includes(`code=${CODE}`) && r.chip === CODE && r.v === "이슬점·구름 실험실";
+  })());
   check(`${vn}: 다른 코드에서는 비어 있음`, await (async () => {
     const p2 = await ctx.newPage(); await p2.goto(URL_("code=OTHER-2026-X1Y2&demo=1"), { waitUntil: "networkidle" });
     const v = await p2.inputValue('[data-key="n1.b1.title"]'); await p2.close(); return v === "";

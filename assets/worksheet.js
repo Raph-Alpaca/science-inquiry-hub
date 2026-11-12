@@ -16,7 +16,7 @@
  *   차시를 printBreak 표시로 쪽(.print-page)으로 나누고, 여러 줄 칸은 rows 비율(--r)로 남는 높이를 나눠 가진다(손글씨 공간).
  *   안내 그림·단추·대화 올리기 칸은 인쇄하지 않고, 3차시 대화는 올린 글 + 빈 말풍선으로 나온다.
  */
-import { codeEntryHtml, bindCodeEntry, rememberCode, lastCode } from "./code-entry.js";
+import { codeEntryHtml, bindCodeEntry, rememberCode, lastCode, canonCode, fixCodeInUrl } from "./code-entry.js";
 import {
   DEMO, loadShelf, parseSid, groupId, RESET_PIN, MAX_TEAM,
   findStudent, getStudent, createStudent, updateStudent, changePin, watchStudent, watchGroup, saveGroup, dropName,
@@ -27,7 +27,8 @@ import { STEPS, LESSONS, JOURNEY } from "../worksheet/lessons.js";
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 const params = new URLSearchParams(location.search);
-const code = (params.get("code") || "").trim().toUpperCase();
+const code = canonCode(params.get("code"));   // '-' 없이 넣은 코드도 같은 활동지로
+fixCodeInUrl(code);
 const suffix = DEMO ? "&demo=1" : "";
 const H2C = "https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js";
 const IMG_DIR = "worksheet/img/";
@@ -54,10 +55,21 @@ const navName = (k) => (k === J ? JOURNEY.label : `${k}차시 ${LESSONS.find((l)
 
 /* ---------- 저장 ---------- */
 const KEY = "sih-ws-" + code;
+const OLD_KEY = "sih-ws-" + code.replace(/-/g, "");   // 예전에 '-' 없이 넣어 따로 저장된 기록
 function load() {
   try {
     const o = JSON.parse(localStorage.getItem(KEY) || "null");
     if (o && o.v === 1 && o.answers) return o;
+    // 이 기기에 '-' 없는 코드로 써 둔 기록만 있으면 한 번 옮겨 온다
+    if (OLD_KEY !== KEY) {
+      const old = JSON.parse(localStorage.getItem(OLD_KEY) || "null");
+      if (old && old.v === 1 && old.answers) {
+        old.code = code;
+        localStorage.setItem(KEY, JSON.stringify(old));
+        localStorage.removeItem(OLD_KEY);
+        return old;
+      }
+    }
   } catch (e) { /* 무시 */ }
   return { v: 1, code, meta: {}, answers: {}, updatedAt: null };
 }
@@ -885,11 +897,15 @@ async function saveImage() {
   doc = load();
   rememberCode(code);
   $("codeText").textContent = code; $("codeChip").hidden = false;
+  // 머리글의 '우리 반 책장 열기' — 어느 차시에서든 책장으로 갈 수 있게 한다
+  $("shelfLink").href = `shelf.html?code=${encodeURIComponent(code)}${suffix}`;
+  $("shelfLink").hidden = false;
   $("sub").textContent = "활동지를 여는 중…";
   let offline = false;
   try {
     shelf = (await Promise.race([loadShelf(code), new Promise((_, rej) => setTimeout(() => rej(new Error("timeout")), 12000))])).shelf;
   } catch (e) { shelf = null; offline = true; }
+  if (!shelf && !offline) $("shelfLink").hidden = true;   // 없는 코드면 열 책장이 없다
   // 책장을 못 찾으면(또는 인터넷이 없으면) 예전처럼 이 기기에만 저장한다
   if (!shelf) return openSheet(offline ? "인터넷 연결이 없어 이 기기에만 저장돼요. 연결되면 새로고침해서 내 활동지를 여세요." : "");
   const saved = readLogin();
