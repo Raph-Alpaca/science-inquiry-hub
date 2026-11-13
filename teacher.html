@@ -681,7 +681,7 @@ function bookRow(s, b, members) {
     <td data-l="제목"><b>${esc(b.title)}</b>${b.example ? ' <span class="chip amber">예시</span>' : ""}</td>
     <td data-l="모둠원 학번" class="names">${esc(members || "(없음)")}</td>
     <td data-l="링크"><a class="lk" href="${esc(b.url)}" target="_blank" rel="noopener noreferrer">${esc(b.url)}</a></td>
-    <td data-l="제출일">${date ? `${date.getMonth() + 1}. ${date.getDate()}` : "-"}</td>
+    <td data-l="제출일" style="white-space:nowrap">${date ? `${date.getMonth() + 1}. ${date.getDate()} ${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}` : "-"}</td>
     <td data-l="의도">${esc((b.intent || "").slice(0, 18))}${(b.intent || "").length > 18 ? "…" : ""}</td>
     <td><span class="row-acts">
       ${b.status !== "approved" ? `<button class="btn small go" data-a="approve">승인</button>` : ""}
