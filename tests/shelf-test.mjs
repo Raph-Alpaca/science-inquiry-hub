@@ -50,7 +50,8 @@ for (const [vn, vp] of Object.entries(VIEWS)) {
       html: document.body.innerHTML,
       scrollW: document.documentElement.scrollWidth, W: document.documentElement.clientWidth,
     }));
-    check(`${vn}: 책장에 서가가 그려짐`, info.rows >= 3, info.labels.join(" | "));
+    // 승인된 책이 없는 2학년 4반은 서가를 만들지 않는다 (빈 서가 없음)
+    check(`${vn}: 책장에 서가가 그려짐`, info.rows === 2 && !info.labels.some((l) => l.includes("4반")), info.labels.join(" | "));
     check(`${vn}: 선생님 예시 11권 + 학생 책 4권`, info.books === 15 || vn === "mobile", `${info.books}권`);
     check(`${vn}: 가로 넘침 없음`, info.scrollW <= info.W + 1, `${info.scrollW} > ${info.W}`);
     if (vn !== "mobile") {   // 표지 아래 학년반·모둠명 줄이 줄어들어 글자 아래가 잘리지 않는지
@@ -296,6 +297,44 @@ for (const [vn, vp] of Object.entries(VIEWS)) {
   await page.waitForTimeout(10800);
   check("책 삭제: 10초 뒤 저장소에서 지워짐", !(await stored()).books.demo.some((b) => b.id === target));
   check("책 삭제: 지운 뒤 알림이 사라지고 목록도 그대로 줄어 있음", (await undoCount()) === 0 && (await bookCount()) === before - 1);
+
+  // --- 학년·반을 잘못 넣은 책: 반으로 골라 보고 목록 줄에서 바로 지운다 ---
+  await page.evaluate(async () => {
+    const m = await import("/assets/shelf-data.js");
+    const id = await m.submitBook({ id: "demo", code: "DEMO-2026-BOOK" }, { grade: 3, classNo: 9, team: "잘못", title: "반을 잘못 넣은 책", url: "https://example.com/x", intent: "", howto: "", concepts: [], coverKind: "heat", coverColor: "#EE6B57", memberNames: "39901" });
+    await m.setStatus({ id: "demo" }, [id], "approved");
+  });
+  await page.reload({ waitUntil: "networkidle" });
+  await page.waitForSelector(".shelf-card[data-s]");
+  await page.click('[role=tab][data-t="approved"]');
+  await page.waitForSelector("select[data-cls]");
+  const opts = await page.$$eval("select[data-cls] option", (os) => os.map((o) => o.textContent.trim()));
+  check("반 고르기: 반마다 권수가 보임", opts.some((o) => o === "3학년 9반 (1)") && opts[0].startsWith("전체 반"), opts.join(" | "));
+  await page.selectOption("select[data-cls]", "3-9");
+  await page.waitForTimeout(200);
+  check("반 고르기: 고른 반의 책만 보임", (await bookCount()) === 1 && (await page.textContent(".shelf-card[data-s] tbody")).includes("반을 잘못 넣은 책"));
+  const peekHas = async (label) => {
+    const p = await ctx.newPage();
+    await p.goto(`${BASE}/shelf.html?code=DEMO-2026-BOOK&demo=1`, { waitUntil: "networkidle" });
+    await p.waitForSelector(".shelf-row");
+    const labels = await p.$$eval(".shelf-row .row-label h2", (hs) => hs.map((h) => h.textContent));
+    await p.close();
+    return labels.some((l) => l.includes(label));
+  };
+  check("공개 책장: 잘못 넣은 반 서가가 생겨 있음", await peekHas("3학년 9반"));
+  check("공개 책장: 승인된 책이 없는 반은 서가가 없음 (빈 서가 없음)", !(await peekHas("2학년 4반")));
+  await page.click('tr[data-b] [data-a="delete"]');
+  await page.waitForSelector("#dangerDlg[open]");
+  check("목록 삭제: 확인창에 책 제목과 학년·반이 보임", /반을 잘못 넣은 책/.test(await page.textContent("#dg-what")) && /3학년 9반/.test(await page.textContent("#dg-what")));
+  check("목록 삭제: 적기 전에는 삭제 단추가 꺼져 있음", await page.isDisabled("#dg-ok"));
+  await page.fill("#dg-type", "삭제");
+  await page.click("#dg-ok");
+  await page.waitForTimeout(300);
+  check("목록 삭제: 되돌리기 알림이 뜨고, 반 고르기는 전체 반으로 돌아감", (await undoCount()) === 1 && (await bookCount()) === before - 1);
+  await page.screenshot({ path: `${OUT}/laptop-teacher-delete-row.png` });
+  await page.waitForTimeout(10800);
+  check("목록 삭제: 10초 뒤 저장소에서 지워짐 (모둠원 학번까지)", !(await stored()).books.demo.some((b) => b.title === "반을 잘못 넣은 책") && !Object.values((await stored()).priv).includes("39901"));
+  check("공개 책장: 책을 지우면 그 반 서가도 사라짐", !(await peekHas("3학년 9반")));
 
   // --- 책장 삭제 ---
   await page.click('[data-a="settings"]');

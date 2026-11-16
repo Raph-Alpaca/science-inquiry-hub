@@ -58,7 +58,7 @@ const browser = await chromium.launch();
   await page.waitForURL(/code=DEMO-2026-BOOK/, { timeout: 5000 }).catch(() => {});
   check("앱 다시 실행: 지난 책장이 바로 열림", page.url().includes("code=DEMO-2026-BOOK&demo=1"), page.url());
   await page.waitForSelector(".row-label h2", { timeout: 6000 }).catch(() => {});
-  check("앱 다시 실행: 책장이 그려짐", (await page.$$(".row-label h2")).length >= 3);
+  check("앱 다시 실행: 책장이 그려짐", (await page.$$(".row-label h2")).length >= 2);
   await page.goto(BASE + "/shelf.html?demo=1", { waitUntil: "networkidle" }); await page.waitForTimeout(300);
   check("브라우저로 코드 없이 오면 예전처럼 입력 칸", await page.$("#codeInput") !== null);
   // 선생님 화면 링크는 맨 아래 작은 글씨 한 곳에만 둔다 (머리글·안내 칸에는 두지 않음)

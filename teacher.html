@@ -158,6 +158,7 @@ const shelfUrl = (code) => (!DEMO && SITE.studentLink && SITE.studentLink.includ
 // 코드를 여러 개 주면(쉼표로 이어서) 그 책장들의 서가를 한 화면에 이어 보여 준다 ("책장 함께 보기").
 const peekUrl = (codes) => `${here}shelf.html?code=${encodeURIComponent([].concat(codes).join(","))}${suffix}`;
 let user = null, shelves = [], data = {}, tab = {};
+const clsPick = {};                                   // 책장마다 골라 보는 반 ("" = 전체 반)
 const mergeSel = new Set(), mergeKnown = new Set();   // 함께 볼 책장 (새 책장은 처음엔 골라 둔다)
 let access = { admin: false, approved: false }, allowed = [], allShelves = [], requests = [], adminLoaded = false;
 // 둘러보기: 로그인 없이 예시 책장으로 선생님 화면을 눌러 본다 (데모 모드 + 관리자 카드 숨김)
@@ -639,7 +640,14 @@ function shelfCard(s) {
     approved: books.filter((b) => b.status === "approved").length,
     hidden: books.filter((b) => b.status === "hidden").length,
   };
-  const rows = books.filter((b) => b.status === t);
+  // 반별로 골라 보기: 지금 탭에 있는 책의 반과 권수. 한두 권뿐인 반(학년·반을 잘못 넣은 책)이 바로 보인다
+  const inTab = books.filter((b) => b.status === t);
+  const perClass = new Map();
+  inTab.forEach((b) => { const k = `${b.grade}-${b.classNo}`; perClass.set(k, (perClass.get(k) || 0) + 1); });
+  const classKeys = [...perClass.keys()].sort((a, b) => { const [ag, ac] = a.split("-").map(Number), [bg, bc] = b.split("-").map(Number); return ag - bg || ac - bc; });
+  if (!perClass.has(clsPick[s.id])) clsPick[s.id] = "";
+  const cp = clsPick[s.id];
+  const rows = cp ? inTab.filter((b) => `${b.grade}-${b.classNo}` === cp) : inTab;
   return `
   <section class="card shelf-card" data-s="${s.id}">
     <div class="hd">
@@ -662,6 +670,11 @@ function shelfCard(s) {
       <button role="tab" data-t="approved" aria-selected="${t === "approved"}">승인됨 ${counts.approved}</button>
       <button role="tab" data-t="hidden" aria-selected="${t === "hidden"}">숨김 ${counts.hidden}</button>
     </div>
+    ${classKeys.length > 1 ? `
+    <div class="ws-tools cls-pick"><label for="cls-${s.id}">반</label><select id="cls-${s.id}" data-cls>
+      <option value="">전체 반 (${inTab.length})</option>
+      ${classKeys.map((k) => { const [g, c] = k.split("-"); return `<option value="${k}"${k === cp ? " selected" : ""}>${g}학년 ${c}반 (${perClass.get(k)})</option>`; }).join("")}
+    </select><span class="note">학년·반을 잘못 넣은 책은 "수정"으로 고치거나 "삭제"로 지울 수 있어요.</span></div>` : ""}
     ${rows.length ? `
     <table class="books">
       <thead><tr><th>학년-반</th><th>책 제목</th><th>모둠원 학번 (선생님만)</th><th>링크</th><th>제출일</th><th>개발자의 의도</th><th></th></tr></thead>
@@ -687,6 +700,7 @@ function bookRow(s, b, members) {
       ${b.status !== "approved" ? `<button class="btn small go" data-a="approve">승인</button>` : ""}
       <button class="btn small" data-a="edit">수정</button>
       ${b.status !== "hidden" ? `<button class="btn small" data-a="hide">숨김</button>` : `<button class="btn small" data-a="approve">다시 승인</button>`}
+      <button class="btn small del" data-a="delete" aria-label="${esc(b.title)} 삭제">삭제</button>
     </span></td>
   </tr>`;
 }
@@ -775,7 +789,10 @@ function wire() {
         return;
       }
       if (a === "edit") openEdit(s, book);
+      if (a === "delete") removeBook(s, book);
     };
+    const pick = card.querySelector("select[data-cls]");
+    if (pick) pick.onchange = () => { clsPick[s.id] = pick.value; render(); };
   });
 }
 
@@ -1107,9 +1124,9 @@ $("ed-save").onclick = async () => {
   await updateBook(s.id, b.id, patch);
   clearShelfCache(s.code); await reload(); toast("저장했어요");
 };
-$("ed-delete").onclick = async () => {
-  if (!editing) return;
-  const { s, b } = editing;
+$("ed-delete").onclick = () => { if (editing) removeBook(editing.s, editing.b); };
+// 책 한 권 지우기: 목록 줄의 "삭제"와 수정 창의 "이 책 삭제"가 함께 쓴다
+async function removeBook(s, b) {
   const yes = await askDanger({
     title: "책 삭제",
     what: `"${b.title}" · ${b.grade}학년 ${b.classNo}반 ${b.team || ""}`.trim(),
@@ -1119,12 +1136,12 @@ $("ed-delete").onclick = async () => {
     ok: "이 책 삭제",
   });
   if (!yes) return;
-  $("editDlg").close();
+  if ($("editDlg").open) $("editDlg").close();
   deleteLater("book:" + b.id, `"${b.title}" 삭제`,
     async () => { await deleteBook(s.id, b.id); clearShelfCache(s.code); await reload(); toast("삭제했어요"); },
     () => redraw());
   redraw();
-};
+}
 </script>
 </body>
 </html>

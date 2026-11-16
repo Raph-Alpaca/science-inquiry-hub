@@ -480,6 +480,10 @@ table.books .row-acts { display: flex; gap: 6px; justify-content: flex-end; }
 .undo-toast small { color: var(--line-2); font-variant-numeric: tabular-nums; margin-left: 4px; }
 .undo-toast .btn { background: var(--paper); color: var(--ink); border-color: var(--paper); flex: none; }
 .btn.danger { background: var(--bad); border-color: var(--bad); color: #fff; }
+/* 목록 줄의 "삭제": 눈에 띄되 승인 단추보다 조용하게 */
+.btn.small.del { color: var(--bad); border-color: #DDB3A9; }
+.btn.small.del:hover { background: var(--bad-soft); }
+.ws-tools.cls-pick { margin: 14px 0 0; flex-wrap: wrap; }
 .btn.danger:hover { background: #862F23; border-color: #862F23; }
 .danger-what { margin: 0 0 14px; padding: 12px 14px; background: var(--bad-soft); border-radius: var(--r-s); color: var(--bad); font-size: 14.5px; font-weight: 600; }
 

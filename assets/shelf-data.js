@@ -692,23 +692,17 @@ export async function loadMembers(shelfId, ids) {
   return out;
 }
 export async function setStatus(shelf, ids, status) {
-  const classesOf = (books) => [...new Set(books.map((b) => `${b.grade}-${b.classNo}`))];
+  // 반 서가는 공개 책장이 승인된 책에서 바로 만든다. 책장 문서의 classes 는 더 쓰지 않는다
+  // (승인한 반을 적어 두면, 학년·반을 잘못 넣은 책을 지워도 빈 서가가 남았다).
   if (DEMO) {
     const d = demoRead();
     const list = d.books[shelf.id] || [];
     list.forEach((b) => { if (ids.includes(b.id)) b.status = status; });
-    const s = d.shelves.find((x) => x.id === shelf.id);
-    if (s && status === "approved") s.classes = [...new Set([...(s.classes || []), ...classesOf(list.filter((b) => ids.includes(b.id)))])];
     demoWrite(d);
     return;
   }
   const { F, db } = await fb();
   await Promise.all(ids.map((id) => F.updateDoc(F.doc(db, "shelves", shelf.id, "books", id), { status })));
-  if (status === "approved") {
-    const all = await listBooks(shelf.id);
-    const cls = classesOf(all.filter((b) => ids.includes(b.id)));
-    if (cls.length) await F.updateDoc(F.doc(db, "shelves", shelf.id), { classes: F.arrayUnion(...cls) });
-  }
 }
 export async function updateBook(shelfId, id, patch) {
   if (DEMO) {

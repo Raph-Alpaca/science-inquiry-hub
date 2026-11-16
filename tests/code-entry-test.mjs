@@ -32,7 +32,7 @@ for (const [vn, vp] of Object.entries({ laptop: { width: 1200, height: 860 }, mo
   await page.waitForURL(/code=DEMO-2026-BOOK/, { timeout: 5000 }).catch(() => {});
   check(`${vn}: 입력한 코드로 책장이 열림 (대문자 정리)`, page.url().includes("shelf.html?code=DEMO-2026-BOOK&demo=1"), page.url());
   await page.waitForSelector(".row-label h2", { timeout: 6000 }).catch(() => {});
-  check(`${vn}: 책장이 그려짐`, (await page.$$(".row-label h2")).length >= 3);
+  check(`${vn}: 책장이 그려짐`, (await page.$$(".row-label h2")).length >= 2);
   // '-' 없이 넣어도 같은 책장
   await page.goto(BASE + "/shelf.html?demo=1", { waitUntil: "networkidle" }); await page.waitForTimeout(300);
   await page.fill("#codeInput", "demo2026book"); await page.keyboard.press("Enter");
@@ -40,7 +40,7 @@ for (const [vn, vp] of Object.entries({ laptop: { width: 1200, height: 860 }, mo
   check(`${vn}: '-' 없이 넣어도 같은 책장 주소로`, page.url().includes("shelf.html?code=DEMO-2026-BOOK&demo=1"), page.url());
   await page.goto(BASE + "/shelf.html?code=DEMO2026BOOK&demo=1", { waitUntil: "networkidle" });
   await page.waitForSelector(".row-label h2", { timeout: 6000 }).catch(() => {});
-  check(`${vn}: '-' 없는 주소로 들어와도 책장이 열리고 주소가 고쳐짐`, (await page.$$(".row-label h2")).length >= 3 && page.url().includes("code=DEMO-2026-BOOK"), page.url());
+  check(`${vn}: '-' 없는 주소로 들어와도 책장이 열리고 주소가 고쳐짐`, (await page.$$(".row-label h2")).length >= 2 && page.url().includes("code=DEMO-2026-BOOK"), page.url());
   await page.goto(BASE + "/submit.html?code=demo2026book&demo=1", { waitUntil: "networkidle" }); await page.waitForTimeout(400);
   check(`${vn}: '-' 없는 주소로 출판 의뢰서도 열림`, !(await page.evaluate(() => document.getElementById("form").hidden)) && page.url().includes("code=DEMO-2026-BOOK"), page.url());
   // 다시 코드 없이 들어오면 미리 채워짐
